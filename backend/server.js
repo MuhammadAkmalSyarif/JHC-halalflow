@@ -1,0 +1,1707 @@
+require('dotenv').config();
+const express = require('express');
+const cors = require('cors');
+const multer = require('multer');
+const path = require('path');
+const fs = require('fs');
+const bcrypt = require('bcryptjs');
+const jwt = require('jsonwebtoken');
+const crypto = require('crypto');
+const nodemailer = require('nodemailer');
+const XLSX = require('xlsx');
+
+const { getDb, initializeDatabase, initCompanyProgress, logActivity } = require('./database');
+
+// =============================================
+// MAILER CONFIG
+// =============================================
+const cleanSmtpPass = (process.env.SMTP_PASS || '').replace(/\s+/g, '');
+const transporter = nodemailer.createTransport({
+  host: process.env.SMTP_HOST || 'smtp.gmail.com',
+  port: parseInt(process.env.SMTP_PORT) || 465,
+  secure: (process.env.SMTP_SECURE === 'true' || process.env.SMTP_PORT === '465'),
+  auth: {
+    user: process.env.SMTP_USER,
+    pass: cleanSmtpPass
+  }
+});
+
+// =============================================
+// INIT
+// =============================================
+const app = express();
+const PORT = process.env.PORT || 5000;
+const JWT_SECRET = process.env.JWT_SECRET || 'jhc_halalflow_jwt_secret_2026';
+const ADMIN_JWT_SECRET = process.env.ADMIN_JWT_SECRET || 'jhc_admin_jwt_secret_2026';
+
+// Initialize DB on startup
+const db = initializeDatabase();
+
+app.use(cors());
+app.use(express.json());
+
+// Uploads directory
+const uploadsDir = path.join(__dirname, 'uploads');
+if (!fs.existsSync(uploadsDir)) fs.mkdirSync(uploadsDir, { recursive: true });
+app.use('/uploads', express.static(uploadsDir));
+
+// Multer config
+const storage = multer.diskStorage({
+  destination: (req, file, cb) => cb(null, uploadsDir),
+  filename: (req, file, cb) => {
+    const ext = path.extname(file.originalname);
+    const basename = path.basename(file.originalname, ext).replace(/[^a-zA-Z0-9]/g, '_');
+    cb(null, `${basename}-${Date.now()}-${Math.round(Math.random() * 1e9)}${ext}`);
+  }
+});
+const upload = multer({ storage, limits: { fileSize: 20 * 1024 * 1024 } }); // 20MB
+
+// =============================================
+// MIDDLEWARE: Auth
+// =============================================
+function authMiddleware(req, res, next) {
+  const authHeader = req.headers['authorization'];
+  if (!authHeader || !authHeader.startsWith('Bearer ')) {
+    return res.status(401).json({ error: 'Unauthorized: Token tidak ada' });
+  }
+  const token = authHeader.split(' ')[1];
+  try {
+    const decoded = jwt.verify(token, JWT_SECRET);
+    req.user = decoded; // { id, email, name, company_id, role }
+    next();
+  } catch {
+    return res.status(401).json({ error: 'Unauthorized: Token tidak valid atau kadaluarsa' });
+  }
+}
+
+function adminAuthMiddleware(req, res, next) {
+  const authHeader = req.headers['authorization'];
+  if (!authHeader || !authHeader.startsWith('Bearer ')) {
+    return res.status(401).json({ error: 'Unauthorized: Token admin tidak ada' });
+  }
+  const token = authHeader.split(' ')[1];
+  try {
+    const decoded = jwt.verify(token, ADMIN_JWT_SECRET);
+    req.admin = decoded; // { id, email, name }
+    next();
+  } catch {
+    return res.status(401).json({ error: 'Unauthorized: Token admin tidak valid' });
+  }
+}
+
+// =============================================
+// API: STATUS CHECK
+// =============================================
+app.get('/api/status', (req, res) => {
+  res.json({ status: 'ok', time: new Date(), version: '2.0-sqlite' });
+});
+
+// =============================================
+// API: USER AUTHENTICATION
+// =============================================
+
+// POST /api/auth/register
+app.post('/api/auth/register', async (req, res) => {
+  const { name, email, phone, password } = req.body;
+  if (!name || !email || !password) {
+    return res.status(400).json({ error: 'Nama, email, dan password wajib diisi' });
+  }
+  if (password.length < 6) {
+    return res.status(400).json({ error: 'Password minimal 6 karakter' });
+  }
+
+  const existing = db.prepare('SELECT id FROM users WHERE email = ?').get(email);
+  if (existing) {
+    return res.status(409).json({ error: 'Email sudah terdaftar. Silakan login.' });
+  }
+
+  const hash = bcrypt.hashSync(password, 10);
+  const result = db.prepare(`
+    INSERT INTO users (name, email, phone, password_hash, role)
+    VALUES (?, ?, ?, ?, 'user')
+  `).run(name, email, phone || '', hash);
+
+  const userId = result.lastInsertRowid;
+  const token = jwt.sign(
+    { id: userId, email, name, company_id: null, role: 'user' },
+    JWT_SECRET,
+    { expiresIn: process.env.JWT_EXPIRES_IN || '7d' }
+  );
+
+  logActivity(db, null, userId, 'register', `User baru terdaftar: ${name}`);
+
+  res.status(201).json({
+    message: 'Registrasi berhasil',
+    token,
+    user: { id: userId, name, email, phone: phone || '', company_id: null }
+  });
+});
+
+// POST /api/auth/login
+app.post('/api/auth/login', async (req, res) => {
+  const { email, password } = req.body;
+  if (!email || !password) {
+    return res.status(400).json({ error: 'Email dan password wajib diisi' });
+  }
+
+  const user = db.prepare('SELECT * FROM users WHERE email = ?').get(email);
+  if (!user) {
+    return res.status(401).json({ error: 'Email atau password salah' });
+  }
+
+  const valid = bcrypt.compareSync(password, user.password_hash);
+  if (!valid) {
+    return res.status(401).json({ error: 'Email atau password salah' });
+  }
+
+  const token = jwt.sign(
+    { id: user.id, email: user.email, name: user.name, company_id: user.company_id, role: user.role },
+    JWT_SECRET,
+    { expiresIn: process.env.JWT_EXPIRES_IN || '7d' }
+  );
+
+  res.json({
+    message: 'Login berhasil',
+    token,
+    user: { id: user.id, name: user.name, email: user.email, phone: user.phone, company_id: user.company_id }
+  });
+});
+
+// GET /api/auth/me
+app.get('/api/auth/me', authMiddleware, (req, res) => {
+  const user = db.prepare('SELECT id, name, email, phone, company_id, role, created_at FROM users WHERE id = ?').get(req.user.id);
+  if (!user) return res.status(404).json({ error: 'User tidak ditemukan' });
+  res.json({ user });
+});
+
+// POST /api/auth/forgot-password
+app.post('/api/auth/forgot-password', async (req, res) => {
+  const { email } = req.body;
+  if (!email) return res.status(400).json({ error: 'Email wajib diisi' });
+
+  const user = db.prepare('SELECT * FROM users WHERE email = ?').get(email);
+  if (!user) {
+    // Return success anyway to prevent email enumeration
+    return res.json({ message: 'Jika email terdaftar, instruksi reset password telah dikirim.' });
+  }
+
+  // Generate a 6-digit numeric OTP
+  const otp = Math.floor(100000 + Math.random() * 900000).toString();
+  const expires = new Date(Date.now() + 3600000).toISOString(); // 1 hour
+
+  // Clean old tokens for this email
+  db.prepare('DELETE FROM password_resets WHERE email = ?').run(email);
+  db.prepare('INSERT INTO password_resets (email, token, expires_at) VALUES (?, ?, ?)').run(email, otp, expires);
+
+  // Send the OTP via email
+  const mailOptions = {
+    from: process.env.EMAIL_FROM || `"JHC HalalFlow" <${process.env.SMTP_USER || 'jhc.halalflow@gmail.com'}>`,
+    to: email,
+    subject: 'Kode Verifikasi Reset Password - JHC HalalFlow',
+    html: `
+      <div style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; max-width: 500px; margin: 0 auto; padding: 32px 24px; background: #ffffff; border: 1px solid #e2e8f0; border-radius: 16px;">
+        <div style="text-align: center; margin-bottom: 24px;">
+          <h2 style="color: #059669; margin: 0; font-size: 24px; font-weight: 800; letter-spacing: -0.5px;">JHC HalalFlow</h2>
+          <p style="color: #64748b; margin: 4px 0 0 0; font-size: 13px;">Sistem Manajemen Sertifikasi Halal</p>
+        </div>
+        <div style="border-top: 1px solid #f1f5f9; padding-top: 20px;">
+          <p style="color: #1e293b; font-size: 15px; line-height: 1.6; margin: 0 0 12px 0;">Halo,</p>
+          <p style="color: #475569; font-size: 14px; line-height: 1.6; margin: 0 0 20px 0;">
+            Anda telah meminta untuk mereset kata sandi akun JHC HalalFlow Anda. Masukkan kode verifikasi berikut untuk melanjutkan proses reset password:
+          </p>
+          <div style="background: linear-gradient(135deg, #ecfdf5 0%, #f0fdf4 100%); border: 1.5px dashed #059669; padding: 20px; text-align: center; border-radius: 12px; margin: 24px 0;">
+            <span style="font-size: 12px; font-weight: 700; color: #065f46; letter-spacing: 1px; text-transform: uppercase;">Kode Verifikasi</span>
+            <div style="font-size: 34px; font-weight: 800; color: #047857; letter-spacing: 8px; margin-top: 8px; font-family: monospace;">${otp}</div>
+          </div>
+          <p style="color: #64748b; font-size: 13px; line-height: 1.6; margin: 0 0 8px 0;">
+            ⏳ Kode verifikasi ini berlaku selama <strong>1 jam</strong>. Demi keamanan, jangan bagikan kode ini kepada siapa pun.
+          </p>
+          <p style="color: #94a3b8; font-size: 12px; line-height: 1.5; margin: 24px 0 0 0; border-top: 1px solid #f1f5f9; padding-top: 16px;">
+            Jika Anda tidak meminta reset kata sandi, silakan abaikan email ini. Akun Anda tetap aman.
+          </p>
+        </div>
+      </div>
+    `
+  };
+
+  try {
+    // Only attempt to send if SMTP_USER is configured (avoids crashing if not set yet)
+    if (process.env.SMTP_USER) {
+      await transporter.sendMail(mailOptions);
+      res.json({ message: 'Kode verifikasi telah dikirim ke email Anda.' });
+    } else {
+      // Fallback for DEV mode if email is not configured yet
+      res.json({ 
+        message: 'Kode verifikasi berhasil dibuat.', 
+        dev_token: otp 
+      });
+    }
+  } catch (error) {
+    console.error("Email send error:", error);
+    res.status(500).json({ error: 'Gagal mengirim email. Silakan coba lagi nanti.' });
+  }
+});
+
+// POST /api/auth/verify-reset-token
+app.post('/api/auth/verify-reset-token', (req, res) => {
+  const { token } = req.body;
+  if (!token) return res.status(400).json({ error: 'Token wajib diisi' });
+
+  const resetRecord = db.prepare('SELECT * FROM password_resets WHERE token = ?').get(token);
+  if (!resetRecord) {
+    return res.status(400).json({ error: 'Kode verifikasi tidak valid atau sudah kadaluarsa.' });
+  }
+
+  if (new Date(resetRecord.expires_at) < new Date()) {
+    db.prepare('DELETE FROM password_resets WHERE id = ?').run(resetRecord.id);
+    return res.status(400).json({ error: 'Kode verifikasi sudah kadaluarsa.' });
+  }
+
+  res.json({ message: 'Kode verifikasi valid.' });
+});
+
+// POST /api/auth/reset-password
+app.post('/api/auth/reset-password', async (req, res) => {
+  const { token, newPassword } = req.body;
+  if (!token || !newPassword) {
+    return res.status(400).json({ error: 'Token dan password baru wajib diisi' });
+  }
+
+  if (newPassword.length < 6) {
+    return res.status(400).json({ error: 'Password minimal 6 karakter' });
+  }
+
+  const resetRecord = db.prepare('SELECT * FROM password_resets WHERE token = ?').get(token);
+  if (!resetRecord) {
+    return res.status(400).json({ error: 'Token tidak valid atau sudah kadaluarsa.' });
+  }
+
+  if (new Date(resetRecord.expires_at) < new Date()) {
+    db.prepare('DELETE FROM password_resets WHERE id = ?').run(resetRecord.id);
+    return res.status(400).json({ error: 'Token sudah kadaluarsa.' });
+  }
+
+  // Valid, update password
+  const hash = bcrypt.hashSync(newPassword, 10);
+  db.prepare('UPDATE users SET password_hash = ? WHERE email = ?').run(hash, resetRecord.email);
+  db.prepare('DELETE FROM password_resets WHERE email = ?').run(resetRecord.email);
+
+  res.json({ message: 'Password berhasil diubah. Silakan login.' });
+});
+
+// =============================================
+// API: ADMIN AUTHENTICATION
+// =============================================
+
+// POST /api/admin/login
+app.post('/api/admin/login', async (req, res) => {
+  const { email, password } = req.body;
+  if (!email || !password) {
+    return res.status(400).json({ error: 'Email dan password wajib diisi' });
+  }
+
+  const admin = db.prepare('SELECT * FROM admin_users WHERE email = ?').get(email);
+  if (!admin) {
+    return res.status(401).json({ error: 'Email atau password salah' });
+  }
+
+  const valid = bcrypt.compareSync(password, admin.password_hash);
+  if (!valid) {
+    return res.status(401).json({ error: 'Email atau password salah' });
+  }
+
+  const token = jwt.sign(
+    { id: admin.id, email: admin.email, name: admin.name, role: 'admin' },
+    ADMIN_JWT_SECRET,
+    { expiresIn: process.env.ADMIN_JWT_EXPIRES_IN || '12h' }
+  );
+
+  res.json({
+    message: 'Login admin berhasil',
+    token,
+    admin: { id: admin.id, name: admin.name, email: admin.email }
+  });
+});
+
+// =============================================
+// API: COMPANIES (USER)
+// =============================================
+
+// POST /api/companies — Create or update company profile
+app.post('/api/companies', authMiddleware, (req, res) => {
+  const userId = req.user.id;
+  const { nama, nib, npwp, penanggung_jawab, jenis_usaha, skala_usaha, jumlah_outlet, cabang, alamat } = req.body;
+
+  if (!nama) return res.status(400).json({ error: 'Nama perusahaan wajib diisi' });
+
+  // Check if user already has a company
+  let company = db.prepare('SELECT * FROM companies WHERE user_id = ?').get(userId);
+
+  if (company) {
+    // Update existing
+    db.prepare(`
+      UPDATE companies SET
+        nama = ?, nib = ?, npwp = ?, penanggung_jawab = ?,
+        jenis_usaha = ?, skala_usaha = ?, jumlah_outlet = ?,
+        cabang = ?, alamat = ?, updated_at = datetime('now')
+      WHERE id = ?
+    `).run(nama, nib || '', npwp || '', penanggung_jawab || '', jenis_usaha || '', skala_usaha || '', jumlah_outlet || '', cabang || '', alamat || '', company.id);
+
+    company = db.prepare('SELECT * FROM companies WHERE id = ?').get(company.id);
+    
+    // Update stage 1 progress to Selesai
+    db.prepare(`UPDATE certification_progress SET status = 'Selesai', updated_at = datetime('now') WHERE company_id = ? AND stage = 1`).run(company.id);
+    
+    logActivity(db, company.id, userId, 'company_update', `Registrasi perusahaan diperbarui: ${nama}`);
+  } else {
+    // Create new company
+    const result = db.prepare(`
+      INSERT INTO companies (user_id, nama, nib, npwp, penanggung_jawab, jenis_usaha, skala_usaha, jumlah_outlet, cabang, alamat)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    `).run(userId, nama, nib || '', npwp || '', penanggung_jawab || '', jenis_usaha || '', skala_usaha || '', jumlah_outlet || '', cabang || '', alamat || '');
+
+    const companyId = result.lastInsertRowid;
+
+    // Update user's company_id
+    db.prepare('UPDATE users SET company_id = ?, updated_at = datetime(\'now\') WHERE id = ?').run(companyId, userId);
+
+    // Initialize progress stages
+    initCompanyProgress(db, companyId);
+
+    // Set stage 1 to Selesai
+    db.prepare(`UPDATE certification_progress SET status = 'Selesai', updated_at = datetime('now') WHERE company_id = ? AND stage = 1`).run(companyId);
+
+    company = db.prepare('SELECT * FROM companies WHERE id = ?').get(companyId);
+
+    logActivity(db, companyId, userId, 'company_create', `Perusahaan baru terdaftar: ${nama}`);
+  }
+
+  // Update JWT hint (company_id now set)
+  res.json({ message: 'Data perusahaan berhasil disimpan', company });
+});
+
+// GET /api/companies/mine — Get user's own company
+app.get('/api/companies/mine', authMiddleware, (req, res) => {
+  const userId = req.user.id;
+  const company = db.prepare('SELECT * FROM companies WHERE user_id = ?').get(userId);
+  if (!company) return res.json({ company: null });
+  res.json({ company });
+});
+
+// =============================================
+// API: LEGAL DOCUMENTS (USER)
+// =============================================
+
+// GET /api/companies/:id/legal-documents
+app.get('/api/companies/:id/legal-documents', authMiddleware, (req, res) => {
+  const companyId = parseInt(req.params.id);
+  
+  // Verify ownership
+  const company = db.prepare('SELECT * FROM companies WHERE id = ? AND user_id = ?').get(companyId, req.user.id);
+  if (!company) return res.status(403).json({ error: 'Akses ditolak' });
+
+  const doc = db.prepare('SELECT * FROM legal_documents WHERE company_id = ?').get(companyId);
+  res.json({ legal: doc || {} });
+});
+
+// POST /api/companies/:id/legal-documents
+app.post('/api/companies/:id/legal-documents', authMiddleware, (req, res) => {
+  const companyId = parseInt(req.params.id);
+  const userId = req.user.id;
+
+  const company = db.prepare('SELECT * FROM companies WHERE id = ? AND user_id = ?').get(companyId, userId);
+  if (!company) return res.status(403).json({ error: 'Akses ditolak' });
+
+  const { telp_pemilik, telp_penyelia, email_sihalal, permohonan, sk_penyelia, sk_manajemen, kebijakan, ttd_pemilik, ttd_penyelia } = req.body;
+
+  const existing = db.prepare('SELECT id FROM legal_documents WHERE company_id = ?').get(companyId);
+
+  if (existing) {
+    db.prepare(`
+      UPDATE legal_documents SET
+        telp_pemilik = ?, telp_penyelia = ?, email_sihalal = ?,
+        permohonan = ?, sk_penyelia = ?, sk_manajemen = ?,
+        kebijakan = ?, ttd_pemilik = ?, ttd_penyelia = ?,
+        status = 'Menunggu Verifikasi', updated_at = datetime('now')
+      WHERE company_id = ?
+    `).run(telp_pemilik || '', telp_penyelia || '', email_sihalal || '', permohonan || '', sk_penyelia || '', sk_manajemen || '', kebijakan || '', ttd_pemilik || '', ttd_penyelia || '', companyId);
+  } else {
+    db.prepare(`
+      INSERT INTO legal_documents (company_id, telp_pemilik, telp_penyelia, email_sihalal, permohonan, sk_penyelia, sk_manajemen, kebijakan, ttd_pemilik, ttd_penyelia, status)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'Menunggu Verifikasi')
+    `).run(companyId, telp_pemilik || '', telp_penyelia || '', email_sihalal || '', permohonan || '', sk_penyelia || '', sk_manajemen || '', kebijakan || '', ttd_pemilik || '', ttd_penyelia || '');
+  }
+
+  // Update stage 2 progress
+  db.prepare(`UPDATE certification_progress SET status = 'Menunggu Verifikasi', updated_at = datetime('now') WHERE company_id = ? AND stage = 2`).run(companyId);
+
+  logActivity(db, companyId, userId, 'legal_submit', 'Dokumen legal disubmit untuk verifikasi');
+
+  const doc = db.prepare('SELECT * FROM legal_documents WHERE company_id = ?').get(companyId);
+  res.json({ message: 'Dokumen legal berhasil disimpan', legal: doc });
+});
+
+// =============================================
+// API: MATERIALS (USER)
+// =============================================
+
+// GET /api/companies/:id/materials
+app.get('/api/companies/:id/materials', authMiddleware, (req, res) => {
+  const companyId = parseInt(req.params.id);
+  const company = db.prepare('SELECT * FROM companies WHERE id = ? AND user_id = ?').get(companyId, req.user.id);
+  if (!company) return res.status(403).json({ error: 'Akses ditolak' });
+
+  const progress = db.prepare('SELECT status FROM certification_progress WHERE company_id = ? AND stage = 3').get(companyId);
+  const materials = db.prepare('SELECT * FROM halal_materials WHERE company_id = ? ORDER BY id').all(companyId);
+  res.json({ materials, matrixSubmitted: progress?.status === 'Menunggu Verifikasi' || progress?.status === 'Terverifikasi' });
+});
+
+// POST /api/companies/:id/materials
+app.post('/api/companies/:id/materials', authMiddleware, (req, res) => {
+  const companyId = parseInt(req.params.id);
+  const userId = req.user.id;
+  const company = db.prepare('SELECT * FROM companies WHERE id = ? AND user_id = ?').get(companyId, userId);
+  if (!company) return res.status(403).json({ error: 'Akses ditolak' });
+
+  const { nama_bahan, jenis, produsen, negara, supplier, lembaga, nomor_sertifikat, expired, halal_status } = req.body;
+  if (!nama_bahan) return res.status(400).json({ error: 'Nama bahan wajib diisi' });
+
+  db.prepare(`
+    INSERT INTO halal_materials (company_id, nama_bahan, jenis, produsen, negara, supplier, lembaga, nomor_sertifikat, expired, halal_status)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+  `).run(companyId, nama_bahan, jenis || '', produsen || '', negara || '', supplier || '', lembaga || '', nomor_sertifikat || '', expired || '', halal_status || 'hijau');
+
+  const materials = db.prepare('SELECT * FROM halal_materials WHERE company_id = ? ORDER BY id').all(companyId);
+  logActivity(db, companyId, userId, 'material_add', `Bahan halal ditambahkan: ${nama_bahan}`);
+  res.json({ message: 'Bahan berhasil ditambahkan', materials });
+});
+
+// PUT /api/companies/:id/materials/:matId
+app.put('/api/companies/:id/materials/:matId', authMiddleware, (req, res) => {
+  const companyId = parseInt(req.params.id);
+  const matId = parseInt(req.params.matId);
+  const company = db.prepare('SELECT * FROM companies WHERE id = ? AND user_id = ?').get(companyId, req.user.id);
+  if (!company) return res.status(403).json({ error: 'Akses ditolak' });
+
+  const mat = db.prepare('SELECT * FROM halal_materials WHERE id = ? AND company_id = ?').get(matId, companyId);
+  if (!mat) return res.status(404).json({ error: 'Bahan tidak ditemukan' });
+
+  const { nama_bahan, jenis, produsen, negara, supplier, lembaga, nomor_sertifikat, expired, halal_status } = req.body;
+  db.prepare(`
+    UPDATE halal_materials SET
+      nama_bahan = ?, jenis = ?, produsen = ?, negara = ?, supplier = ?,
+      lembaga = ?, nomor_sertifikat = ?, expired = ?, halal_status = ?,
+      updated_at = datetime('now')
+    WHERE id = ? AND company_id = ?
+  `).run(
+    nama_bahan || mat.nama_bahan, jenis ?? mat.jenis, produsen ?? mat.produsen,
+    negara ?? mat.negara, supplier ?? mat.supplier, lembaga ?? mat.lembaga,
+    nomor_sertifikat ?? mat.nomor_sertifikat, expired ?? mat.expired,
+    halal_status ?? mat.halal_status, matId, companyId
+  );
+
+  const materials = db.prepare('SELECT * FROM halal_materials WHERE company_id = ? ORDER BY id').all(companyId);
+  res.json({ message: 'Bahan berhasil diperbarui', materials });
+});
+
+// DELETE /api/companies/:id/materials/:matId
+app.delete('/api/companies/:id/materials/:matId', authMiddleware, (req, res) => {
+  const companyId = parseInt(req.params.id);
+  const matId = parseInt(req.params.matId);
+  const company = db.prepare('SELECT * FROM companies WHERE id = ? AND user_id = ?').get(companyId, req.user.id);
+  if (!company) return res.status(403).json({ error: 'Akses ditolak' });
+
+  db.prepare('DELETE FROM halal_materials WHERE id = ? AND company_id = ?').run(matId, companyId);
+  const materials = db.prepare('SELECT * FROM halal_materials WHERE company_id = ? ORDER BY id').all(companyId);
+  res.json({ message: 'Bahan berhasil dihapus', materials });
+});
+
+// POST /api/companies/:id/materials/import — Excel import
+app.post('/api/companies/:id/materials/import', authMiddleware, upload.single('file'), (req, res) => {
+  const companyId = parseInt(req.params.id);
+  const userId = req.user.id;
+  const company = db.prepare('SELECT * FROM companies WHERE id = ? AND user_id = ?').get(companyId, userId);
+  if (!company) return res.status(403).json({ error: 'Akses ditolak' });
+  if (!req.file) return res.status(400).json({ error: 'File tidak ditemukan' });
+
+  try {
+    const workbook = XLSX.readFile(req.file.path);
+    const sheet = workbook.Sheets[workbook.SheetNames[0]];
+    const rows = XLSX.utils.sheet_to_json(sheet, { raw: false });
+
+    const errors = [];
+    const insertMat = db.prepare(`
+      INSERT INTO halal_materials (company_id, nama_bahan, jenis, produsen, negara, supplier, lembaga, nomor_sertifikat, expired, halal_status)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    `);
+
+    const insertAll = db.transaction((rows) => {
+      let count = 0;
+      rows.forEach((row, idx) => {
+        const nama = (row['nama_bahan'] || row['Nama Bahan'] || row['name'] || '').toString().trim();
+        const expired = (row['masa_berlaku'] || row['Expired'] || row['expired'] || '').toString().trim();
+        const sertifikat = (row['nomor_sertifikat/registr'] || row['nomor_sertifikat'] || row['Nomor Sertifikat'] || '').toString().trim();
+
+        if (!nama) {
+          errors.push(`Baris ${idx + 2}: Nama bahan wajib diisi`);
+          return;
+        }
+
+        let status = (row['Status Halal'] || row['status'] || 'hijau').toString().toLowerCase().trim();
+        if (!['hijau', 'kuning', 'merah'].includes(status)) status = 'hijau';
+
+        insertMat.run(
+          companyId, nama,
+          (row['jenis_bahan'] || '').toString().trim(),
+          (row['produsen'] || '').toString().trim(),
+          (row['negara'] || '').toString().trim(),
+          (row['supplier'] || row['Supplier'] || '').toString().trim(),
+          (row['lembaga_penerbit'] || '').toString().trim(),
+          sertifikat, expired, status
+        );
+        count++;
+      });
+      return count;
+    });
+
+    const count = insertAll(rows);
+    const materials = db.prepare('SELECT * FROM halal_materials WHERE company_id = ? ORDER BY id').all(companyId);
+    logActivity(db, companyId, userId, 'materials_import', `${count} bahan diimpor dari Excel`);
+
+    res.json({
+      message: `${count} bahan berhasil diimpor`,
+      errors: errors.length > 0 ? errors : undefined,
+      materials
+    });
+  } catch (err) {
+    console.error('Excel import error:', err);
+    res.status(500).json({ error: 'Gagal mengimpor file Excel: ' + err.message });
+  }
+});
+
+// POST /api/companies/:id/materials/submit
+app.post('/api/companies/:id/materials/submit', authMiddleware, (req, res) => {
+  const companyId = parseInt(req.params.id);
+  const userId = req.user.id;
+  const company = db.prepare('SELECT * FROM companies WHERE id = ? AND user_id = ?').get(companyId, userId);
+  if (!company) return res.status(403).json({ error: 'Akses ditolak' });
+
+  const matCount = db.prepare('SELECT COUNT(*) as c FROM halal_materials WHERE company_id = ?').get(companyId).c;
+  if (matCount === 0) return res.status(400).json({ error: 'Tambahkan minimal satu bahan sebelum submit' });
+
+  db.prepare(`UPDATE certification_progress SET status = 'Menunggu Verifikasi', updated_at = datetime('now') WHERE company_id = ? AND stage = 3`).run(companyId);
+  logActivity(db, companyId, userId, 'matrix_submit', `Matrix bahan halal (${matCount} bahan) disubmit untuk verifikasi`);
+
+  res.json({ message: 'Matrix bahan berhasil disubmit', matrixSubmitted: true });
+});
+
+// =============================================
+// API: PROGRESS (USER)
+// =============================================
+
+// GET /api/companies/:id/progress
+app.get('/api/companies/:id/progress', authMiddleware, (req, res) => {
+  const companyId = parseInt(req.params.id);
+  const company = db.prepare('SELECT * FROM companies WHERE id = ? AND user_id = ?').get(companyId, req.user.id);
+  if (!company) return res.status(403).json({ error: 'Akses ditolak' });
+
+  const stages = db.prepare('SELECT * FROM certification_progress WHERE company_id = ? ORDER BY stage').all(companyId);
+  const matCount = db.prepare('SELECT COUNT(*) as c FROM halal_materials WHERE company_id = ?').get(companyId).c;
+
+  const completedStages = stages.filter(s => ['Selesai', 'Terverifikasi'].includes(s.status)).length;
+  const totalPercent = Math.round((completedStages / 7) * 100);
+
+  const currentStage = stages.find(s => !['Selesai', 'Terverifikasi'].includes(s.status)) || stages[stages.length - 1];
+
+  res.json({
+    company,
+    stages,
+    completedStages,
+    totalPercent,
+    currentStage: currentStage?.stage_name || 'Selesai',
+    currentStageNum: currentStage?.stage || 7,
+    matCount
+  });
+});
+
+// =============================================
+// API: FILE UPLOAD (USER)
+// =============================================
+
+// POST /api/upload
+app.post('/api/upload', authMiddleware, upload.single('file'), (req, res) => {
+  if (!req.file) return res.status(400).json({ error: 'File tidak ada' });
+
+  const companyId = req.body.company_id ? parseInt(req.body.company_id) : null;
+  const docType = req.body.document_type || 'general';
+
+  // Log to uploaded_files table
+  db.prepare(`
+    INSERT INTO uploaded_files (company_id, user_id, original_name, stored_name, file_path, document_type)
+    VALUES (?, ?, ?, ?, ?, ?)
+  `).run(companyId, req.user.id, req.file.originalname, req.file.filename, `/uploads/${req.file.filename}`, docType);
+
+  res.json({
+    message: 'File berhasil diupload',
+    filename: req.file.filename,
+    originalName: req.file.originalname,
+    url: `/uploads/${req.file.filename}`
+  });
+});
+
+// =============================================
+// BACKWARD COMPATIBILITY: Legacy API routes
+// These allow the existing frontend to work while migrating
+// =============================================
+
+// Legacy: GET /api/company-profile
+app.get('/api/company-profile', authMiddleware, (req, res) => {
+  const userId = req.user.id;
+  const company = db.prepare('SELECT * FROM companies WHERE user_id = ?').get(userId);
+  if (!company) return res.json({});
+  // Map to old format
+  res.json({
+    nama: company.nama,
+    nib: company.nib,
+    npwp: company.npwp,
+    penanggungJawab: company.penanggung_jawab,
+    jenisUsaha: company.jenis_usaha,
+    skalaUsaha: company.skala_usaha,
+    jumlahOutlet: company.jumlah_outlet,
+    cabang: company.cabang,
+    alamat: company.alamat,
+    _company_id: company.id
+  });
+});
+
+// Legacy: POST /api/company-profile
+app.post('/api/company-profile', authMiddleware, (req, res) => {
+  const userId = req.user.id;
+  const { nama, nib, npwp, penanggungJawab, jenisUsaha, skalaUsaha, jumlahOutlet, cabang, alamat } = req.body;
+
+  let company = db.prepare('SELECT * FROM companies WHERE user_id = ?').get(userId);
+  if (company) {
+    db.prepare(`
+      UPDATE companies SET nama=?, nib=?, npwp=?, penanggung_jawab=?, jenis_usaha=?, skala_usaha=?, jumlah_outlet=?, cabang=?, alamat=?, updated_at=datetime('now')
+      WHERE user_id=?
+    `).run(nama||'', nib||'', npwp||'', penanggungJawab||'', jenisUsaha||'', skalaUsaha||'', jumlahOutlet||'', cabang||'', alamat||'', userId);
+  } else {
+    const r = db.prepare(`INSERT INTO companies (user_id,nama,nib,npwp,penanggung_jawab,jenis_usaha,skala_usaha,jumlah_outlet,cabang,alamat) VALUES (?,?,?,?,?,?,?,?,?,?)`
+    ).run(userId, nama||'', nib||'', npwp||'', penanggungJawab||'', jenisUsaha||'', skalaUsaha||'', jumlahOutlet||'', cabang||'', alamat||'');
+    const cid = r.lastInsertRowid;
+    db.prepare('UPDATE users SET company_id=? WHERE id=?').run(cid, userId);
+    initCompanyProgress(db, cid);
+  }
+
+  company = db.prepare('SELECT * FROM companies WHERE user_id=?').get(userId);
+  if (company) {
+    db.prepare(`UPDATE certification_progress SET status='Selesai' WHERE company_id=? AND stage=1`).run(company.id);
+    logActivity(db, company.id, userId, 'company_update', `Registrasi perusahaan: ${nama}`);
+  }
+
+  res.json({ message: 'Profile saved successfully', data: req.body });
+});
+
+// Legacy: GET /api/legal
+app.get('/api/legal', authMiddleware, (req, res) => {
+  const userId = req.user.id;
+  const company = db.prepare('SELECT id FROM companies WHERE user_id=?').get(userId);
+  if (!company) return res.json({});
+  const doc = db.prepare('SELECT * FROM legal_documents WHERE company_id=?').get(company.id);
+  if (!doc) return res.json({});
+  res.json({
+    telpPemilik: doc.telp_pemilik, telpPenyelia: doc.telp_penyelia,
+    emailSihalal: doc.email_sihalal, permohonan: doc.permohonan,
+    sk_penyelia: doc.sk_penyelia, sk_manajemen: doc.sk_manajemen,
+    kebijakan: doc.kebijakan, ttdPemilik: doc.ttd_pemilik, ttdPenyelia: doc.ttd_penyelia
+  });
+});
+
+// Legacy: POST /api/legal
+app.post('/api/legal', authMiddleware, (req, res) => {
+  const userId = req.user.id;
+  const company = db.prepare('SELECT id FROM companies WHERE user_id=?').get(userId);
+  if (!company) return res.status(404).json({ error: 'Buat profil perusahaan dulu' });
+
+  const { telpPemilik, telpPenyelia, emailSihalal, permohonan, sk_penyelia, sk_manajemen, kebijakan, ttdPemilik, ttdPenyelia } = req.body;
+  const existing = db.prepare('SELECT id FROM legal_documents WHERE company_id=?').get(company.id);
+  if (existing) {
+    db.prepare(`UPDATE legal_documents SET telp_pemilik=?,telp_penyelia=?,email_sihalal=?,permohonan=?,sk_penyelia=?,sk_manajemen=?,kebijakan=?,ttd_pemilik=?,ttd_penyelia=?,status='Menunggu Verifikasi',updated_at=datetime('now') WHERE company_id=?`
+    ).run(telpPemilik||'', telpPenyelia||'', emailSihalal||'', permohonan||'', sk_penyelia||'', sk_manajemen||'', kebijakan||'', ttdPemilik||'', ttdPenyelia||'', company.id);
+  } else {
+    db.prepare(`INSERT INTO legal_documents (company_id,telp_pemilik,telp_penyelia,email_sihalal,permohonan,sk_penyelia,sk_manajemen,kebijakan,ttd_pemilik,ttd_penyelia,status) VALUES (?,?,?,?,?,?,?,?,?,?,'Menunggu Verifikasi')`
+    ).run(company.id, telpPemilik||'', telpPenyelia||'', emailSihalal||'', permohonan||'', sk_penyelia||'', sk_manajemen||'', kebijakan||'', ttdPemilik||'', ttdPenyelia||'');
+  }
+  db.prepare(`UPDATE certification_progress SET status='Menunggu Verifikasi' WHERE company_id=? AND stage=2`).run(company.id);
+  logActivity(db, company.id, userId, 'legal_submit', 'Dokumen legal disubmit');
+  res.json({ message: 'Legal data saved successfully' });
+});
+
+// Legacy: GET /api/materials
+app.get('/api/materials', authMiddleware, (req, res) => {
+  const userId = req.user.id;
+  const company = db.prepare('SELECT id FROM companies WHERE user_id=?').get(userId);
+  if (!company) return res.json({ materials: [], matrixSubmitted: false });
+  const progress = db.prepare('SELECT status FROM certification_progress WHERE company_id=? AND stage=3').get(company.id);
+  const materials = db.prepare('SELECT * FROM halal_materials WHERE company_id=? ORDER BY id').all(company.id);
+  // Map to legacy format
+  const mapped = materials.map(m => ({ id: m.id, name: m.nama_bahan, jenis: m.jenis, produsen: m.produsen, negara: m.negara, supplier: m.supplier, lembaga: m.lembaga, sertifikat: m.nomor_sertifikat, expired: m.expired, status: m.halal_status }));
+  res.json({ materials: mapped, matrixSubmitted: ['Menunggu Verifikasi','Terverifikasi'].includes(progress?.status) });
+});
+
+// Legacy: POST /api/materials
+app.post('/api/materials', authMiddleware, (req, res) => {
+  const userId = req.user.id;
+  const company = db.prepare('SELECT id FROM companies WHERE user_id=?').get(userId);
+  if (!company) return res.status(404).json({ error: 'Buat profil perusahaan dulu' });
+  const { name, jenis, produsen, negara, supplier, lembaga, sertifikat, expired, status } = req.body;
+  db.prepare(`INSERT INTO halal_materials (company_id,nama_bahan,jenis,produsen,negara,supplier,lembaga,nomor_sertifikat,expired,halal_status) VALUES (?,?,?,?,?,?,?,?,?,?)`
+  ).run(company.id, name||'', jenis||'', produsen||'', negara||'', supplier||'', lembaga||'', sertifikat||'', expired||'', status||'hijau');
+  const all = db.prepare('SELECT * FROM halal_materials WHERE company_id=? ORDER BY id').all(company.id);
+  const mapped = all.map(m => ({ id: m.id, name: m.nama_bahan, jenis: m.jenis, produsen: m.produsen, negara: m.negara, supplier: m.supplier, lembaga: m.lembaga, sertifikat: m.nomor_sertifikat, expired: m.expired, status: m.halal_status }));
+  logActivity(db, company.id, userId, 'material_add', `Bahan ditambahkan: ${name}`);
+  res.json({ message: 'Material added successfully', materials: mapped });
+});
+
+// Legacy: PUT /api/materials/:id
+app.put('/api/materials/:id', authMiddleware, (req, res) => {
+  const userId = req.user.id;
+  const company = db.prepare('SELECT id FROM companies WHERE user_id=?').get(userId);
+  if (!company) return res.status(404).json({ error: 'Perusahaan tidak ditemukan' });
+  const matId = parseInt(req.params.id);
+  const mat = db.prepare('SELECT * FROM halal_materials WHERE id=? AND company_id=?').get(matId, company.id);
+  if (!mat) return res.status(404).json({ error: 'Bahan tidak ditemukan' });
+  const { name, jenis, produsen, negara, supplier, lembaga, sertifikat, expired, status } = req.body;
+  db.prepare(`UPDATE halal_materials SET nama_bahan=?,jenis=?,produsen=?,negara=?,supplier=?,lembaga=?,nomor_sertifikat=?,expired=?,halal_status=?,updated_at=datetime('now') WHERE id=? AND company_id=?`
+  ).run(name||mat.nama_bahan, jenis??mat.jenis, produsen??mat.produsen, negara??mat.negara, supplier??mat.supplier, lembaga??mat.lembaga, sertifikat??mat.nomor_sertifikat, expired??mat.expired, status??mat.halal_status, matId, company.id);
+  const all = db.prepare('SELECT * FROM halal_materials WHERE company_id=? ORDER BY id').all(company.id);
+  const mapped = all.map(m => ({ id: m.id, name: m.nama_bahan, jenis: m.jenis, produsen: m.produsen, negara: m.negara, supplier: m.supplier, lembaga: m.lembaga, sertifikat: m.nomor_sertifikat, expired: m.expired, status: m.halal_status }));
+  res.json({ message: 'Material updated', materials: mapped });
+});
+
+// Legacy: DELETE /api/materials/:id
+app.delete('/api/materials/:id', authMiddleware, (req, res) => {
+  const userId = req.user.id;
+  const company = db.prepare('SELECT id FROM companies WHERE user_id=?').get(userId);
+  if (!company) return res.status(404).json({ error: 'Perusahaan tidak ditemukan' });
+  db.prepare('DELETE FROM halal_materials WHERE id=? AND company_id=?').run(parseInt(req.params.id), company.id);
+  const all = db.prepare('SELECT * FROM halal_materials WHERE company_id=? ORDER BY id').all(company.id);
+  const mapped = all.map(m => ({ id: m.id, name: m.nama_bahan, jenis: m.jenis, produsen: m.produsen, negara: m.negara, supplier: m.supplier, lembaga: m.lembaga, sertifikat: m.nomor_sertifikat, expired: m.expired, status: m.halal_status }));
+  res.json({ message: 'Material deleted', materials: mapped });
+});
+
+// Legacy: POST /api/materials/import
+app.post('/api/materials/import', authMiddleware, upload.single('file'), (req, res) => {
+  const userId = req.user.id;
+  const company = db.prepare('SELECT id FROM companies WHERE user_id=?').get(userId);
+  if (!company) return res.status(404).json({ error: 'Buat profil perusahaan dulu' });
+  if (!req.file) return res.status(400).json({ error: 'No file uploaded' });
+  try {
+    const workbook = XLSX.readFile(req.file.path);
+    const sheet = workbook.Sheets[workbook.SheetNames[0]];
+    const rows = XLSX.utils.sheet_to_json(sheet, { raw: false });
+    const insertMat = db.prepare(`INSERT INTO halal_materials (company_id,nama_bahan,jenis,produsen,negara,supplier,lembaga,nomor_sertifikat,expired,halal_status) VALUES (?,?,?,?,?,?,?,?,?,?)`);
+    let count = 0;
+    const insertAll = db.transaction((rows) => {
+      for (const row of rows) {
+        const name = (row['nama_bahan']||row['Nama Bahan']||row['name']||'').toString().trim();
+        if (!name) continue;
+        let status = (row['Status Halal']||row['status']||'hijau').toString().toLowerCase().trim();
+        if (!['hijau','kuning','merah'].includes(status)) status = 'hijau';
+        insertMat.run(company.id, name, (row['jenis_bahan']||'').toString().trim(), (row['produsen']||'').toString().trim(), (row['negara']||'').toString().trim(), (row['supplier']||row['Supplier']||'').toString().trim(), (row['lembaga_penerbit']||'').toString().trim(), (row['nomor_sertifikat/registr']||row['nomor_sertifikat']||'').toString().trim(), (row['masa_berlaku']||row['Expired']||row['expired']||'').toString().trim(), status);
+        count++;
+      }
+    });
+    insertAll(rows);
+    const all = db.prepare('SELECT * FROM halal_materials WHERE company_id=? ORDER BY id').all(company.id);
+    const mapped = all.map(m => ({ id: m.id, name: m.nama_bahan, jenis: m.jenis, produsen: m.produsen, negara: m.negara, supplier: m.supplier, lembaga: m.lembaga, sertifikat: m.nomor_sertifikat, expired: m.expired, status: m.halal_status }));
+    logActivity(db, company.id, userId, 'materials_import', `${count} bahan diimpor dari Excel`);
+    res.json({ message: `${count} bahan baku berhasil diimpor`, materials: mapped });
+  } catch (err) {
+    res.status(500).json({ error: 'Gagal mengimpor file Excel' });
+  }
+});
+
+// Legacy: POST /api/materials/submit
+app.post('/api/materials/submit', authMiddleware, (req, res) => {
+  const userId = req.user.id;
+  const company = db.prepare('SELECT id FROM companies WHERE user_id=?').get(userId);
+  if (!company) return res.status(404).json({ error: 'Perusahaan tidak ditemukan' });
+  db.prepare(`UPDATE certification_progress SET status='Menunggu Verifikasi',updated_at=datetime('now') WHERE company_id=? AND stage=3`).run(company.id);
+  logActivity(db, company.id, userId, 'matrix_submit', 'Matrix bahan disubmit');
+  res.json({ message: 'Matrix submitted successfully', matrixSubmitted: true });
+});
+
+// Legacy: GET /api/progress
+app.get('/api/progress', authMiddleware, (req, res) => {
+  const userId = req.user.id;
+  const company = db.prepare('SELECT * FROM companies WHERE user_id=?').get(userId);
+  const user = db.prepare('SELECT * FROM users WHERE id=?').get(userId);
+
+  if (!company) {
+    return res.json({ currentUser: { namaLengkap: user?.name, email: user?.email, nomorTelepon: user?.phone, loginAt: user?.created_at }, steps: [], completedCount: 0, totalPercent: 0, materialsCount: 0, certificationStatus: 0 });
+  }
+
+  const stages = db.prepare('SELECT * FROM certification_progress WHERE company_id=? ORDER BY stage').all(company.id);
+  const matCount = db.prepare('SELECT COUNT(*) as c FROM halal_materials WHERE company_id=?').get(company.id).c;
+
+  const steps = stages.map(s => ({
+    id: s.stage, label: s.stage_name,
+    completed: ['Selesai','Terverifikasi'].includes(s.status),
+    status: s.status,
+    detail: s.status
+  }));
+
+  const completedCount = steps.filter(s => s.completed).length;
+  const totalPercent = Math.round((completedCount / 7) * 100);
+
+  res.json({
+    currentUser: { namaLengkap: user?.name, email: user?.email, nomorTelepon: user?.phone, loginAt: user?.created_at },
+    company,
+    steps, completedCount, totalPercent,
+    materialsCount: matCount, certificationStatus: company.certification_status || 0
+  });
+});
+
+// Legacy: GET/POST /api/certification-status
+app.get('/api/certification-status', authMiddleware, (req, res) => {
+  const userId = req.user.id;
+  const company = db.prepare('SELECT certification_status FROM companies WHERE user_id=?').get(userId);
+  res.json({ certificationStatus: company?.certification_status || 0 });
+});
+
+// =============================================
+// API: PRODUCTS & BOM (USER)
+// =============================================
+
+// Ensure products table exists
+try {
+  db.exec(`
+    CREATE TABLE IF NOT EXISTS products (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      company_id INTEGER NOT NULL,
+      name TEXT NOT NULL,
+      bahan TEXT DEFAULT '[]',
+      submitted INTEGER DEFAULT 0,
+      created_at TEXT DEFAULT (datetime('now')),
+      updated_at TEXT DEFAULT (datetime('now')),
+      FOREIGN KEY (company_id) REFERENCES companies(id) ON DELETE CASCADE
+    )
+  `);
+  db.exec(`
+    CREATE TABLE IF NOT EXISTS production_data (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      company_id INTEGER NOT NULL UNIQUE,
+      alur_proses TEXT,
+      layout_ruang TEXT,
+      bebas_babi TEXT,
+      created_at TEXT DEFAULT (datetime('now')),
+      updated_at TEXT DEFAULT (datetime('now')),
+      FOREIGN KEY (company_id) REFERENCES companies(id) ON DELETE CASCADE
+    )
+  `);
+} catch(e) { console.log('Tables may already exist:', e.message); }
+
+// GET /api/products — get all products for user's company
+app.get('/api/products', authMiddleware, (req, res) => {
+  const userId = req.user.id;
+  const company = db.prepare('SELECT id FROM companies WHERE user_id=?').get(userId);
+  if (!company) return res.json({ products: [], productsSubmitted: false });
+  const rows = db.prepare('SELECT * FROM products WHERE company_id=? ORDER BY id').all(company.id);
+  const products = rows.map(r => ({ ...r, bahan: JSON.parse(r.bahan || '[]') }));
+  const submitted = products.length > 0 && products.every(p => p.submitted === 1);
+  res.json({ products, productsSubmitted: submitted });
+});
+
+// POST /api/products — save a product with BOM
+app.post('/api/products', authMiddleware, (req, res) => {
+  const userId = req.user.id;
+  const company = db.prepare('SELECT id FROM companies WHERE user_id=?').get(userId);
+  if (!company) return res.status(404).json({ error: 'Perusahaan belum dibuat' });
+  const { name, bahan } = req.body;
+  if (!name) return res.status(400).json({ error: 'Nama produk wajib diisi' });
+  const bahanJson = JSON.stringify(bahan || []);
+  db.prepare(`INSERT INTO products (company_id, name, bahan, submitted) VALUES (?, ?, ?, 0)`).run(company.id, name, bahanJson);
+  const rows = db.prepare('SELECT * FROM products WHERE company_id=? ORDER BY id').all(company.id);
+  const products = rows.map(r => ({ ...r, bahan: JSON.parse(r.bahan || '[]') }));
+  logActivity(db, company.id, userId, 'product_add', `Produk ditambahkan: ${name}`);
+  res.json({ message: 'OK', products });
+});
+
+// DELETE /api/products/:id
+app.delete('/api/products/:id', authMiddleware, (req, res) => {
+  const userId = req.user.id;
+  const company = db.prepare('SELECT id FROM companies WHERE user_id=?').get(userId);
+  if (!company) return res.status(404).json({ error: 'Perusahaan tidak ditemukan' });
+  db.prepare('DELETE FROM products WHERE id=? AND company_id=?').run(parseInt(req.params.id), company.id);
+  const rows = db.prepare('SELECT * FROM products WHERE company_id=? ORDER BY id').all(company.id);
+  const products = rows.map(r => ({ ...r, bahan: JSON.parse(r.bahan || '[]') }));
+  res.json({ message: 'OK', products });
+});
+
+// POST /api/products/import — Excel import (stub, keeps compatibility)
+app.post('/api/products/import', authMiddleware, upload.single('file'), (req, res) => res.json({ message: '0 produk diimpor', products: [] }));
+
+// POST /api/products/submit — mark stage 4 as submitted
+app.post('/api/products/submit', authMiddleware, (req, res) => {
+  const userId = req.user.id;
+  const company = db.prepare('SELECT id FROM companies WHERE user_id=?').get(userId);
+  if (!company) return res.status(404).json({ error: 'Perusahaan tidak ditemukan' });
+  db.prepare(`UPDATE products SET submitted=1 WHERE company_id=?`).run(company.id);
+  db.prepare(`UPDATE certification_progress SET status='Menunggu Verifikasi', updated_at=datetime('now') WHERE company_id=? AND stage=4`).run(company.id);
+  logActivity(db, company.id, userId, 'products_submit', 'Data produk & BOM disubmit untuk verifikasi');
+  res.json({ message: 'OK', productsSubmitted: true });
+});
+
+// =============================================
+// API: PROSES PRODUKSI (USER)
+// =============================================
+
+// GET /api/production
+app.get('/api/production', authMiddleware, (req, res) => {
+  const userId = req.user.id;
+  const company = db.prepare('SELECT id FROM companies WHERE user_id=?').get(userId);
+  if (!company) return res.json({});
+  const row = db.prepare('SELECT * FROM production_data WHERE company_id=?').get(company.id);
+  if (!row) return res.json({});
+  res.json({ alurProses: row.alur_proses, layoutRuang: row.layout_ruang, bebasBabi: row.bebas_babi });
+});
+
+// POST /api/production
+app.post('/api/production', authMiddleware, (req, res) => {
+  const userId = req.user.id;
+  const company = db.prepare('SELECT id FROM companies WHERE user_id=?').get(userId);
+  if (!company) return res.status(404).json({ error: 'Perusahaan tidak ditemukan' });
+  const { alurProses, layoutRuang, bebasBabi } = req.body;
+  const existing = db.prepare('SELECT id FROM production_data WHERE company_id=?').get(company.id);
+  if (existing) {
+    db.prepare(`UPDATE production_data SET alur_proses=?, layout_ruang=?, bebas_babi=?, updated_at=datetime('now') WHERE company_id=?`)
+      .run(alurProses||existing.alur_proses, layoutRuang||existing.layout_ruang, bebasBabi||existing.bebas_babi, company.id);
+  } else {
+    db.prepare(`INSERT INTO production_data (company_id, alur_proses, layout_ruang, bebas_babi) VALUES (?,?,?,?)`)
+      .run(company.id, alurProses||'', layoutRuang||'', bebasBabi||'');
+  }
+  db.prepare(`UPDATE certification_progress SET status='Menunggu Verifikasi', updated_at=datetime('now') WHERE company_id=? AND stage=5`).run(company.id);
+  logActivity(db, company.id, userId, 'production_save', 'Dokumen proses produksi halal disimpan');
+  res.json({ message: 'OK' });
+});
+
+// =============================================
+// API: EVIDENCE BUKTI (USER)
+// =============================================
+
+// Ensure evidence_data table exists
+try {
+  db.exec(`
+    CREATE TABLE IF NOT EXISTS evidence_data (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      company_id INTEGER NOT NULL UNIQUE,
+      sosialisasiFoto TEXT,
+      auditInternalFoto TEXT,
+      sosialisasiAbsen TEXT,
+      auditInternalAbsen TEXT,
+      pembelianBahan TEXT,
+      penyimpananBahan TEXT,
+      hasilProduksi TEXT,
+      distribusiProduk TEXT,
+      created_at TEXT DEFAULT (datetime('now')),
+      updated_at TEXT DEFAULT (datetime('now')),
+      FOREIGN KEY (company_id) REFERENCES companies(id) ON DELETE CASCADE
+    )
+  `);
+} catch(e) { console.log('Tables may already exist:', e.message); }
+
+app.get('/api/evidence', authMiddleware, (req, res) => {
+  const userId = req.user.id;
+  const company = db.prepare('SELECT id FROM companies WHERE user_id=?').get(userId);
+  if (!company) return res.json({});
+  const row = db.prepare('SELECT * FROM evidence_data WHERE company_id=?').get(company.id);
+  if (!row) return res.json({});
+  res.json({
+    sosialisasiFoto: row.sosialisasiFoto,
+    auditInternalFoto: row.auditInternalFoto,
+    sosialisasiAbsen: row.sosialisasiAbsen,
+    auditInternalAbsen: row.auditInternalAbsen,
+    pembelianBahan: row.pembelianBahan,
+    penyimpananBahan: row.penyimpananBahan,
+    hasilProduksi: row.hasilProduksi,
+    distribusiProduk: row.distribusiProduk
+  });
+});
+
+app.post('/api/evidence', authMiddleware, (req, res) => {
+  const userId = req.user.id;
+  const company = db.prepare('SELECT id FROM companies WHERE user_id=?').get(userId);
+  if (!company) return res.status(404).json({ error: 'Perusahaan tidak ditemukan' });
+  const data = req.body;
+  const existing = db.prepare('SELECT id FROM evidence_data WHERE company_id=?').get(company.id);
+  if (existing) {
+    db.prepare(`
+      UPDATE evidence_data SET 
+        sosialisasiFoto=?, auditInternalFoto=?, sosialisasiAbsen=?, auditInternalAbsen=?, 
+        pembelianBahan=?, penyimpananBahan=?, hasilProduksi=?, distribusiProduk=?, updated_at=datetime('now')
+      WHERE company_id=?
+    `).run(
+      data.sosialisasiFoto||existing.sosialisasiFoto, data.auditInternalFoto||existing.auditInternalFoto,
+      data.sosialisasiAbsen||existing.sosialisasiAbsen, data.auditInternalAbsen||existing.auditInternalAbsen,
+      data.pembelianBahan||existing.pembelianBahan, data.penyimpananBahan||existing.penyimpananBahan,
+      data.hasilProduksi||existing.hasilProduksi, data.distribusiProduk||existing.distribusiProduk,
+      company.id
+    );
+  } else {
+    db.prepare(`
+      INSERT INTO evidence_data (
+        company_id, sosialisasiFoto, auditInternalFoto, sosialisasiAbsen, auditInternalAbsen,
+        pembelianBahan, penyimpananBahan, hasilProduksi, distribusiProduk
+      ) VALUES (?,?,?,?,?,?,?,?,?)
+    `).run(
+      company.id, data.sosialisasiFoto||'', data.auditInternalFoto||'', data.sosialisasiAbsen||'', data.auditInternalAbsen||'',
+      data.pembelianBahan||'', data.penyimpananBahan||'', data.hasilProduksi||'', data.distribusiProduk||''
+    );
+  }
+  db.prepare(`UPDATE certification_progress SET status='Menunggu Verifikasi', updated_at=datetime('now') WHERE company_id=? AND stage=6`).run(company.id);
+  logActivity(db, company.id, userId, 'evidence_save', 'Dokumen evidence disimpan');
+  res.json({ message: 'OK' });
+});
+
+// =============================================
+// API: SUBMIT APPLICATION & CERTIFICATE (USER)
+// =============================================
+
+app.post('/api/submit-application', authMiddleware, (req, res) => {
+  const userId = req.user.id;
+  const company = db.prepare('SELECT id FROM companies WHERE user_id=?').get(userId);
+  if (!company) return res.status(404).json({ error: 'Perusahaan tidak ditemukan' });
+  // Set certification_status to 8 (Menunggu Verifikasi BPJPH/Admin)
+  db.prepare(`UPDATE companies SET certification_status=8, updated_at=datetime('now') WHERE id=?`).run(company.id);
+  logActivity(db, company.id, userId, 'submit_application', 'Mengajukan permohonan sertifikasi halal ke sistem');
+  res.json({ message: 'OK', status: 8 });
+});
+
+app.get('/api/certificate', authMiddleware, (req, res) => {
+  const userId = req.user.id;
+  const company = db.prepare('SELECT id, nama, certification_status FROM companies WHERE user_id=?').get(userId);
+  if (!company || company.certification_status < 8) {
+    return res.status(403).json({ error: 'Sertifikat belum tersedia atau belum disetujui' });
+  }
+  
+  const htmlContent = `
+<!DOCTYPE html>
+<html lang="id">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Sertifikat Halal - ${company.nama || 'Perusahaan'}</title>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,600;0,700;1,600&family=Poppins:wght@400;500;600;700&display=swap');
+        
+        body, html {
+            margin: 0;
+            padding: 0;
+            background-color: #f3f4f6;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            min-height: 100vh;
+            font-family: 'Poppins', sans-serif;
+        }
+        
+        .certificate-wrapper {
+            background: #fff;
+            padding: 20px;
+            box-shadow: 0 20px 50px rgba(0,0,0,0.1);
+            border-radius: 10px;
+        }
+
+        .certificate {
+            width: 800px;
+            height: 560px;
+            padding: 40px;
+            position: relative;
+            background: #fff url('https://www.transparenttextures.com/patterns/cream-paper.png');
+            border: 8px solid #059669;
+            box-sizing: border-box;
+            text-align: center;
+            color: #1f2937;
+        }
+
+        .certificate::before {
+            content: '';
+            position: absolute;
+            top: 6px;
+            left: 6px;
+            right: 6px;
+            bottom: 6px;
+            border: 2px solid #10b981;
+            pointer-events: none;
+        }
+
+        .header {
+            margin-bottom: 30px;
+            position: relative;
+        }
+
+        .logo-text {
+            font-family: 'Playfair Display', serif;
+            font-size: 24px;
+            color: #065f46;
+            letter-spacing: 2px;
+            text-transform: uppercase;
+            font-weight: 700;
+        }
+
+        .title {
+            font-family: 'Playfair Display', serif;
+            font-size: 48px;
+            color: #047857;
+            margin: 15px 0 5px 0;
+            text-transform: uppercase;
+            letter-spacing: 4px;
+            text-shadow: 1px 1px 2px rgba(0,0,0,0.1);
+        }
+
+        .subtitle {
+            font-size: 14px;
+            color: #6b7280;
+            letter-spacing: 2px;
+            text-transform: uppercase;
+            margin-bottom: 40px;
+        }
+
+        .content {
+            margin-top: 30px;
+        }
+
+        .presented-to {
+            font-size: 16px;
+            color: #4b5563;
+            margin-bottom: 15px;
+        }
+
+        .company-name {
+            font-family: 'Playfair Display', serif;
+            font-size: 42px;
+            color: #1f2937;
+            font-style: italic;
+            border-bottom: 2px solid #d1d5db;
+            display: inline-block;
+            padding-bottom: 5px;
+            margin-bottom: 25px;
+            font-weight: 600;
+        }
+
+        .description {
+            font-size: 15px;
+            color: #4b5563;
+            line-height: 1.6;
+            max-width: 600px;
+            margin: 0 auto;
+        }
+
+        .footer {
+            margin-top: 50px;
+            display: flex;
+            justify-content: space-around;
+            align-items: flex-end;
+        }
+
+        .signature-block {
+            text-align: center;
+        }
+
+        .signature {
+            font-family: 'Playfair Display', cursive;
+            font-size: 28px;
+            color: #065f46;
+            border-bottom: 1px solid #9ca3af;
+            padding-bottom: 5px;
+            margin-bottom: 10px;
+            font-style: italic;
+        }
+
+        .date {
+            font-size: 16px;
+            font-weight: 600;
+            color: #374151;
+            border-bottom: 1px solid #9ca3af;
+            padding-bottom: 5px;
+            margin-bottom: 10px;
+            min-width: 150px;
+            display: inline-block;
+        }
+
+        .signature-title {
+            font-size: 12px;
+            color: #6b7280;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+            font-weight: 600;
+        }
+        
+        .badge {
+            width: 100px;
+            height: 100px;
+            background: linear-gradient(135deg, #059669, #10b981);
+            border-radius: 50%;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            color: white;
+            font-family: 'Playfair Display', serif;
+            font-weight: bold;
+            font-size: 20px;
+            box-shadow: 0 4px 15px rgba(16, 185, 129, 0.4);
+            border: 4px solid #fff;
+            position: relative;
+        }
+        
+        .badge::after {
+            content: '';
+            position: absolute;
+            top: -6px; left: -6px; right: -6px; bottom: -6px;
+            border: 1px dashed #059669;
+            border-radius: 50%;
+        }
+
+        @media print {
+            body { background: white; }
+            .certificate-wrapper { box-shadow: none; padding: 0; }
+        }
+    </style>
+</head>
+<body>
+    <div class="certificate-wrapper">
+        <div class="certificate">
+            <div class="header">
+                <div class="logo-text">JHC HalalFlow</div>
+                <h1 class="title">Sertifikat Halal</h1>
+                <div class="subtitle">Sistem Jaminan Produk Halal (SJPH)</div>
+            </div>
+
+            <div class="content">
+                <div class="presented-to">Sertifikat ini diberikan dengan bangga kepada:</div>
+                <div class="company-name">${company.nama || 'Nama Perusahaan'}</div>
+                <div class="description">
+                    Telah memenuhi seluruh standar dan kriteria Sistem Jaminan Produk Halal (SJPH).<br>
+                    Produk dan fasilitas produksi perusahaan ini dinyatakan <strong>HALAL</strong> dan telah disetujui secara resmi.
+                </div>
+            </div>
+
+            <div class="footer">
+                <div class="signature-block">
+                    <div class="date">${new Date().toLocaleDateString('id-ID', { year: 'numeric', month: 'long', day: 'numeric' })}</div>
+                    <div class="signature-title">Tanggal Disetujui</div>
+                </div>
+                
+                <div class="badge">
+                    HALAL
+                </div>
+
+                <div class="signature-block">
+                    <div class="signature">Admin JHC</div>
+                    <div class="signature-title">Otorisasi JHC HalalFlow</div>
+                </div>
+            </div>
+        </div>
+    </div>
+</body>
+</html>
+  `;
+  
+  res.setHeader('Content-Type', 'text/html');
+  res.send(htmlContent);
+});
+
+// =============================================
+// API: CHAT (USER)
+// =============================================
+app.get('/api/chat', authMiddleware, (req, res) => res.json([{ sender: 'ai', text: 'Halo! Saya AI Halal Assistant JHC. Ada yang ingin ditanyakan?' }]));
+app.post('/api/chat', authMiddleware, (req, res) => {
+  const reply = 'Berdasarkan standar SJPH BPJPH, pastikan seluruh bahan baku utama telah memiliki sertifikat halal yang valid.';
+  res.json({ messages: [{ sender: 'user', text: req.body.text }, { sender: 'ai', text: reply }] });
+});
+
+// Legacy: Template downloads
+const frontendPublicDir = path.join(__dirname, '..', 'frontend', 'public');
+const XLSX_MIME = 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet';
+app.get('/api/template/bahan', (req, res) => {
+  const f = path.join(frontendPublicDir, 'nama-bahan.xlsx');
+  if (!fs.existsSync(f)) return res.status(404).json({ error: 'Template tidak ditemukan' });
+  res.setHeader('Content-Type', XLSX_MIME);
+  res.setHeader('Content-Disposition', 'attachment; filename="nama-bahan.xlsx"');
+  res.sendFile(f);
+});
+app.get('/api/template/produk', (req, res) => {
+  const f = path.join(frontendPublicDir, 'nama_produk.xlsx');
+  if (!fs.existsSync(f)) return res.status(404).json({ error: 'Template tidak ditemukan' });
+  res.setHeader('Content-Type', XLSX_MIME);
+  res.setHeader('Content-Disposition', 'attachment; filename="nama_produk.xlsx"');
+  res.sendFile(f);
+});
+
+// =============================================
+// API: ADMIN ENDPOINTS
+// =============================================
+
+// GET /api/admin/dashboard
+app.get('/api/admin/dashboard', adminAuthMiddleware, (req, res) => {
+  const totalCompanies = db.prepare('SELECT COUNT(*) as c FROM companies').get().c;
+  const newThisWeek = db.prepare(`SELECT COUNT(*) as c FROM companies WHERE created_at >= datetime('now', '-7 days')`).get().c;
+  const totalUsers = db.prepare('SELECT COUNT(*) as c FROM users').get().c;
+
+  const legalPending = db.prepare(`SELECT COUNT(*) as c FROM legal_documents WHERE status = 'Menunggu Verifikasi'`).get().c;
+  const legalVerified = db.prepare(`SELECT COUNT(*) as c FROM legal_documents WHERE status = 'Terverifikasi'`).get().c;
+  const matrixPending = db.prepare(`SELECT COUNT(*) as c FROM certification_progress WHERE stage = 3 AND status = 'Menunggu Verifikasi'`).get().c;
+
+  // Stage status overview
+  const stageStats = db.prepare(`
+    SELECT status, COUNT(*) as count FROM certification_progress GROUP BY status
+  `).all();
+
+  // Recent activities
+  const recentActivities = db.prepare(`
+    SELECT a.*, c.nama as company_name, u.name as user_name
+    FROM activities a
+    LEFT JOIN companies c ON a.company_id = c.id
+    LEFT JOIN users u ON a.user_id = u.id
+    ORDER BY a.created_at DESC LIMIT 10
+  `).all();
+
+  res.json({
+    stats: { totalCompanies, newThisWeek, totalUsers, legalPending, legalVerified, matrixPending },
+    stageStats,
+    recentActivities
+  });
+});
+
+// GET /api/admin/companies
+app.get('/api/admin/companies', adminAuthMiddleware, (req, res) => {
+  const { search, status, jenis_usaha, page = 1, limit = 20 } = req.query;
+  const offset = (parseInt(page) - 1) * parseInt(limit);
+
+  let query = `
+    SELECT c.*, u.name as user_name, u.email as user_email, u.phone as user_phone,
+    (SELECT COUNT(*) FROM halal_materials WHERE company_id = c.id) as mat_count,
+    (SELECT status FROM certification_progress WHERE company_id = c.id AND stage = 2) as legal_status,
+    (SELECT status FROM certification_progress WHERE company_id = c.id AND stage = 3) as matrix_status,
+    (SELECT COUNT(*) FROM certification_progress WHERE company_id = c.id AND status IN ('Selesai','Terverifikasi')) as completed_stages
+    FROM companies c
+    LEFT JOIN users u ON c.user_id = u.id
+    WHERE 1=1
+  `;
+  const params = [];
+
+  if (search) {
+    query += ` AND (c.nama LIKE ? OR c.nib LIKE ? OR u.name LIKE ? OR u.email LIKE ?)`;
+    const s = `%${search}%`;
+    params.push(s, s, s, s);
+  }
+  if (jenis_usaha) { query += ` AND c.jenis_usaha = ?`; params.push(jenis_usaha); }
+
+  const countResult = db.prepare(query.replace('SELECT c.*, u.name as user_name, u.email as user_email, u.phone as user_phone,\n    (SELECT COUNT(*) FROM halal_materials WHERE company_id = c.id) as mat_count,\n    (SELECT status FROM certification_progress WHERE company_id = c.id AND stage = 2) as legal_status,\n    (SELECT status FROM certification_progress WHERE company_id = c.id AND stage = 3) as matrix_status,\n    (SELECT COUNT(*) FROM certification_progress WHERE company_id = c.id AND status IN (\'Selesai\',\'Terverifikasi\')) as completed_stages', 'SELECT COUNT(*) as total')).get(...params);
+
+  query += ` ORDER BY c.updated_at DESC LIMIT ? OFFSET ?`;
+  params.push(parseInt(limit), offset);
+
+  const companies = db.prepare(query).all(...params);
+  companies.forEach(c => { c.progress_percent = Math.round((c.completed_stages / 7) * 100); });
+
+  res.json({
+    companies,
+    pagination: {
+      total: countResult?.total || companies.length,
+      page: parseInt(page),
+      limit: parseInt(limit),
+      totalPages: Math.ceil((countResult?.total || companies.length) / parseInt(limit))
+    }
+  });
+});
+
+// DELETE /api/admin/companies/:id
+app.delete('/api/admin/companies/:id', adminAuthMiddleware, (req, res) => {
+  const companyId = parseInt(req.params.id);
+  const company = db.prepare('SELECT id, user_id FROM companies WHERE id=?').get(companyId);
+  if (!company) return res.status(404).json({ error: 'Perusahaan tidak ditemukan' });
+
+  // Delete will cascade to child tables if schema is set up with ON DELETE CASCADE
+  // We'll manually delete just in case, since SQLite sometimes needs PRAGMA foreign_keys = ON
+  db.prepare('DELETE FROM halal_materials WHERE company_id=?').run(companyId);
+  db.prepare('DELETE FROM legal_documents WHERE company_id=?').run(companyId);
+  db.prepare('DELETE FROM products WHERE company_id=?').run(companyId);
+  db.prepare('DELETE FROM production_data WHERE company_id=?').run(companyId);
+  db.prepare('DELETE FROM evidence_data WHERE company_id=?').run(companyId);
+  db.prepare('DELETE FROM certification_progress WHERE company_id=?').run(companyId);
+  db.prepare('DELETE FROM activities WHERE company_id=?').run(companyId);
+  db.prepare('DELETE FROM uploaded_files WHERE company_id=?').run(companyId);
+  
+  db.prepare('DELETE FROM companies WHERE id=?').run(companyId);
+  
+  // Clear user's company_id
+  db.prepare('UPDATE users SET company_id=NULL WHERE id=?').run(company.user_id);
+  
+  logActivity(db, null, null, 'admin_company_delete', `Admin menghapus data perusahaan (ID: ${companyId})`);
+  res.json({ message: 'Perusahaan berhasil dihapus' });
+});
+
+// GET /api/admin/companies/:id
+app.get('/api/admin/companies/:id', adminAuthMiddleware, (req, res) => {
+  const companyId = parseInt(req.params.id);
+  const company = db.prepare(`
+    SELECT c.*, u.name as user_name, u.email as user_email, u.phone as user_phone, u.created_at as user_registered_at
+    FROM companies c LEFT JOIN users u ON c.user_id = u.id
+    WHERE c.id = ?
+  `).get(companyId);
+  if (!company) return res.status(404).json({ error: 'Perusahaan tidak ditemukan' });
+
+  const progress = db.prepare('SELECT * FROM certification_progress WHERE company_id = ? ORDER BY stage').all(companyId);
+  const completedStages = progress.filter(s => ['Selesai','Terverifikasi'].includes(s.status)).length;
+  company.progress_percent = Math.round((completedStages / 7) * 100);
+  company.completed_stages = completedStages;
+  company.mat_count = db.prepare('SELECT COUNT(*) as c FROM halal_materials WHERE company_id=?').get(companyId).c;
+
+  res.json({ company, progress });
+});
+
+// GET /api/admin/companies/:id/legal-documents
+app.get('/api/admin/companies/:id/legal-documents', adminAuthMiddleware, (req, res) => {
+  const companyId = parseInt(req.params.id);
+  const company = db.prepare('SELECT id FROM companies WHERE id=?').get(companyId);
+  if (!company) return res.status(404).json({ error: 'Perusahaan tidak ditemukan' });
+  const doc = db.prepare('SELECT * FROM legal_documents WHERE company_id=?').get(companyId);
+  const files = db.prepare('SELECT * FROM uploaded_files WHERE company_id=? ORDER BY uploaded_at DESC').all(companyId);
+  res.json({ legal: doc || {}, files });
+});
+
+// GET /api/admin/companies/:id/materials
+app.get('/api/admin/companies/:id/materials', adminAuthMiddleware, (req, res) => {
+  const companyId = parseInt(req.params.id);
+  const company = db.prepare('SELECT id FROM companies WHERE id=?').get(companyId);
+  if (!company) return res.status(404).json({ error: 'Perusahaan tidak ditemukan' });
+
+  const { search, halal_status, page = 1, limit = 50 } = req.query;
+  const offset = (parseInt(page) - 1) * parseInt(limit);
+  let query = 'SELECT * FROM halal_materials WHERE company_id = ?';
+  const params = [companyId];
+  if (search) { query += ' AND nama_bahan LIKE ?'; params.push(`%${search}%`); }
+  if (halal_status) { query += ' AND halal_status = ?'; params.push(halal_status); }
+  query += ' ORDER BY id LIMIT ? OFFSET ?';
+  params.push(parseInt(limit), offset);
+
+  const materials = db.prepare(query).all(...params);
+  const total = db.prepare('SELECT COUNT(*) as c FROM halal_materials WHERE company_id=?').get(companyId).c;
+  const progress = db.prepare('SELECT status FROM certification_progress WHERE company_id=? AND stage=3').get(companyId);
+
+  res.json({ materials, total, matrixStatus: progress?.status || 'Belum Dimulai' });
+});
+
+// GET /api/admin/companies/:id/activities
+app.get('/api/admin/companies/:id/activities', adminAuthMiddleware, (req, res) => {
+  const companyId = parseInt(req.params.id);
+  const activities = db.prepare(`
+    SELECT a.*, u.name as user_name FROM activities a
+    LEFT JOIN users u ON a.user_id = u.id
+    WHERE a.company_id = ? ORDER BY a.created_at DESC LIMIT 50
+  `).all(companyId);
+  res.json({ activities });
+});
+
+// GET /api/admin/companies/:id/progress
+app.get('/api/admin/companies/:id/progress', adminAuthMiddleware, (req, res) => {
+  const companyId = parseInt(req.params.id);
+  const progress = db.prepare('SELECT * FROM certification_progress WHERE company_id=? ORDER BY stage').all(companyId);
+  const completedStages = progress.filter(s => ['Selesai','Terverifikasi'].includes(s.status)).length;
+  res.json({ progress, completedStages, totalPercent: Math.round((completedStages / 7) * 100) });
+});
+
+// PATCH /api/admin/companies/:id/stage-status — Admin update status per stage
+app.patch('/api/admin/companies/:id/stage-status', adminAuthMiddleware, (req, res) => {
+  const companyId = parseInt(req.params.id);
+  const { stage, status, notes } = req.body;
+  const VALID_STATUSES = ['Belum Dimulai','Dalam Proses','Menunggu Verifikasi','Terverifikasi','Perlu Perbaikan','Selesai'];
+
+  if (!stage || !status) return res.status(400).json({ error: 'Stage dan status wajib diisi' });
+  if (!VALID_STATUSES.includes(status)) return res.status(400).json({ error: 'Status tidak valid' });
+
+  const company = db.prepare('SELECT * FROM companies WHERE id=?').get(companyId);
+  if (!company) return res.status(404).json({ error: 'Perusahaan tidak ditemukan' });
+
+  db.prepare(`
+    UPDATE certification_progress SET status=?, notes=?, updated_by='admin', updated_at=datetime('now')
+    WHERE company_id=? AND stage=?
+  `).run(status, notes || '', companyId, stage);
+
+  logActivity(db, companyId, null, 'admin_status_update', `Admin mengubah status Tahap ${stage} menjadi: ${status}`);
+
+  const progress = db.prepare('SELECT * FROM certification_progress WHERE company_id=? ORDER BY stage').all(companyId);
+  res.json({ message: 'Status berhasil diperbarui', progress });
+});
+
+// PATCH /api/admin/companies/:id/certification-status
+app.patch('/api/admin/companies/:id/certification-status', adminAuthMiddleware, async (req, res) => {
+  const companyId = parseInt(req.params.id);
+  const { status } = req.body;
+  if (typeof status !== 'number') return res.status(400).json({ error: 'Status tidak valid' });
+
+  db.prepare('UPDATE companies SET certification_status=?, updated_at=datetime(\'now\') WHERE id=?').run(status, companyId);
+  logActivity(db, companyId, null, 'admin_cert_update', `Admin mengubah status sertifikasi BPJPH ke tahap ${status}`);
+
+  // --- Kirim notifikasi email ke user perusahaan ---
+  const STAGE_LABELS = {
+    1: 'Diterima oleh Admin',
+    2: 'Sedang Diproses',
+    3: 'Disubmit di SIHALAL',
+    4: 'Feedback BPJPH / Dikirim ke LPH',
+    5: 'Penjadwalan Audit',
+    6: 'Perbaikan Hasil Audit',
+    7: 'Sidang Fatwa MUI',
+    8: 'Terbit Sertifikat Halal BPJPH',
+    9: 'Sertifikasi Halal Selesai / Lulus',
+  };
+
+  const STAGE_MESSAGES = {
+    1: 'Pengajuan sertifikasi halal Anda telah <strong>diterima dan diverifikasi oleh Admin JHC</strong>. Proses selanjutnya segera dimulai.',
+    2: 'Dokumen dan pengajuan Anda sedang <strong>dalam proses review</strong> oleh tim JHC. Kami akan segera memberi kabar lebih lanjut.',
+    3: 'Pengajuan Anda telah <strong>disubmit ke sistem SIHALAL BPJPH</strong>. Nomor registrasi akan diinformasikan segera.',
+    4: 'Pengajuan Anda sedang mendapat <strong>feedback dari BPJPH</strong> dan diteruskan ke Lembaga Pemeriksa Halal (LPH).',
+    5: 'Tim auditor LPH akan segera menghubungi Anda untuk <strong>menjadwalkan sesi audit</strong> di lokasi produksi.',
+    6: 'Terdapat <strong>perbaikan yang diperlukan</strong> berdasarkan hasil audit. Harap segera tindak lanjuti dan upload dokumen perbaikan.',
+    7: 'Berkas Anda sedang dibahas dalam <strong>Sidang Fatwa MUI</strong> untuk penetapan kehalalan produk.',
+    8: '🎉 Selamat! <strong>Sertifikat Halal BPJPH Anda telah terbit!</strong> Silakan login ke sistem JHC HalalFlow untuk mengakses sertifikat.',
+    9: '🏆 Selamat! Proses sertifikasi halal Anda telah <strong>selesai dan lulus</strong>. Terima kasih telah mempercayakan proses ini kepada JHC.',
+  };
+
+  try {
+    const company = db.prepare('SELECT c.*, u.email, u.name FROM companies c LEFT JOIN users u ON c.user_id = u.id WHERE c.id=?').get(companyId);
+    if (company && company.email && process.env.SMTP_USER) {
+      const stageLabel = STAGE_LABELS[status] || `Tahap ${status}`;
+      const stageMessage = STAGE_MESSAGES[status] || `Status pengajuan Anda telah diperbarui ke <strong>${stageLabel}</strong>.`;
+
+      await transporter.sendMail({
+        from: process.env.EMAIL_FROM || `"JHC HalalFlow" <${process.env.SMTP_USER}>`,
+        to: company.email,
+        subject: `🔔 Update Status Sertifikasi Halal - ${stageLabel}`,
+        html: `
+          <div style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; max-width: 500px; margin: 0 auto; padding: 32px 24px; background: #ffffff; border: 1px solid #e2e8f0; border-radius: 16px;">
+            <div style="text-align: center; margin-bottom: 24px;">
+              <h2 style="color: #059669; margin: 0; font-size: 22px; font-weight: 800;">JHC HalalFlow</h2>
+              <p style="color: #64748b; margin: 4px 0 0 0; font-size: 13px;">Sistem Manajemen Sertifikasi Halal</p>
+            </div>
+            <div style="border-top: 1px solid #f1f5f9; padding-top: 20px;">
+              <p style="color: #1e293b; font-size: 15px; margin: 0 0 12px 0;">Halo, <strong>${company.name || 'Pengguna'}</strong>,</p>
+              <p style="color: #475569; font-size: 14px; line-height: 1.7; margin: 0 0 20px 0;">
+                Kami ingin memberitahukan bahwa terdapat <strong>pembaruan status pengajuan sertifikasi halal</strong> untuk perusahaan <strong>${company.nama || '-'}</strong>.
+              </p>
+              <div style="background: linear-gradient(135deg, #ecfdf5 0%, #f0fdf4 100%); border: 1.5px solid #059669; padding: 20px; border-radius: 12px; margin: 0 0 20px 0;">
+                <p style="margin: 0 0 6px 0; font-size: 11px; font-weight: 700; color: #065f46; letter-spacing: 1px; text-transform: uppercase;">Status Terbaru</p>
+                <p style="margin: 0; font-size: 18px; font-weight: 800; color: #047857;">Tahap ${status}: ${stageLabel}</p>
+              </div>
+              <p style="color: #475569; font-size: 14px; line-height: 1.7; margin: 0 0 20px 0;">${stageMessage}</p>
+              <a href="http://localhost:5173" style="display: inline-block; background: #059669; color: white; text-decoration: none; padding: 12px 28px; border-radius: 10px; font-weight: 700; font-size: 13px;">Lihat Detail di Dashboard →</a>
+              <p style="color: #94a3b8; font-size: 12px; line-height: 1.5; margin: 24px 0 0 0; border-top: 1px solid #f1f5f9; padding-top: 16px;">
+                Email ini dikirim secara otomatis oleh sistem JHC HalalFlow. Jika ada pertanyaan, hubungi Admin: <a href="https://wa.me/6285117021977" style="color: #059669;">0851-1702-1977</a>
+              </p>
+            </div>
+          </div>
+        `
+      });
+      console.log(`[EMAIL] Notifikasi status tahap ${status} dikirim ke: ${company.email}`);
+    }
+  } catch (emailErr) {
+    console.error('[EMAIL] Gagal kirim notifikasi status:', emailErr.message);
+    // Jangan stop response hanya karena email gagal
+  }
+
+  res.json({ message: 'Status sertifikasi diperbarui', certification_status: status });
+});
+
+// Legacy: POST /api/certification-status (for backward compat with old admin)
+app.post('/api/certification-status', adminAuthMiddleware, (req, res) => {
+  const { status, userEmail } = req.body;
+  if (typeof status !== 'number') return res.status(400).json({ error: 'Status tidak valid' });
+  const user = db.prepare('SELECT id FROM users WHERE email=?').get(userEmail);
+  if (!user) return res.status(404).json({ error: 'User tidak ditemukan' });
+  const company = db.prepare('SELECT id FROM companies WHERE user_id=?').get(user.id);
+  if (!company) return res.status(404).json({ error: 'Perusahaan tidak ditemukan' });
+  db.prepare('UPDATE companies SET certification_status=? WHERE id=?').run(status, company.id);
+  res.json({ certificationStatus: status });
+});
+
+// GET /api/admin/activities (global)
+app.get('/api/admin/activities', adminAuthMiddleware, (req, res) => {
+  const activities = db.prepare(`
+    SELECT a.*, c.nama as company_name, u.name as user_name
+    FROM activities a
+    LEFT JOIN companies c ON a.company_id = c.id
+    LEFT JOIN users u ON a.user_id = u.id
+    ORDER BY a.created_at DESC LIMIT 50
+  `).all();
+  res.json({ activities });
+});
+
+// GET /api/admin/companies/:id/products — produk & BOM per perusahaan
+app.get('/api/admin/companies/:id/products', adminAuthMiddleware, (req, res) => {
+  const companyId = parseInt(req.params.id);
+  const company = db.prepare('SELECT id FROM companies WHERE id=?').get(companyId);
+  if (!company) return res.status(404).json({ error: 'Perusahaan tidak ditemukan' });
+  try {
+    const rows = db.prepare('SELECT * FROM products WHERE company_id=? ORDER BY id').all(companyId);
+    const products = rows.map(r => ({ ...r, bahan: JSON.parse(r.bahan || '[]') }));
+    const stage = db.prepare('SELECT status FROM certification_progress WHERE company_id=? AND stage=4').get(companyId);
+    res.json({ products, stageStatus: stage?.status || 'Belum Dimulai' });
+  } catch(e) {
+    res.json({ products: [], stageStatus: 'Belum Dimulai' });
+  }
+});
+
+// GET /api/admin/companies/:id/production — proses produksi halal
+app.get('/api/admin/companies/:id/production', adminAuthMiddleware, (req, res) => {
+  const companyId = parseInt(req.params.id);
+  const company = db.prepare('SELECT id FROM companies WHERE id=?').get(companyId);
+  if (!company) return res.status(404).json({ error: 'Perusahaan tidak ditemukan' });
+  try {
+    const row = db.prepare('SELECT * FROM production_data WHERE company_id=?').get(companyId);
+    const stage = db.prepare('SELECT status FROM certification_progress WHERE company_id=? AND stage=5').get(companyId);
+    res.json({
+      production: row ? { alurProses: row.alur_proses, layoutRuang: row.layout_ruang, bebasBabi: row.bebas_babi } : null,
+      stageStatus: stage?.status || 'Belum Dimulai'
+    });
+  } catch(e) {
+    res.json({ production: null, stageStatus: 'Belum Dimulai' });
+  }
+});
+
+// GET /api/admin/companies/:id/evidence — dokumen evidence
+app.get('/api/admin/companies/:id/evidence', adminAuthMiddleware, (req, res) => {
+  const companyId = parseInt(req.params.id);
+  const company = db.prepare('SELECT id FROM companies WHERE id=?').get(companyId);
+  if (!company) return res.status(404).json({ error: 'Perusahaan tidak ditemukan' });
+  try {
+    const row = db.prepare('SELECT * FROM evidence_data WHERE company_id=?').get(companyId);
+    const stage = db.prepare('SELECT status FROM certification_progress WHERE company_id=? AND stage=6').get(companyId);
+    res.json({
+      evidence: row ? {
+        sosialisasiFoto: row.sosialisasiFoto,
+        auditInternalFoto: row.auditInternalFoto,
+        sosialisasiAbsen: row.sosialisasiAbsen,
+        auditInternalAbsen: row.auditInternalAbsen,
+        pembelianBahan: row.pembelianBahan,
+        penyimpananBahan: row.penyimpananBahan,
+        hasilProduksi: row.hasilProduksi,
+        distribusiProduk: row.distribusiProduk
+      } : null,
+      stageStatus: stage?.status || 'Belum Dimulai'
+    });
+  } catch(e) {
+    res.json({ evidence: null, stageStatus: 'Belum Dimulai' });
+  }
+});
+
+// =============================================
+// START SERVER
+// =============================================
+app.listen(PORT, () => {
+  console.log(`\n🟢 JHC HalalFlow Backend v2.0 (SQLite)`);
+  console.log(`   Port: ${PORT}`);
+  console.log(`   Database: SQLite (halalflow.db)`);
+  console.log(`   http://localhost:${PORT}/api/status\n`);
+});

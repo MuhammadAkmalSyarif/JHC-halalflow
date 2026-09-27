@@ -1,0 +1,29 @@
+{
+  "currentUserEmail": "241572010004.akmal@student.stmik.tazkia.ac.id",
+  "currentUserName": "Muhammad Akmal Syarif",
+  "currentUserPhone": "085173200470",
+  "currentUserLoginAt": "2026-08-26T12:10:10.096Z",
+  "users": [
+    {
+      "email": "241572010004.akmal@student.stmik.tazkia.ac.id",
+      "namaLengkap": "Muhammad Akmal Syarif",
+      "nomorTelepon": "085173200470",
+      "registeredAt": "2026-08-25T15:48:21.803Z",
+      "companyProfile": {},
+      "materials": [],
+      "matrixSubmitted": false,
+      "products": [],
+      "productsSubmitted": false,
+      "legalData": {},
+      "productionData": {},
+      "evidenceData": {},
+      "chatMessages": [
+        {
+          "sender": "ai",
+          "text": "Halo! Saya AI Halal Assistant JHC. Ada yang ingin ditanyakan seputar regulasi SJPH atau kelengkapan berkas Anda?"
+        }
+      ],
+      "certificationStatus": 0
+    }
+  ]
+}
