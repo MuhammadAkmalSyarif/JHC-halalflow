@@ -17,12 +17,15 @@ const { getDb, initializeDatabase, initCompanyProgress, logActivity } = require(
 // =============================================
 const cleanSmtpPass = (process.env.SMTP_PASS || '').replace(/\s+/g, '');
 const transporter = nodemailer.createTransport({
-  host: process.env.SMTP_HOST || 'smtp.gmail.com',
-  port: parseInt(process.env.SMTP_PORT) || 465,
-  secure: (process.env.SMTP_SECURE === 'true' || process.env.SMTP_PORT === '465'),
+  host: 'smtp.gmail.com',
+  port: 587,
+  secure: false, // false = STARTTLS (works on Render & cloud hosting)
   auth: {
     user: process.env.SMTP_USER,
     pass: cleanSmtpPass
+  },
+  tls: {
+    rejectUnauthorized: false // handle SSL certificate issues on cloud
   }
 });
 
