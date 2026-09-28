@@ -1,0 +1,16 @@
+{
+  "rewrites": [
+    {
+      "source": "/api/:path*",
+      "destination": "https://jhc-halalflow-backend.onrender.com/api/:path*"
+    },
+    {
+      "source": "/uploads/:path*",
+      "destination": "https://jhc-halalflow-backend.onrender.com/uploads/:path*"
+    },
+    {
+      "source": "/((?!assets/|favicon\\.ico).*)",
+      "destination": "/index.html"
+    }
+  ]
+}

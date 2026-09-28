@@ -92,8 +92,16 @@ const STEPS = [
 ];
 
 // =============================================
-// AUTH HELPER
+// API BASE & AUTH HELPER
 // =============================================
+const API_BASE = (import.meta.env.VITE_API_URL || '').replace(/\/$/, '');
+
+function getFullUrl(url) {
+  if (!url) return '';
+  if (url.startsWith('http://') || url.startsWith('https://')) return url;
+  return `${API_BASE}${url.startsWith('/') ? url : `/${url}`}`;
+}
+
 function getAuthHeaders() {
   const token = localStorage.getItem('jhc_token');
   return token ? { 'Authorization': `Bearer ${token}` } : {};
@@ -107,7 +115,8 @@ async function apiFetch(url, options = {}) {
     ...(options.headers || {})
   };
   
-  const res = await fetch(url, { ...options, headers });
+  const finalUrl = getFullUrl(url);
+  const res = await fetch(finalUrl, { ...options, headers });
   if (res.status === 401) {
     localStorage.removeItem('jhc_token');
     window.location.reload();
@@ -737,7 +746,7 @@ const Dashboard = ({
                             )}
                           </div>
                           <a
-                            href={fileSertifikat ? `/uploads/${fileSertifikat}` : '/api/certificate'}
+                            href={fileSertifikat ? getFullUrl(`/uploads/${fileSertifikat}`) : getFullUrl('/api/certificate')}
                             target="_blank"
                             rel="noreferrer"
                             className="inline-flex items-center justify-center gap-2 px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-bold shadow-sm transition-all hover:scale-105"
@@ -2323,7 +2332,7 @@ const StepPengajuanBPJPH = ({
           </p>
           <div className="pt-2">
             <a
-              href={fileSertifikat ? `/uploads/${fileSertifikat}` : '/api/certificate'}
+              href={fileSertifikat ? getFullUrl(`/uploads/${fileSertifikat}`) : getFullUrl('/api/certificate')}
               target="_blank"
               rel="noreferrer"
               className="inline-flex items-center gap-2 px-6 py-3 bg-white text-emerald-800 hover:bg-emerald-50 rounded-xl font-black text-sm shadow-md transition-all hover:scale-105"
@@ -2403,7 +2412,7 @@ const Login = ({ onLogin }) => {
     setLoading(true);
     setMessage({ text: '', type: '' });
     try {
-      const res = await fetch('/api/auth/forgot-password', {
+      const res = await fetch(getFullUrl('/api/auth/forgot-password'), {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ email: formData.email })
@@ -2437,7 +2446,7 @@ const Login = ({ onLogin }) => {
       if (forgotPasswordStep === 1) {
         // Handle Forgot Password (request token)
         try {
-          const res = await fetch('/api/auth/forgot-password', {
+          const res = await fetch(getFullUrl('/api/auth/forgot-password'), {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ email: formData.email })
@@ -2465,7 +2474,7 @@ const Login = ({ onLogin }) => {
       } else if (forgotPasswordStep === 2) {
         // Verify Token
         try {
-          const res = await fetch('/api/auth/verify-reset-token', {
+          const res = await fetch(getFullUrl('/api/auth/verify-reset-token'), {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ token: formData.token })
@@ -2491,7 +2500,7 @@ const Login = ({ onLogin }) => {
           return;
         }
         try {
-          const res = await fetch('/api/auth/reset-password', {
+          const res = await fetch(getFullUrl('/api/auth/reset-password'), {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ token: formData.token, newPassword: formData.password })
@@ -2527,7 +2536,7 @@ const Login = ({ onLogin }) => {
       : { email: formData.email, password: formData.password };
 
     try {
-      const res = await fetch(endpoint, {
+      const res = await fetch(getFullUrl(endpoint), {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(payload)

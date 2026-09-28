@@ -1,8 +1,16 @@
 import React, { useState, useEffect, useCallback } from 'react';
 
 // =============================================
-// ADMIN AUTH HELPER
+// ADMIN API BASE & AUTH HELPER
 // =============================================
+const API_BASE = (import.meta.env.VITE_API_URL || '').replace(/\/$/, '');
+
+function getFullUrl(url) {
+  if (!url) return '';
+  if (url.startsWith('http://') || url.startsWith('https://')) return url;
+  return `${API_BASE}${url.startsWith('/') ? url : `/${url}`}`;
+}
+
 function getAdminHeaders() {
   const token = localStorage.getItem('jhc_admin_token');
   return token
@@ -11,7 +19,8 @@ function getAdminHeaders() {
 }
 
 async function adminFetch(url, options = {}) {
-  const res = await fetch(url, { ...options, headers: { ...getAdminHeaders(), ...(options.headers || {}) } });
+  const finalUrl = getFullUrl(url);
+  const res = await fetch(finalUrl, { ...options, headers: { ...getAdminHeaders(), ...(options.headers || {}) } });
   if (res.status === 401) {
     localStorage.removeItem('jhc_admin_token');
     window.location.reload();
@@ -104,7 +113,7 @@ const AdminLogin = ({ onLogin }) => {
     setLoading(true);
     setError('');
     try {
-      const res = await fetch('/api/admin/login', {
+      const res = await fetch(getFullUrl('/api/admin/login'), {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(form)
