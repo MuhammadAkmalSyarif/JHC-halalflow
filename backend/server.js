@@ -225,20 +225,13 @@ app.post('/api/auth/forgot-password', async (req, res) => {
   };
 
   try {
-    // Only attempt to send if SMTP_USER is configured (avoids crashing if not set yet)
-    if (process.env.SMTP_USER) {
-      await transporter.sendMail(mailOptions);
-      res.json({ message: 'Kode verifikasi telah dikirim ke email Anda.' });
-    } else {
-      // Fallback for DEV mode if email is not configured yet
-      res.json({ 
-        message: 'Kode verifikasi berhasil dibuat.', 
-        dev_token: otp 
-      });
-    }
+    await transporter.sendMail(mailOptions);
+    res.json({ message: 'Kode verifikasi telah dikirim ke email Anda. Periksa inbox/spam.' });
   } catch (error) {
     console.error("Email send error:", error);
-    res.status(500).json({ error: 'Gagal mengirim email. Silakan coba lagi nanti.' });
+    // Hapus token dari DB jika email gagal agar tidak ada OTP invalid tersimpan
+    db.prepare('DELETE FROM password_resets WHERE email = ?').run(email);
+    res.status(500).json({ error: 'Gagal mengirim email. Pastikan alamat email benar dan coba lagi.' });
   }
 });
 

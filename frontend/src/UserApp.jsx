@@ -2403,7 +2403,6 @@ const Login = ({ onLogin }) => {
   const [showPwd, setShowPwd] = useState(false);
   const [loading, setLoading] = useState(false);
   const [message, setMessage] = useState({ text: '', type: '' });
-  const [devToken, setDevToken] = useState('');
 
   const handleChange = (e) => setFormData({ ...formData, [e.target.name]: e.target.value });
 
@@ -2420,13 +2419,8 @@ const Login = ({ onLogin }) => {
       const data = await res.json();
       if (res.ok) {
         setMessage({ text: data.message || 'Kode verifikasi telah dikirim ulang ke email Anda.', type: 'success' });
-        if (data.dev_token) {
-          setDevToken(data.dev_token);
-          setFormData(prev => ({ ...prev, token: data.dev_token }));
-        } else {
-          setDevToken('');
-          setFormData(prev => ({ ...prev, token: '' }));
-        }
+        // Reset field kode — user harus cek email dan isi sendiri
+        setFormData(prev => ({ ...prev, token: '' }));
       } else {
         setMessage({ text: data.error || 'Gagal mengirim ulang kode.', type: 'error' });
       }
@@ -2454,13 +2448,8 @@ const Login = ({ onLogin }) => {
           const data = await res.json();
           if (res.ok) {
             setMessage({ text: data.message, type: 'success' });
-            if (data.dev_token) {
-              setDevToken(data.dev_token); // For dev purposes only
-              setFormData({ ...formData, token: data.dev_token });
-            } else {
-              setDevToken('');
-              setFormData(prev => ({ ...prev, token: '' }));
-            }
+            // Token harus diisi manual dari email — tidak ada auto-fill
+            setFormData(prev => ({ ...prev, token: '' }));
             setForgotPasswordStep(2);
           } else {
             setMessage({ text: data.error || 'Terjadi kesalahan', type: 'error' });
@@ -2510,7 +2499,6 @@ const Login = ({ onLogin }) => {
             setMessage({ text: 'Password berhasil diubah! Silakan login.', type: 'success' });
             setIsForgotPassword(false);
             setForgotPasswordStep(1);
-            setDevToken('');
             setFormData({ ...formData, password: '', confirmPassword: '', token: '' });
           } else {
             setMessage({ text: data.error || 'Terjadi kesalahan', type: 'error' });
