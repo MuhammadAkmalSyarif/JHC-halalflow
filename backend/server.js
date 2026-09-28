@@ -863,11 +863,18 @@ app.get('/api/progress', authMiddleware, (req, res) => {
   });
 });
 
-// Legacy: GET/POST /api/certification-status
+// GET /api/certification-status
 app.get('/api/certification-status', authMiddleware, (req, res) => {
   const userId = req.user.id;
-  const company = db.prepare('SELECT certification_status FROM companies WHERE user_id=?').get(userId);
-  res.json({ certificationStatus: company?.certification_status || 0 });
+  const company = db.prepare('SELECT certification_status, permohonan_status, permohonan_catatan, nomor_sertifikat, tgl_terbit_sertifikat, file_sertifikat FROM companies WHERE user_id=?').get(userId);
+  res.json({
+    certificationStatus: company?.certification_status || 0,
+    permohonanStatus: company?.permohonan_status || 'belum',
+    permohonanCatatan: company?.permohonan_catatan || '',
+    nomorSertifikat: company?.nomor_sertifikat || '',
+    tglTerbitSertifikat: company?.tgl_terbit_sertifikat || '',
+    fileSertifikat: company?.file_sertifikat || ''
+  });
 });
 
 // =============================================
@@ -1070,21 +1077,41 @@ app.post('/api/evidence', authMiddleware, (req, res) => {
 
 app.post('/api/submit-application', authMiddleware, (req, res) => {
   const userId = req.user.id;
-  const company = db.prepare('SELECT id FROM companies WHERE user_id=?').get(userId);
+  const company = db.prepare('SELECT id, nama FROM companies WHERE user_id=?').get(userId);
   if (!company) return res.status(404).json({ error: 'Perusahaan tidak ditemukan' });
-  // Set certification_status to 8 (Menunggu Verifikasi BPJPH/Admin)
-  db.prepare(`UPDATE companies SET certification_status=8, updated_at=datetime('now') WHERE id=?`).run(company.id);
-  logActivity(db, company.id, userId, 'submit_application', 'Mengajukan permohonan sertifikasi halal ke sistem');
-  res.json({ message: 'OK', status: 8 });
+
+  // Update status permohonan to 'menunggu' (pending review by admin)
+  db.prepare(`
+    UPDATE companies 
+    SET permohonan_status='menunggu', permohonan_catatan='', updated_at=datetime('now') 
+    WHERE id=?
+  `).run(company.id);
+
+  db.prepare(`
+    UPDATE certification_progress 
+    SET status='Menunggu Verifikasi', updated_by='user', updated_at=datetime('now') 
+    WHERE company_id=? AND stage=7
+  `).run(company.id);
+
+  logActivity(db, company.id, userId, 'submit_application', 'Pelaku usaha mengajukan permohonan sertifikasi halal');
+  res.json({ message: 'Permohonan berhasil diajukan ke Admin JHC', permohonanStatus: 'menunggu' });
 });
 
 app.get('/api/certificate', authMiddleware, (req, res) => {
   const userId = req.user.id;
-  const company = db.prepare('SELECT id, nama, certification_status FROM companies WHERE user_id=?').get(userId);
-  if (!company || company.certification_status < 8) {
-    return res.status(403).json({ error: 'Sertifikat belum tersedia atau belum disetujui' });
+  const company = db.prepare('SELECT id, nama, nib, certification_status, permohonan_status, nomor_sertifikat, tgl_terbit_sertifikat, file_sertifikat FROM companies WHERE user_id=?').get(userId);
+  if (!company || (company.certification_status < 8 && !company.file_sertifikat)) {
+    return res.status(403).json({ error: 'Sertifikat belum tersedia atau belum diterbitkan' });
+  }
+
+  // If company has uploaded file and user requests direct file download or redirect
+  if (req.query.file === '1' && company.file_sertifikat) {
+    return res.redirect(`/uploads/${company.file_sertifikat}`);
   }
   
+  const nomorSertifikat = company.nomor_sertifikat || 'ID' + (company.id + 311100000000).toString();
+  const tglTerbit = company.tgl_terbit_sertifikat || new Date().toLocaleDateString('id-ID', { year: 'numeric', month: 'long', day: 'numeric' });
+
   const htmlContent = `
 <!DOCTYPE html>
 <html lang="id">
@@ -1093,215 +1120,241 @@ app.get('/api/certificate', authMiddleware, (req, res) => {
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Sertifikat Halal - ${company.nama || 'Perusahaan'}</title>
     <style>
-        @import url('https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,600;0,700;1,600&family=Poppins:wght@400;500;600;700&display=swap');
+        @import url('https://fonts.googleapis.com/css2?family=Cinzel:wght@600;700;900&family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap');
         
+        * { box-sizing: border-box; margin: 0; padding: 0; }
         body, html {
-            margin: 0;
-            padding: 0;
-            background-color: #f3f4f6;
+            background-color: #0f172a;
             display: flex;
             justify-content: center;
             align-items: center;
             min-height: 100vh;
-            font-family: 'Poppins', sans-serif;
+            font-family: 'Plus Jakarta Sans', sans-serif;
+            padding: 24px;
         }
         
         .certificate-wrapper {
-            background: #fff;
-            padding: 20px;
-            box-shadow: 0 20px 50px rgba(0,0,0,0.1);
-            border-radius: 10px;
+            background: #ffffff;
+            padding: 24px;
+            box-shadow: 0 25px 60px -15px rgba(0,0,0,0.5);
+            border-radius: 20px;
+            max-width: 900px;
+            width: 100%;
         }
 
         .certificate {
-            width: 800px;
-            height: 560px;
-            padding: 40px;
+            width: 100%;
+            min-height: 600px;
+            padding: 48px 40px;
             position: relative;
-            background: #fff url('https://www.transparenttextures.com/patterns/cream-paper.png');
-            border: 8px solid #059669;
+            background: #ffffff radial-gradient(#10b981 0.75px, transparent 0.75px);
+            background-size: 24px 24px;
+            border: 8px double #059669;
+            border-radius: 12px;
             box-sizing: border-box;
             text-align: center;
-            color: #1f2937;
+            color: #1e293b;
         }
 
-        .certificate::before {
-            content: '';
-            position: absolute;
-            top: 6px;
-            left: 6px;
-            right: 6px;
-            bottom: 6px;
-            border: 2px solid #10b981;
-            pointer-events: none;
+        .cert-header {
+            margin-bottom: 24px;
         }
 
-        .header {
-            margin-bottom: 30px;
-            position: relative;
-        }
-
-        .logo-text {
-            font-family: 'Playfair Display', serif;
-            font-size: 24px;
+        .logo-title {
+            font-family: 'Cinzel', serif;
+            font-size: 22px;
             color: #065f46;
-            letter-spacing: 2px;
+            letter-spacing: 3px;
             text-transform: uppercase;
+            font-weight: 900;
+        }
+
+        .main-title {
+            font-family: 'Cinzel', serif;
+            font-size: 38px;
+            color: #047857;
+            margin: 12px 0 4px 0;
+            text-transform: uppercase;
+            letter-spacing: 4px;
             font-weight: 700;
         }
 
-        .title {
-            font-family: 'Playfair Display', serif;
-            font-size: 48px;
-            color: #047857;
-            margin: 15px 0 5px 0;
-            text-transform: uppercase;
-            letter-spacing: 4px;
-            text-shadow: 1px 1px 2px rgba(0,0,0,0.1);
-        }
-
-        .subtitle {
-            font-size: 14px;
-            color: #6b7280;
+        .sub-title {
+            font-size: 13px;
+            color: #64748b;
             letter-spacing: 2px;
             text-transform: uppercase;
-            margin-bottom: 40px;
-        }
-
-        .content {
-            margin-top: 30px;
-        }
-
-        .presented-to {
-            font-size: 16px;
-            color: #4b5563;
-            margin-bottom: 15px;
-        }
-
-        .company-name {
-            font-family: 'Playfair Display', serif;
-            font-size: 42px;
-            color: #1f2937;
-            font-style: italic;
-            border-bottom: 2px solid #d1d5db;
-            display: inline-block;
-            padding-bottom: 5px;
-            margin-bottom: 25px;
             font-weight: 600;
         }
 
+        .cert-number {
+            display: inline-block;
+            margin-top: 14px;
+            padding: 6px 18px;
+            background: #ecfdf5;
+            border: 1px solid #a7f3d0;
+            border-radius: 9999px;
+            font-size: 12px;
+            font-weight: 700;
+            color: #065f46;
+            letter-spacing: 1px;
+        }
+
+        .content {
+            margin: 28px 0;
+        }
+
+        .presented-to {
+            font-size: 14px;
+            color: #64748b;
+            font-weight: 500;
+            margin-bottom: 10px;
+        }
+
+        .company-name {
+            font-family: 'Cinzel', serif;
+            font-size: 34px;
+            color: #0f172a;
+            font-weight: 700;
+            border-bottom: 2px solid #cbd5e1;
+            display: inline-block;
+            padding-bottom: 6px;
+            margin-bottom: 16px;
+        }
+
+        .company-nib {
+            font-size: 12px;
+            color: #64748b;
+            margin-bottom: 14px;
+        }
+
         .description {
-            font-size: 15px;
-            color: #4b5563;
-            line-height: 1.6;
-            max-width: 600px;
+            font-size: 14px;
+            color: #334155;
+            line-height: 1.7;
+            max-width: 680px;
             margin: 0 auto;
         }
 
         .footer {
-            margin-top: 50px;
+            margin-top: 40px;
             display: flex;
-            justify-content: space-around;
+            justify-content: space-between;
             align-items: flex-end;
+            padding: 0 20px;
         }
 
-        .signature-block {
+        .sig-block {
             text-align: center;
+            min-width: 180px;
         }
 
-        .signature {
-            font-family: 'Playfair Display', cursive;
-            font-size: 28px;
-            color: #065f46;
-            border-bottom: 1px solid #9ca3af;
-            padding-bottom: 5px;
-            margin-bottom: 10px;
-            font-style: italic;
+        .sig-val {
+            font-weight: 700;
+            font-size: 14px;
+            color: #0f172a;
+            border-bottom: 1.5px solid #94a3b8;
+            padding-bottom: 4px;
+            margin-bottom: 6px;
         }
 
-        .date {
-            font-size: 16px;
-            font-weight: 600;
-            color: #374151;
-            border-bottom: 1px solid #9ca3af;
-            padding-bottom: 5px;
-            margin-bottom: 10px;
-            min-width: 150px;
-            display: inline-block;
-        }
-
-        .signature-title {
-            font-size: 12px;
-            color: #6b7280;
+        .sig-lbl {
+            font-size: 11px;
+            color: #64748b;
             text-transform: uppercase;
             letter-spacing: 1px;
             font-weight: 600;
         }
-        
-        .badge {
-            width: 100px;
-            height: 100px;
+
+        .halal-badge {
+            width: 90px;
+            height: 90px;
             background: linear-gradient(135deg, #059669, #10b981);
             border-radius: 50%;
             display: flex;
+            flex-direction: column;
             justify-content: center;
             align-items: center;
             color: white;
-            font-family: 'Playfair Display', serif;
-            font-weight: bold;
-            font-size: 20px;
-            box-shadow: 0 4px 15px rgba(16, 185, 129, 0.4);
-            border: 4px solid #fff;
-            position: relative;
-        }
-        
-        .badge::after {
-            content: '';
-            position: absolute;
-            top: -6px; left: -6px; right: -6px; bottom: -6px;
-            border: 1px dashed #059669;
-            border-radius: 50%;
+            box-shadow: 0 10px 25px -5px rgba(16, 185, 129, 0.5);
+            border: 4px solid #ffffff;
+            outline: 2px dashed #059669;
         }
 
+        .halal-badge .text {
+            font-family: 'Cinzel', serif;
+            font-weight: 900;
+            font-size: 14px;
+            letter-spacing: 1px;
+        }
+
+        .actions-bar {
+            margin-top: 20px;
+            display: flex;
+            justify-content: center;
+            gap: 12px;
+        }
+
+        .btn-print {
+            background: #059669;
+            color: white;
+            border: none;
+            padding: 10px 24px;
+            border-radius: 10px;
+            font-weight: 700;
+            font-size: 13px;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+        .btn-print:hover { background: #047857; }
+
         @media print {
-            body { background: white; }
+            body, html { background: white; padding: 0; }
             .certificate-wrapper { box-shadow: none; padding: 0; }
+            .actions-bar { display: none; }
         }
     </style>
 </head>
 <body>
     <div class="certificate-wrapper">
         <div class="certificate">
-            <div class="header">
-                <div class="logo-text">JHC HalalFlow</div>
-                <h1 class="title">Sertifikat Halal</h1>
-                <div class="subtitle">Sistem Jaminan Produk Halal (SJPH)</div>
+            <div class="cert-header">
+                <div class="logo-title">JHC HalalFlow • BPJPH</div>
+                <h1 class="main-title">Sertifikat Halal</h1>
+                <div class="sub-title">Sistem Jaminan Produk Halal (SJPH)</div>
+                <div class="cert-number">Nomor Sertifikat: ${nomorSertifikat}</div>
             </div>
 
             <div class="content">
-                <div class="presented-to">Sertifikat ini diberikan dengan bangga kepada:</div>
+                <div class="presented-to">Diberikan secara resmi kepada:</div>
                 <div class="company-name">${company.nama || 'Nama Perusahaan'}</div>
+                ${company.nib ? `<div class="company-nib">Nomor Induk Berusaha (NIB): <strong>${company.nib}</strong></div>` : ''}
                 <div class="description">
-                    Telah memenuhi seluruh standar dan kriteria Sistem Jaminan Produk Halal (SJPH).<br>
-                    Produk dan fasilitas produksi perusahaan ini dinyatakan <strong>HALAL</strong> dan telah disetujui secara resmi.
+                    Telah memenuhi seluruh kriteria dan standar penerapan <strong>Sistem Jaminan Produk Halal (SJPH)</strong> sesuai dengan ketentuan Badan Penyelenggara Jaminan Produk Halal (BPJPH) dan Majelis Ulama Indonesia (MUI).
                 </div>
             </div>
 
             <div class="footer">
-                <div class="signature-block">
-                    <div class="date">${new Date().toLocaleDateString('id-ID', { year: 'numeric', month: 'long', day: 'numeric' })}</div>
-                    <div class="signature-title">Tanggal Disetujui</div>
-                </div>
-                
-                <div class="badge">
-                    HALAL
+                <div class="sig-block">
+                    <div class="sig-val">${tglTerbit}</div>
+                    <div class="sig-lbl">Tanggal Terbit</div>
                 </div>
 
-                <div class="signature-block">
-                    <div class="signature">Admin JHC</div>
-                    <div class="signature-title">Otorisasi JHC HalalFlow</div>
+                <div class="halal-badge">
+                    <span class="text">HALAL</span>
+                    <span style="font-size: 9px; opacity: 0.9;">INDONESIA</span>
+                </div>
+
+                <div class="sig-block">
+                    <div class="sig-val">Admin & Komite Halal JHC</div>
+                    <div class="sig-lbl">Otorisasi Resmi</div>
                 </div>
             </div>
+        </div>
+
+        <div class="actions-bar">
+            <button class="btn-print" onclick="window.print()">🖨️ Cetak / Simpan PDF</button>
+            ${company.file_sertifikat ? `<a href="/uploads/${company.file_sertifikat}" target="_blank" class="btn-print" style="background:#0284c7; text-decoration:none;">📄 Unduh Berkas Asli (PDF/Gambar)</a>` : ''}
         </div>
     </div>
 </body>
@@ -1613,6 +1666,422 @@ app.patch('/api/admin/companies/:id/certification-status', adminAuthMiddleware, 
 
   res.json({ message: 'Status sertifikasi diperbarui', certification_status: status });
 });
+
+// =============================================
+// ADMIN: APPLICATIONS & APPROVAL ROUTES
+// =============================================
+
+// GET /api/admin/applications — List all applications with status
+app.get('/api/admin/applications', adminAuthMiddleware, (req, res) => {
+  try {
+    const applications = db.prepare(`
+      SELECT 
+        c.id, c.user_id, c.nama, c.nib, c.npwp, c.penanggung_jawab, c.jenis_usaha, c.skala_usaha,
+        c.permohonan_status, c.permohonan_catatan, c.certification_status,
+        c.nomor_sertifikat, c.tgl_terbit_sertifikat, c.file_sertifikat,
+        c.created_at, c.updated_at,
+        u.name AS user_name, u.email AS user_email, u.phone AS user_phone
+      FROM companies c
+      LEFT JOIN users u ON c.user_id = u.id
+      ORDER BY 
+        CASE 
+          WHEN c.permohonan_status = 'menunggu' THEN 0 
+          WHEN c.permohonan_status = 'ditolak' THEN 1
+          WHEN c.permohonan_status = 'disetujui' THEN 2
+          ELSE 3 
+        END,
+        c.updated_at DESC
+    `).all();
+
+    const stats = {
+      total: applications.length,
+      menunggu: applications.filter(a => a.permohonan_status === 'menunggu').length,
+      disetujui: applications.filter(a => a.permohonan_status === 'disetujui').length,
+      ditolak: applications.filter(a => a.permohonan_status === 'ditolak').length,
+    };
+
+    res.json({ applications, stats });
+  } catch (err) {
+    console.error('Error fetching admin applications:', err);
+    res.status(500).json({ error: 'Gagal mengambil data permohonan' });
+  }
+});
+
+// POST /api/admin/applications/:id/approve — Admin approves application
+app.post('/api/admin/applications/:id/approve', adminAuthMiddleware, async (req, res) => {
+  const companyId = parseInt(req.params.id);
+  const company = db.prepare('SELECT c.*, u.email, u.name FROM companies c LEFT JOIN users u ON c.user_id = u.id WHERE c.id=?').get(companyId);
+  if (!company) return res.status(404).json({ error: 'Perusahaan tidak ditemukan' });
+
+  const nextCertStatus = company.certification_status > 0 ? company.certification_status : 1;
+
+  db.prepare(`
+    UPDATE companies 
+    SET permohonan_status='disetujui', permohonan_catatan='', certification_status=?, updated_at=datetime('now')
+    WHERE id=?
+  `).run(nextCertStatus, companyId);
+
+  db.prepare(`
+    UPDATE certification_progress 
+    SET status='Terverifikasi', updated_by='admin', updated_at=datetime('now')
+    WHERE company_id=? AND stage=7
+  `).run(companyId);
+
+  logActivity(db, companyId, null, 'admin_permohonan_approved', 'Admin menyetujui permohonan sertifikasi halal');
+
+  // Send email notification if configured
+  if (company.email && process.env.SMTP_USER) {
+    try {
+      await transporter.sendMail({
+        from: process.env.EMAIL_FROM || `"JHC HalalFlow" <${process.env.SMTP_USER}>`,
+        to: company.email,
+        subject: `✅ Permohonan Sertifikasi Halal Disetujui - ${company.nama || 'JHC HalalFlow'}`,
+        html: `
+          <div style="font-family: sans-serif; max-width: 500px; margin: 0 auto; padding: 24px; border: 1px solid #e2e8f0; border-radius: 16px; background: #ffffff;">
+            <h2 style="color: #059669; margin-top: 0;">Permohonan Anda Disetujui!</h2>
+            <p>Halo <strong>${company.name || 'Pelaku Usaha'}</strong>,</p>
+            <p>Kabar baik! Permohonan sertifikasi halal untuk <strong>${company.nama || 'perusahaan Anda'}</strong> telah diverifikasi dan <strong>disetujui</strong> oleh Admin JHC HalalFlow.</p>
+            <p>Proses sertifikasi saat ini telah aktif pada <strong>Tahap 1 (Diterima oleh Admin)</strong>. Anda dapat memantau perkembangannya langsung di dashboard.</p>
+            <a href="http://localhost:5173" style="display:inline-block; padding:12px 24px; background:#059669; color:#fff; text-decoration:none; border-radius:10px; font-weight:bold; margin-top:10px;">Buka Dashboard →</a>
+          </div>
+        `
+      });
+    } catch (e) {
+      console.error('[EMAIL] Gagal kirim email approve:', e.message);
+    }
+  }
+
+  res.json({ message: 'Permohonan berhasil disetujui', permohonan_status: 'disetujui', certification_status: nextCertStatus });
+});
+
+// POST /api/admin/applications/:id/reject — Admin rejects application with reason
+app.post('/api/admin/applications/:id/reject', adminAuthMiddleware, async (req, res) => {
+  const companyId = parseInt(req.params.id);
+  const notes = (req.body.notes || req.body.reason || '').trim();
+  if (!notes) {
+    return res.status(400).json({ error: 'Penjelasan/alasan penolakan wajib diisi' });
+  }
+
+  const company = db.prepare('SELECT c.*, u.email, u.name FROM companies c LEFT JOIN users u ON c.user_id = u.id WHERE c.id=?').get(companyId);
+  if (!company) return res.status(404).json({ error: 'Perusahaan tidak ditemukan' });
+
+  db.prepare(`
+    UPDATE companies 
+    SET permohonan_status='ditolak', permohonan_catatan=?, updated_at=datetime('now')
+    WHERE id=?
+  `).run(notes, companyId);
+
+  db.prepare(`
+    UPDATE certification_progress 
+    SET status='Perlu Perbaikan', notes=?, updated_by='admin', updated_at=datetime('now')
+    WHERE company_id=? AND stage=7
+  `).run(notes, companyId);
+
+  logActivity(db, companyId, null, 'admin_permohonan_rejected', `Admin menolak permohonan: ${notes}`);
+
+  // Send email notification if configured
+  if (company.email && process.env.SMTP_USER) {
+    try {
+      await transporter.sendMail({
+        from: process.env.EMAIL_FROM || `"JHC HalalFlow" <${process.env.SMTP_USER}>`,
+        to: company.email,
+        subject: `⚠️ Perbaikan Berkas Permohonan Sertifikasi Halal - ${company.nama || 'JHC HalalFlow'}`,
+        html: `
+          <div style="font-family: sans-serif; max-width: 500px; margin: 0 auto; padding: 24px; border: 1.5px solid #fca5a5; border-radius: 16px; background: #fffaf0;">
+            <h2 style="color: #dc2626; margin-top: 0;">Permohonan Memerlukan Perbaikan</h2>
+            <p>Halo <strong>${company.name || 'Pelaku Usaha'}</strong>,</p>
+            <p>Admin JHC telah meninjau pengajuan berkas permohonan sertifikasi halal Anda dan memberikan catatan perbaikan berikut:</p>
+            <div style="background: #fee2e2; border-left: 4px solid #ef4444; padding: 14px 16px; margin: 16px 0; border-radius: 8px; color: #7f1d1d; font-size: 14px; line-height: 1.5;">
+              <strong>Catatan Admin:</strong><br/>
+              ${notes}
+            </div>
+            <p>Silakan login ke akun JHC HalalFlow Anda untuk memperbaiki data dan mengajukan ulang.</p>
+            <a href="http://localhost:5173" style="display:inline-block; padding:12px 24px; background:#ef4444; color:#fff; text-decoration:none; border-radius:10px; font-weight:bold; margin-top:10px;">Lihat & Perbaiki Dokumen →</a>
+          </div>
+        `
+      });
+    } catch (e) {
+      console.error('[EMAIL] Gagal kirim email reject:', e.message);
+    }
+  }
+
+  res.json({ message: 'Permohonan ditolak dan catatan telah dikirim ke user', permohonan_status: 'ditolak', notes });
+});
+
+// Helper for issuing certificate
+const issueCertificateHandler = async (req, res) => {
+  const companyId = parseInt(req.params.id);
+  const company = db.prepare('SELECT c.*, u.email, u.name FROM companies c LEFT JOIN users u ON c.user_id = u.id WHERE c.id=?').get(companyId);
+  if (!company) return res.status(404).json({ error: 'Perusahaan tidak ditemukan' });
+
+  const nomorSertifikat = (req.body.nomorSertifikat || req.body.nomor_sertifikat || company.nomor_sertifikat || `ID3211000894109${new Date().getFullYear()}`).trim();
+  const tglTerbit = (req.body.tglTerbit || req.body.tgl_terbit_sertifikat || company.tgl_terbit_sertifikat || new Date().toISOString().split('T')[0]).trim();
+  
+  let fileName = company.file_sertifikat || '';
+  const uploadedFile = req.file || (req.files && req.files[0]);
+  if (uploadedFile) {
+    fileName = uploadedFile.filename;
+  }
+
+  db.prepare(`
+    UPDATE companies 
+    SET nomor_sertifikat=?, tgl_terbit_sertifikat=?, file_sertifikat=?, certification_status=8, permohonan_status='disetujui', updated_at=datetime('now')
+    WHERE id=?
+  `).run(nomorSertifikat, tglTerbit, fileName, companyId);
+
+  db.prepare(`
+    UPDATE certification_progress 
+    SET status='Selesai', updated_by='admin', updated_at=datetime('now')
+    WHERE company_id=? AND stage=7
+  `).run(companyId);
+
+  logActivity(db, companyId, null, 'admin_issued_certificate', `Admin menerbitkan sertifikat halal (No: ${nomorSertifikat})`);
+
+  res.json({
+    message: 'Sertifikat halal berhasil diterbitkan',
+    nomorSertifikat,
+    nomor_sertifikat: nomorSertifikat,
+    tglTerbit,
+    tgl_terbit_sertifikat: tglTerbit,
+    file_sertifikat: fileName,
+    certification_status: 8
+  });
+};
+
+// POST /api/admin/companies/:id/certificate & POST /api/admin/applications/:id/certificate
+app.post('/api/admin/companies/:id/certificate', adminAuthMiddleware, upload.any(), issueCertificateHandler);
+app.post('/api/admin/applications/:id/certificate', adminAuthMiddleware, upload.any(), issueCertificateHandler);
+
+// GET /api/admin/companies/:id/certificate — Admin Preview Certificate
+const getAdminCertificateHandler = (req, res) => {
+  const companyId = parseInt(req.params.id);
+  const company = db.prepare('SELECT id, nama, nib, certification_status, nomor_sertifikat, tgl_terbit_sertifikat, file_sertifikat FROM companies WHERE id=?').get(companyId);
+  if (!company) return res.status(404).json({ error: 'Perusahaan tidak ditemukan' });
+
+  if (req.query.file === '1' && company.file_sertifikat) {
+    return res.redirect(`/uploads/${company.file_sertifikat}`);
+  }
+
+  const nomorSertifikat = company.nomor_sertifikat || `ID3211000894109${new Date().getFullYear()}`;
+  const tglTerbit = company.tgl_terbit_sertifikat || new Date().toLocaleDateString('id-ID', { year: 'numeric', month: 'long', day: 'numeric' });
+
+  const htmlContent = `
+<!DOCTYPE html>
+<html lang="id">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Sertifikat Halal (Preview) - ${company.nama || 'Perusahaan'}</title>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Cinzel:wght@600;700;900&family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap');
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+        body, html {
+            background-color: #0f172a;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            min-height: 100vh;
+            font-family: 'Plus Jakarta Sans', sans-serif;
+            padding: 24px;
+        }
+        .certificate-wrapper {
+            background: #ffffff;
+            padding: 24px;
+            box-shadow: 0 25px 60px -15px rgba(0,0,0,0.5);
+            border-radius: 20px;
+            max-width: 900px;
+            width: 100%;
+        }
+        .certificate {
+            width: 100%;
+            min-height: 600px;
+            padding: 48px 40px;
+            position: relative;
+            background: #ffffff radial-gradient(#10b981 0.75px, transparent 0.75px);
+            background-size: 24px 24px;
+            border: 8px double #059669;
+            border-radius: 12px;
+            box-sizing: border-box;
+            text-align: center;
+            color: #1e293b;
+        }
+        .cert-header { margin-bottom: 24px; }
+        .logo-title {
+            font-family: 'Cinzel', serif;
+            font-size: 22px;
+            color: #065f46;
+            letter-spacing: 3px;
+            text-transform: uppercase;
+            font-weight: 900;
+        }
+        .main-title {
+            font-family: 'Cinzel', serif;
+            font-size: 38px;
+            color: #047857;
+            margin: 12px 0 4px 0;
+            text-transform: uppercase;
+            letter-spacing: 4px;
+            font-weight: 700;
+        }
+        .sub-title {
+            font-size: 13px;
+            color: #64748b;
+            letter-spacing: 2px;
+            text-transform: uppercase;
+            font-weight: 600;
+        }
+        .cert-number {
+            display: inline-block;
+            margin-top: 14px;
+            padding: 6px 18px;
+            background: #ecfdf5;
+            border: 1px solid #a7f3d0;
+            border-radius: 9999px;
+            font-size: 12px;
+            font-weight: 700;
+            color: #065f46;
+            letter-spacing: 1px;
+        }
+        .content { margin: 28px 0; }
+        .presented-to { font-size: 14px; color: #64748b; font-weight: 500; margin-bottom: 10px; }
+        .company-name {
+            font-family: 'Cinzel', serif;
+            font-size: 34px;
+            color: #0f172a;
+            font-weight: 700;
+            border-bottom: 2px solid #cbd5e1;
+            display: inline-block;
+            padding-bottom: 6px;
+            margin-bottom: 16px;
+        }
+        .company-nib { font-size: 12px; color: #64748b; margin-bottom: 14px; }
+        .description {
+            font-size: 14px;
+            color: #334155;
+            line-height: 1.7;
+            max-width: 680px;
+            margin: 0 auto;
+        }
+        .footer {
+            margin-top: 40px;
+            display: flex;
+            justify-content: space-between;
+            align-items: flex-end;
+            padding: 0 20px;
+        }
+        .sig-block { text-align: center; min-width: 180px; }
+        .sig-val {
+            font-weight: 700;
+            font-size: 14px;
+            color: #0f172a;
+            border-bottom: 1.5px solid #94a3b8;
+            padding-bottom: 4px;
+            margin-bottom: 6px;
+        }
+        .sig-lbl {
+            font-size: 11px;
+            color: #64748b;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+            font-weight: 600;
+        }
+        .halal-badge {
+            width: 90px;
+            height: 90px;
+            background: linear-gradient(135deg, #059669, #10b981);
+            border-radius: 50%;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            color: white;
+            box-shadow: 0 10px 25px -5px rgba(16, 185, 129, 0.5);
+            border: 4px solid #ffffff;
+            outline: 2px dashed #059669;
+        }
+        .halal-badge .text {
+            font-family: 'Cinzel', serif;
+            font-weight: 900;
+            font-size: 14px;
+            letter-spacing: 1px;
+        }
+        .actions-bar {
+            margin-top: 20px;
+            display: flex;
+            justify-content: center;
+            gap: 12px;
+        }
+        .btn-print {
+            background: #059669;
+            color: white;
+            border: none;
+            padding: 10px 24px;
+            border-radius: 10px;
+            font-weight: 700;
+            font-size: 13px;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+        .btn-print:hover { background: #047857; }
+        @media print {
+            body, html { background: white; padding: 0; }
+            .certificate-wrapper { box-shadow: none; padding: 0; }
+            .actions-bar { display: none; }
+        }
+    </style>
+</head>
+<body>
+    <div class="certificate-wrapper">
+        <div class="certificate">
+            <div class="cert-header">
+                <div class="logo-title">JHC HalalFlow • BPJPH</div>
+                <h1 class="main-title">Sertifikat Halal</h1>
+                <div class="sub-title">Sistem Jaminan Produk Halal (SJPH)</div>
+                <div class="cert-number">Nomor Sertifikat: ${nomorSertifikat}</div>
+            </div>
+
+            <div class="content">
+                <div class="presented-to">Diberikan secara resmi kepada:</div>
+                <div class="company-name">${company.nama || 'Nama Perusahaan'}</div>
+                ${company.nib ? `<div class="company-nib">Nomor Induk Berusaha (NIB): <strong>${company.nib}</strong></div>` : ''}
+                <div class="description">
+                    Telah memenuhi seluruh kriteria dan standar penerapan <strong>Sistem Jaminan Produk Halal (SJPH)</strong> sesuai dengan ketentuan Badan Penyelenggara Jaminan Produk Halal (BPJPH) dan Majelis Ulama Indonesia (MUI).
+                </div>
+            </div>
+
+            <div class="footer">
+                <div class="sig-block">
+                    <div class="sig-val">${tglTerbit}</div>
+                    <div class="sig-lbl">Tanggal Terbit</div>
+                </div>
+
+                <div class="halal-badge">
+                    <span class="text">HALAL</span>
+                    <span style="font-size: 9px; opacity: 0.9;">INDONESIA</span>
+                </div>
+
+                <div class="sig-block">
+                    <div class="sig-val">Admin & Komite Halal JHC</div>
+                    <div class="sig-lbl">Otorisasi Resmi</div>
+                </div>
+            </div>
+        </div>
+
+        <div class="actions-bar">
+            <button class="btn-print" onclick="window.print()">🖨️ Cetak / Simpan PDF</button>
+            ${company.file_sertifikat ? `<a href="/uploads/${company.file_sertifikat}" target="_blank" class="btn-print" style="background:#0284c7; text-decoration:none;">📄 Unduh Berkas Asli (PDF/Gambar)</a>` : ''}
+        </div>
+    </div>
+</body>
+</html>
+  `;
+
+  res.setHeader('Content-Type', 'text/html');
+  res.send(htmlContent);
+};
+
+app.get('/api/admin/companies/:id/certificate', adminAuthMiddleware, getAdminCertificateHandler);
+app.get('/api/admin/applications/:id/certificate', adminAuthMiddleware, getAdminCertificateHandler);
 
 // Legacy: POST /api/certification-status (for backward compat with old admin)
 app.post('/api/certification-status', adminAuthMiddleware, (req, res) => {

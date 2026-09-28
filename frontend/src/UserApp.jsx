@@ -25,7 +25,8 @@ const Icons = {
   Admin: (props) => <svg {...props} fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M5.121 17.804A13.937 13.937 0 0112 16c2.5 0 4.847.655 6.879 1.804M15 10a3 3 0 11-6 0 3 3 0 016 0zm6 2a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>,
   List: (props) => <svg {...props} fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M4 6h16M4 10h16M4 14h16M4 18h16"/></svg>,
   Package: (props) => <svg {...props} fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4"/></svg>,
-  User: (props) => <svg {...props} fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z"/></svg>
+  User: (props) => <svg {...props} fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z"/></svg>,
+  Menu: (props) => <svg {...props} fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M4 6h16M4 12h16M4 18h16"/></svg>
 };
 
 const Card = ({ children, className = "" }) => (
@@ -132,6 +133,28 @@ export default function UserApp() {
   const [chatMessages, setChatMessages] = useState([]);
   const [chatInput, setChatInput] = useState('');
   const [certificationStatus, setCertificationStatus] = useState(0);
+  const [permohonanStatus, setPermohonanStatus] = useState('belum');
+  const [permohonanCatatan, setPermohonanCatatan] = useState('');
+  const [nomorSertifikat, setNomorSertifikat] = useState('');
+  const [tglTerbitSertifikat, setTglTerbitSertifikat] = useState('');
+  const [fileSertifikat, setFileSertifikat] = useState('');
+  const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+
+  // Refresh status function
+  const refreshCertStatus = async () => {
+    try {
+      const certRes = await apiFetch('/api/certification-status', { headers: getAuthHeaders() });
+      const certVal = await certRes.json();
+      setCertificationStatus(certVal.certificationStatus || 0);
+      setPermohonanStatus(certVal.permohonanStatus || 'belum');
+      setPermohonanCatatan(certVal.permohonanCatatan || '');
+      setNomorSertifikat(certVal.nomorSertifikat || '');
+      setTglTerbitSertifikat(certVal.tglTerbitSertifikat || '');
+      setFileSertifikat(certVal.fileSertifikat || '');
+    } catch (err) {
+      // ignore
+    }
+  };
 
   // Fetch initial data from backend APIs with JWT
   useEffect(() => {
@@ -164,6 +187,11 @@ export default function UserApp() {
 
         const certVal = await certRes.json();
         setCertificationStatus(certVal.certificationStatus || 0);
+        setPermohonanStatus(certVal.permohonanStatus || 'belum');
+        setPermohonanCatatan(certVal.permohonanCatatan || '');
+        setNomorSertifikat(certVal.nomorSertifikat || '');
+        setTglTerbitSertifikat(certVal.tglTerbitSertifikat || '');
+        setFileSertifikat(certVal.fileSertifikat || '');
       } catch (err) {
         console.error('Error fetching data from API:', err);
       }
@@ -176,10 +204,15 @@ export default function UserApp() {
         const certRes = await apiFetch('/api/certification-status', { headers: getAuthHeaders() });
         const certVal = await certRes.json();
         setCertificationStatus(certVal.certificationStatus || 0);
+        setPermohonanStatus(certVal.permohonanStatus || 'belum');
+        setPermohonanCatatan(certVal.permohonanCatatan || '');
+        setNomorSertifikat(certVal.nomorSertifikat || '');
+        setTglTerbitSertifikat(certVal.tglTerbitSertifikat || '');
+        setFileSertifikat(certVal.fileSertifikat || '');
       } catch (err) {
         // ignore polling errors
       }
-    }, 5000);
+    }, 4000);
 
     return () => clearInterval(statusInterval);
   }, [isLoggedIn]);
@@ -281,13 +314,22 @@ export default function UserApp() {
 
   return (
     <div className="min-h-screen bg-slate-50 flex flex-col font-sans text-slate-900">
-      {/* Top Navbar */}
-      <header className="bg-white border-b sticky top-0 z-30 px-6 py-4 flex justify-between items-center shadow-sm">
-        <div className="flex items-center gap-3 cursor-pointer" onClick={() => setCurrentStep(0)}>
-          <img src="/logo.jpg" alt="JHC HalalFlow Logo" className="h-16 md:h-20 object-contain" />
-          <div>
-            <h1 className="font-extrabold text-lg text-emerald-900 tracking-tight">JHC HalalFlow</h1>
-            <p className="text-xs text-emerald-600 font-semibold">Platform Manajemen Sertifikasi Halal</p>
+      {/* Top Navbar — Elevated z-40 and fixed h-20 so it is never covered */}
+      <header className="bg-white border-b sticky top-0 z-40 px-4 md:px-6 h-20 flex justify-between items-center shadow-sm">
+        <div className="flex items-center gap-2.5 md:gap-3">
+          <button
+            onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
+            className="lg:hidden p-2 text-emerald-800 hover:bg-emerald-100/70 rounded-xl transition-colors"
+            title="Menu Navigasi"
+          >
+            {mobileMenuOpen ? <Icons.X className="w-5 h-5" /> : <Icons.Menu className="w-5 h-5" />}
+          </button>
+          <div className="flex items-center gap-2.5 md:gap-3 cursor-pointer" onClick={() => { setCurrentStep(0); setMobileMenuOpen(false); }}>
+            <img src="/logo.jpg" alt="JHC HalalFlow Logo" className="h-12 md:h-14 object-contain" />
+            <div>
+              <h1 className="font-extrabold text-base md:text-lg text-emerald-950 tracking-tight leading-tight">JHC HalalFlow</h1>
+              <p className="text-[11px] md:text-xs text-emerald-700 font-semibold leading-tight">Platform Manajemen Sertifikasi Halal</p>
+            </div>
           </div>
         </div>
 
@@ -318,56 +360,56 @@ export default function UserApp() {
         </div>
       </header>
 
-      <div className="flex flex-1">
+      <div className="flex flex-1 relative">
+        {/* Mobile Backdrop */}
+        {mobileMenuOpen && (
+          <div
+            className="fixed inset-x-0 top-20 bottom-0 bg-black/40 z-20 lg:hidden backdrop-blur-xs transition-opacity"
+            onClick={() => setMobileMenuOpen(false)}
+          />
+        )}
+
         {/* Sidebar Navigation */}
-        <aside className="w-72 bg-[#063b27] border-r border-emerald-900 hidden lg:flex flex-col p-4 space-y-1 overflow-y-auto shadow-[4px_0_24px_rgba(0,0,0,0.05)] z-20">
-          <p className="text-[11px] font-extrabold text-emerald-300/70 uppercase tracking-wider px-3 mb-2 mt-2">Alur Sertifikasi SJPH</p>
+        <aside className={`fixed top-20 left-0 bottom-0 w-72 border-r border-emerald-200/80 z-30 flex flex-col p-4 space-y-1 overflow-y-auto shadow-lg lg:shadow-[4px_0_24px_rgba(6,78,59,0.05)] transition-transform duration-300 ${
+          mobileMenuOpen ? 'translate-x-0' : '-translate-x-full'
+        } lg:translate-x-0 lg:sticky lg:top-20 lg:h-[calc(100vh-5rem)] lg:shrink-0`}>
+          <p className="sidebar-section-title text-[11px] font-extrabold text-emerald-800 uppercase tracking-wider px-3 mb-2 mt-2">Alur Sertifikasi SJPH</p>
           {STEPS.map((step) => {
             const Icon = step.icon;
             const isActive = currentStep === step.id;
             return (
               <button
                 key={step.id}
-                onClick={() => setCurrentStep(step.id)}
+                data-active={isActive ? "true" : undefined}
+                onClick={() => {
+                  setCurrentStep(step.id);
+                  setMobileMenuOpen(false);
+                }}
                 className={`w-full flex items-center gap-3 px-3 py-3 rounded-xl text-sm font-semibold transition-all ${
                   isActive
-                    ? 'bg-emerald-500 text-white shadow-md shadow-emerald-900/20'
-                    : 'text-emerald-100 hover:bg-emerald-800 hover:text-white'
+                    ? 'bg-emerald-600 text-white shadow-md shadow-emerald-600/30 font-bold border border-emerald-400/30'
+                    : 'text-emerald-950/85 hover:bg-emerald-100/70 hover:text-emerald-950 hover:border-emerald-200/60 border border-transparent'
                 }`}
               >
-                <Icon className={`w-5 h-5 ${isActive ? 'text-white' : 'text-emerald-300/70'}`} />
+                <Icon className={`w-5 h-5 shrink-0 ${isActive ? 'text-white' : 'text-emerald-600'}`} />
                 <span className="text-left leading-snug">{step.title}</span>
               </button>
             );
           })}
 
-          <div className="mt-6">
-            <p className="text-[11px] font-extrabold text-emerald-300/70 uppercase tracking-wider px-3 mb-2">Menu Komplementer</p>
-            <a
-              href="https://drive.google.com/drive/folders/1R6UuM_uvXeuzu4bLLK4HhiJesAnexTBQ?hl=ID"
-              target="_blank"
-              rel="noopener noreferrer"
-              className="w-full flex items-center gap-3 px-3 py-3 rounded-xl text-sm font-semibold transition-all text-emerald-100 hover:bg-emerald-800 hover:text-white"
-            >
-              <Icons.Download className="w-5 h-5 text-emerald-300/70" />
-              <div className="text-left leading-snug">
-                <span>Download Template</span>
-                <p className="text-[10px] text-emerald-400 font-normal mt-0.5 leading-tight">File pendukung untuk diunduh</p>
-              </div>
-            </a>
-          </div>
+
 
           {/* User Account & Professional Logout Button */}
-          <div className="mt-auto pt-4 border-t border-emerald-800 flex flex-col gap-2">
-            <div className="flex items-center gap-2.5 p-2 rounded-xl bg-emerald-900/50 border border-emerald-800/50">
-              <div className="w-8 h-8 rounded-full bg-emerald-500 text-white font-bold flex items-center justify-center text-xs shrink-0 shadow-sm">
+          <div className="mt-auto pt-4 border-t border-emerald-200/70 flex flex-col gap-2">
+            <div className="flex items-center gap-2.5 p-2.5 rounded-xl bg-white/80 border border-emerald-200/80 shadow-2xs">
+              <div className="w-8 h-8 rounded-full bg-gradient-to-br from-emerald-500 to-emerald-600 text-white font-bold flex items-center justify-center text-xs shrink-0 shadow-2xs">
                 {userProfile?.namaLengkap ? userProfile.namaLengkap.charAt(0).toUpperCase() : 'U'}
               </div>
               <div className="min-w-0 flex-1">
-                <p className="text-xs font-bold text-white truncate leading-tight">
+                <p className="text-xs font-bold text-emerald-950 truncate leading-tight">
                   {userProfile?.namaLengkap || 'Pengguna JHC'}
                 </p>
-                <p className="text-[10px] text-emerald-300 truncate leading-tight mt-0.5">
+                <p className="text-[10px] text-emerald-700/80 truncate leading-tight mt-0.5">
                   {userProfile?.email || 'Akun Aktif'}
                 </p>
               </div>
@@ -389,26 +431,56 @@ export default function UserApp() {
                 setEvidenceData({});
                 setChatMessages([]);
                 setCertificationStatus(0);
+                setPermohonanStatus('belum');
+                setPermohonanCatatan('');
+                setNomorSertifikat('');
+                setTglTerbitSertifikat('');
+                setFileSertifikat('');
               }}
-              className="w-full flex items-center justify-center gap-2 px-3 py-2 rounded-xl text-xs font-bold text-emerald-100 hover:text-white bg-emerald-800/40 hover:bg-red-500/90 border border-emerald-700/50 hover:border-red-500 transition-all shadow-sm group"
+              className="sidebar-logout-btn w-full flex items-center justify-center gap-2 px-3 py-2 rounded-xl text-xs font-bold text-emerald-800 hover:text-red-600 bg-white/80 hover:bg-red-50 border border-emerald-200/80 hover:border-red-200 transition-all shadow-2xs group"
             >
-              <Icons.LogOut className="w-4 h-4 text-emerald-300 group-hover:text-white transition-colors" />
+              <Icons.LogOut className="w-4 h-4 text-emerald-700 group-hover:text-red-500 transition-colors" />
               <span>Keluar Akun</span>
             </button>
           </div>
         </aside>
 
         {/* Main Content Area */}
-        <main className="flex-1 p-6 md:p-10 pb-48 max-w-6xl mx-auto overflow-y-auto">
-          {currentStep === 0 && <Dashboard changeStep={setCurrentStep} readinessScore={readinessScore} certificationStatus={certificationStatus} isKomitmenComplete={isKomitmenComplete} isBahanComplete={isBahanComplete} isPphComplete={isPphComplete} isProdukComplete={isProdukComplete} isEvaluasiComplete={isEvaluasiComplete} />}
+        <main className="flex-1 min-w-0 p-6 md:p-10 pb-48 max-w-6xl mx-auto overflow-y-auto">
+          {currentStep === 0 && (
+            <Dashboard 
+              changeStep={setCurrentStep} 
+              readinessScore={readinessScore} 
+              certificationStatus={certificationStatus}
+              permohonanStatus={permohonanStatus}
+              permohonanCatatan={permohonanCatatan}
+              nomorSertifikat={nomorSertifikat}
+              fileSertifikat={fileSertifikat}
+              isKomitmenComplete={isKomitmenComplete} 
+              isBahanComplete={isBahanComplete} 
+              isPphComplete={isPphComplete} 
+              isProdukComplete={isProdukComplete} 
+              isEvaluasiComplete={isEvaluasiComplete} 
+            />
+          )}
           {currentStep === 1 && <StepRegistrasi />}
           {currentStep === 2 && <StepDokumen legalData={legalData} setLegalData={setLegalData} handleGenericFileUpload={handleGenericFileUpload} />}
           {currentStep === 3 && <StepMatrixBahanHalal materials={materials} setMaterials={setMaterials} matrixSubmitted={matrixSubmitted} setMatrixSubmitted={setMatrixSubmitted} />}
           {currentStep === 4 && <StepUploadProduk products={products} setProducts={setProducts} materials={materials} productsSubmitted={productsSubmitted} setProductsSubmitted={setProductsSubmitted} />}
           {currentStep === 5 && <StepProsesProduksi productionData={productionData} setProductionData={setProductionData} handleGenericFileUpload={handleGenericFileUpload} />}
           {currentStep === 6 && <StepUploadEvidence evidenceData={evidenceData} setEvidenceData={setEvidenceData} handleGenericFileUpload={handleGenericFileUpload} />}
-          {currentStep === 7 && <StepPengajuanBPJPH readinessScore={readinessScore} />}
-          {currentStep === 99 && <AdminPanel certificationStatus={certificationStatus} setCertificationStatus={setCertificationStatus} />}
+          {currentStep === 7 && (
+            <StepPengajuanBPJPH 
+              readinessScore={readinessScore}
+              certificationStatus={certificationStatus}
+              permohonanStatus={permohonanStatus}
+              permohonanCatatan={permohonanCatatan}
+              nomorSertifikat={nomorSertifikat}
+              fileSertifikat={fileSertifikat}
+              onRefreshStatus={refreshCertStatus}
+            />
+          )}
+
         </main>
       </div>
 
@@ -449,7 +521,20 @@ export default function UserApp() {
   );
 }
 
-const Dashboard = ({ changeStep, readinessScore, certificationStatus, isKomitmenComplete, isBahanComplete, isPphComplete, isProdukComplete, isEvaluasiComplete }) => {
+const Dashboard = ({ 
+  changeStep, 
+  readinessScore, 
+  certificationStatus, 
+  permohonanStatus,
+  permohonanCatatan,
+  nomorSertifikat,
+  fileSertifikat,
+  isKomitmenComplete, 
+  isBahanComplete, 
+  isPphComplete, 
+  isProdukComplete, 
+  isEvaluasiComplete 
+}) => {
 
   const CERT_STAGES = [
     { no: 1, label: 'Diterima oleh Admin', desc: 'Pengajuan telah diterima dan sedang dilakukan pemeriksaan awal oleh Admin JHC.', color: 'blue' },
@@ -464,19 +549,60 @@ const Dashboard = ({ changeStep, readinessScore, certificationStatus, isKomitmen
 
   return (
     <div className="space-y-6 animate-fade-in">
+      {/* Rejection Alert Banner */}
+      {permohonanStatus === 'ditolak' && (
+        <div className="p-5 bg-gradient-to-r from-red-50 to-rose-50 border-2 border-red-300 rounded-2xl flex flex-col sm:flex-row sm:items-center justify-between gap-4 shadow-sm">
+          <div className="flex items-start gap-3.5">
+            <div className="w-10 h-10 rounded-xl bg-red-600 text-white flex items-center justify-center shrink-0 shadow-sm font-black text-lg">
+              !
+            </div>
+            <div>
+              <h4 className="text-sm font-bold text-red-900">Perhatian: Pengajuan Permohonan Perlu Perbaikan</h4>
+              <p className="text-xs text-red-700 mt-1 leading-relaxed">
+                <strong>Catatan Admin:</strong> {permohonanCatatan || 'Harap periksa kembali kelengkapan dokumen SJPH Anda.'}
+              </p>
+            </div>
+          </div>
+          <button
+            onClick={() => changeStep(7)}
+            className="px-5 py-2.5 bg-red-600 hover:bg-red-700 text-white rounded-xl text-xs font-bold shrink-0 transition-all shadow-sm hover:shadow hover:scale-105"
+          >
+            Lihat & Ajukan Ulang →
+          </button>
+        </div>
+      )}
+
+      {/* Pending Banner */}
+      {permohonanStatus === 'menunggu' && (
+        <div className="p-4 bg-amber-50 border border-amber-200 rounded-2xl flex items-center justify-between gap-4 shadow-xs">
+          <div className="flex items-center gap-3">
+            <div className="w-8 h-8 rounded-lg bg-amber-500 text-white flex items-center justify-center shrink-0">
+              <svg className="w-4 h-4 animate-spin" fill="none" viewBox="0 0 24 24"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"/><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"/></svg>
+            </div>
+            <div>
+              <p className="text-xs font-bold text-amber-900">Permohonan Sedang Ditinjau Admin</p>
+              <p className="text-[11px] text-amber-700 mt-0.5">Dokumen Anda sedang dalam antrean verifikasi tim JHC HalalFlow.</p>
+            </div>
+          </div>
+          <button onClick={() => changeStep(7)} className="text-xs font-bold text-amber-800 hover:underline shrink-0">
+            Lihat Detail →
+          </button>
+        </div>
+      )}
+
       <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
         <Card className="p-6 bg-gradient-to-br from-emerald-600 via-emerald-700 to-teal-800 text-white shadow-lg relative overflow-hidden">
           <div className="absolute top-0 right-0 w-32 h-32 bg-white/5 rounded-full -translate-y-1/2 translate-x-1/2"></div>
           <div className="absolute bottom-0 left-0 w-20 h-20 bg-white/5 rounded-full translate-y-1/2 -translate-x-1/2"></div>
           <p className="text-emerald-100 text-sm font-medium relative z-10">Halal Readiness Score</p>
+          <p className="text-emerald-200/70 text-[10px] relative z-10 mt-0.5">Kesiapan berkas SJPH internal perusahaan</p>
           <div className="flex items-baseline gap-2 mt-2 relative z-10">
             <h3 className="text-4xl font-extrabold tracking-tight">{readinessScore}%</h3>
-            <span className="text-xs bg-white/20 backdrop-blur-sm px-2.5 py-0.5 rounded-full font-semibold">Siap Sertifikasi</span>
+            <span className="text-xs bg-white/20 backdrop-blur-sm px-2.5 py-0.5 rounded-full font-semibold">{readinessScore >= 100 ? 'Siap Diajukan' : 'Persiapan Berkas'}</span>
           </div>
           <div className="w-full bg-white/15 h-2.5 rounded-full mt-4 overflow-hidden relative z-10">
             <div className="bg-white h-full rounded-full transition-all duration-700 ease-out" style={{ width: `${readinessScore}%` }}></div>
           </div>
-
         </Card>
 
         <Card className="p-6">
@@ -532,20 +658,20 @@ const Dashboard = ({ changeStep, readinessScore, certificationStatus, isKomitmen
 
       {/* Status Progress Sertifikasi Halal */}
       <Card className="p-6">
-        <div className="flex items-center justify-between mb-5">
+        <div className="flex items-center justify-between mb-5 flex-wrap gap-2">
           <div className="flex items-center gap-3">
             <div className="w-9 h-9 rounded-xl bg-emerald-600 flex items-center justify-center shadow-sm">
               <Icons.Award className="w-5 h-5 text-white" />
             </div>
             <div>
               <h3 className="text-base font-extrabold text-slate-800">Status Progress Sertifikasi Halal</h3>
-              <p className="text-xs text-slate-400 mt-0.5">Diperbarui oleh Admin JHC • Real-time</p>
+              <p className="text-xs text-slate-400 mt-0.5">Tahapan proses verifikasi oleh BPJPH • Dikelola Admin JHC • Real-time</p>
             </div>
           </div>
           {certificationStatus === 0 ? (
             <span className="text-xs bg-slate-100 text-slate-500 font-semibold px-3 py-1 rounded-full border">Menunggu Pengajuan</span>
-          ) : certificationStatus === 8 ? (
-            <span className="text-xs bg-emerald-100 text-emerald-700 font-bold px-3 py-1 rounded-full border border-emerald-200 flex items-center gap-1">🎉 Sertifikat Terbit!</span>
+          ) : certificationStatus >= 8 ? (
+            <span className="text-xs bg-emerald-100 text-emerald-800 font-bold px-3 py-1 rounded-full border border-emerald-300 flex items-center gap-1">🎉 Sertifikat Terbit!</span>
           ) : (
             <span className="text-xs bg-blue-100 text-blue-700 font-semibold px-3 py-1 rounded-full border border-blue-200">Tahap {certificationStatus} dari 8</span>
           )}
@@ -558,38 +684,70 @@ const Dashboard = ({ changeStep, readinessScore, certificationStatus, isKomitmen
             <p className="text-xs mt-1">Admin JHC akan memperbarui status setelah pengajuan diterima.</p>
           </div>
         ) : (
-          <div className="space-y-2">
+          <div className="space-y-2.5">
             {CERT_STAGES.map((stage) => {
               const isDone = stage.no < certificationStatus;
               const isCurrent = stage.no === certificationStatus;
-              const isPending = stage.no > certificationStatus;
               return (
                 <div
                   key={stage.no}
-                  className={`flex items-start gap-3 p-3 rounded-xl border transition-all ${
+                  className={`p-3.5 rounded-xl border transition-all ${
+                    stage.no === 8 && certificationStatus >= 8 ? 'bg-gradient-to-r from-emerald-50 to-teal-50 border-emerald-400 shadow-md ring-1 ring-emerald-300' :
                     isCurrent ? 'bg-emerald-50 border-emerald-300 shadow-sm' :
                     isDone ? 'bg-slate-50 border-slate-100' :
                     'border-slate-100 opacity-40'
                   }`}
                 >
-                  <div className={`w-7 h-7 rounded-full flex items-center justify-center text-xs font-extrabold shrink-0 mt-0.5 ${
-                    isDone ? 'bg-emerald-500 text-white' :
-                    isCurrent ? 'bg-emerald-600 text-white ring-4 ring-emerald-200' :
-                    'bg-slate-200 text-slate-400'
-                  }`}>
-                    {isDone ? '✓' : stage.no}
+                  <div className="flex items-start gap-3">
+                    <div className={`w-7 h-7 rounded-full flex items-center justify-center text-xs font-extrabold shrink-0 mt-0.5 ${
+                      isDone || (stage.no === 8 && certificationStatus >= 8) ? 'bg-emerald-500 text-white' :
+                      isCurrent ? 'bg-emerald-600 text-white ring-4 ring-emerald-200' :
+                      'bg-slate-200 text-slate-400'
+                    }`}>
+                      {isDone || (stage.no === 8 && certificationStatus >= 8) ? '✓' : stage.no}
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center justify-between gap-2 flex-wrap">
+                        <p className={`text-sm font-bold leading-tight ${
+                          stage.no === 8 && certificationStatus >= 8 ? 'text-emerald-900 font-extrabold' :
+                          isCurrent ? 'text-emerald-800' : isDone ? 'text-slate-600' : 'text-slate-400'
+                        }`}>{stage.label}</p>
+                        {isCurrent && stage.no !== 8 && (
+                          <span className="text-[10px] bg-emerald-600 text-white font-bold px-2 py-0.5 rounded-full shrink-0 animate-pulse">SAAT INI</span>
+                        )}
+                        {stage.no === 8 && certificationStatus >= 8 && (
+                          <span className="text-[10px] bg-emerald-600 text-white font-bold px-2.5 py-0.5 rounded-full shrink-0">SELESAI & TERBIT</span>
+                        )}
+                      </div>
+                      {(isCurrent || isDone || (stage.no === 8 && certificationStatus >= 8)) && (
+                        <p className="text-xs text-slate-500 mt-1 leading-relaxed">{stage.desc}</p>
+                      )}
+
+                      {/* FEATURE: Download Sertifikat at Stage 8 */}
+                      {stage.no === 8 && certificationStatus >= 8 && (
+                        <div className="mt-3 pt-3 border-t border-emerald-200/80 flex flex-col sm:flex-row sm:items-center justify-between gap-3 bg-white/70 p-3 rounded-xl">
+                          <div>
+                            <p className="text-xs font-bold text-emerald-950 flex items-center gap-1.5">
+                              <Icons.Award className="w-4 h-4 text-emerald-600 shrink-0"/> Sertifikat Halal BPJPH Resmi Terbit
+                            </p>
+                            {nomorSertifikat && (
+                              <p className="text-[11px] text-slate-500 font-mono mt-0.5">
+                                No: <span className="font-bold text-emerald-800">{nomorSertifikat}</span>
+                              </p>
+                            )}
+                          </div>
+                          <a
+                            href={fileSertifikat ? `/uploads/${fileSertifikat}` : '/api/certificate'}
+                            target="_blank"
+                            rel="noreferrer"
+                            className="inline-flex items-center justify-center gap-2 px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-bold shadow-sm transition-all hover:scale-105"
+                          >
+                            <Icons.Download className="w-4 h-4"/> Download Sertifikat Halal
+                          </a>
+                        </div>
+                      )}
+                    </div>
                   </div>
-                  <div className="flex-1 min-w-0">
-                    <p className={`text-sm font-bold leading-tight ${
-                      isCurrent ? 'text-emerald-800' : isDone ? 'text-slate-600' : 'text-slate-400'
-                    }`}>{stage.label}</p>
-                    {(isCurrent || isDone) && (
-                      <p className="text-xs text-slate-500 mt-0.5 leading-relaxed">{stage.desc}</p>
-                    )}
-                  </div>
-                  {isCurrent && (
-                    <span className="text-[10px] bg-emerald-600 text-white font-bold px-2 py-0.5 rounded-full shrink-0 animate-pulse">SAAT INI</span>
-                  )}
                 </div>
               );
             })}
@@ -767,29 +925,14 @@ const StepDokumen = ({ legalData, setLegalData, handleGenericFileUpload }) => {
           <h2 className="text-2xl font-bold text-slate-800">Dokumen Legal & Kontak Pendaftaran</h2>
           <p className="text-sm text-slate-500 mt-1">Unggah dokumen format Word (.doc/.docx) atau PDF (.pdf) serta lengkapi kontak resmi pendaftaran SIHALAL.</p>
         </div>
-        <button
-          onClick={() => {
-            const link = document.createElement('a');
-            link.href = '/templates/template_dokumen_legal.docx';
-            link.download = 'template_dokumen_legal.docx';
-            // Fallback: buat file text berisi instruksi jika template tidak tersedia
-            const content = `TEMPLATE DOKUMEN LEGAL - JHC HALALFLOW\n\n` +
-              `1. Permohonan Pendaftaran Sertifikasi Halal\n   - Surat permohonan resmi bermaterai\n   - Ditandatangani pemilik usaha\n\n` +
-              `2. SK Penyelia Halal\n   - Surat Keputusan penetapan Penyelia Halal\n   - Dilengkapi identitas penyelia\n\n` +
-              `3. SK Manajemen Halal\n   - Surat Keputusan penetapan Tim Manajemen Halal\n   - Ditandatangani pimpinan perusahaan\n\n` +
-              `4. Kebijakan Halal Bermaterai\n   - Pernyataan komitmen kebijakan halal perusahaan\n   - Bermaterai 10.000 dan ditandatangani\n\n` +
-              `Catatan: Upload file dalam format .doc, .docx, atau .pdf`;
-            const blob = new Blob([content], { type: 'text/plain;charset=utf-8' });
-            const url = URL.createObjectURL(blob);
-            link.href = url;
-            link.download = 'panduan_dokumen_legal.txt';
-            link.click();
-            URL.revokeObjectURL(url);
-          }}
-          className="px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-lg text-xs font-semibold flex items-center gap-2 transition-colors shrink-0"
+        <a
+          href="https://drive.google.com/drive/folders/1HSmtyIZlv05B_GzOGKO9HB0KQ8mp8df_?usp=sharing"
+          target="_blank"
+          rel="noopener noreferrer"
+          className="px-4 py-2 bg-emerald-50 hover:bg-emerald-100 text-emerald-800 border border-emerald-200 rounded-lg text-xs font-semibold flex items-center gap-2 transition-all shadow-2xs shrink-0"
         >
-          <Icons.Download className="w-4 h-4" /> Unduh Template
-        </button>
+          <Icons.Download className="w-4 h-4 text-emerald-600" /> Unduh Template
+        </a>
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4 p-4 bg-slate-50 rounded-xl border">
@@ -845,7 +988,7 @@ const StepDokumen = ({ legalData, setLegalData, handleGenericFileUpload }) => {
           </div>
 
           <div className="p-4 border rounded-xl bg-white shadow-xs">
-            <h4 className="font-semibold text-sm text-slate-800 mb-1">4. Kebijakan Halal Bermaterai</h4>
+            <h4 className="font-semibold text-sm text-slate-800 mb-1">4. Kebijakan Halal</h4>
             <p className="text-xs text-slate-400 mb-3">Format: .doc, .docx, .pdf</p>
             <input type="file" name="kebijakan" accept=".pdf,.doc,.docx" onChange={(e) => handleGenericFileUpload(e, 'kebijakan', setLegalData)} className="w-full text-xs text-slate-500 file:mr-4 file:py-2 file:px-4 file:rounded-lg file:border-0 file:text-xs file:font-semibold file:bg-emerald-50 file:text-emerald-700 hover:file:bg-emerald-100 cursor-pointer" />
             {legalData.kebijakan && (
@@ -1803,25 +1946,14 @@ const StepProsesProduksi = ({ productionData, setProductionData, handleGenericFi
           <h2 className="text-2xl font-bold text-slate-800">Proses Produksi Halal</h2>
           <p className="text-sm text-slate-500 mt-1">Unggah dokumen alur proses produksi (jpeg), layout ruang produksi (jpeg), dan surat pernyataan bebas babi (pdf).</p>
         </div>
-        <button
-          onClick={() => {
-            const content = `PANDUAN PROSES PRODUKSI HALAL - JHC HALALFLOW\n\n` +
-              `1. Alur Proses Produksi\n   - Diagram/flowchart alur produksi dari bahan baku hingga produk jadi\n   - Format gambar: .jpeg\n   - Sertakan setiap tahap proses produksi secara detail\n\n` +
-              `2. Layout Ruang Produksi\n   - Denah/layout tata letak ruang produksi\n   - Format gambar: .jpeg\n   - Tunjukkan pemisahan area produk halal dan non-halal (jika ada)\n\n` +
-              `3. Surat Pernyataan Bebas Babi\n   - Surat pernyataan bahwa fasilitas produksi bebas dari babi dan turunannya\n   - Format: .pdf\n   - Bermaterai dan ditandatangani pimpinan perusahaan\n\n` +
-              `Catatan: Semua file harus jelas dan dapat terbaca`;
-            const blob = new Blob([content], { type: 'text/plain;charset=utf-8' });
-            const url = URL.createObjectURL(blob);
-            const link = document.createElement('a');
-            link.href = url;
-            link.download = 'panduan_proses_produksi_halal.txt';
-            link.click();
-            URL.revokeObjectURL(url);
-          }}
-          className="px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-lg text-xs font-semibold flex items-center gap-2 transition-colors shrink-0"
+        <a
+          href="https://drive.google.com/drive/folders/1en91DXyMlUgw7xRzg4Ln-qCT2FrQZgyW?usp=sharing"
+          target="_blank"
+          rel="noopener noreferrer"
+          className="px-4 py-2 bg-emerald-50 hover:bg-emerald-100 text-emerald-800 border border-emerald-200 rounded-lg text-xs font-semibold flex items-center gap-2 transition-all shadow-2xs shrink-0"
         >
-          <Icons.Download className="w-4 h-4" /> Unduh Template
-        </button>
+          <Icons.Download className="w-4 h-4 text-emerald-600" /> Unduh Template
+        </a>
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
@@ -1853,7 +1985,7 @@ const StepProsesProduksi = ({ productionData, setProductionData, handleGenericFi
 
         <div className="p-5 border rounded-2xl bg-slate-50 flex flex-col justify-between">
           <div>
-            <h4 className="font-bold text-sm text-slate-800 mb-1">3. Surat Pernyataan Bebas Babi</h4>
+            <h4 className="font-bold text-sm text-slate-800 mb-1">3. Surat Pernyataan Bebas Babi Bermaterai</h4>
             <p className="text-xs text-slate-500 mb-4">Format: .pdf</p>
             <input type="file" name="bebasBabi" accept=".pdf" onChange={(e) => handleGenericFileUpload(e, 'bebasBabi', setProductionData)} className="w-full text-xs text-slate-500 file:mr-2 file:py-1.5 file:px-3 file:rounded-lg file:border-0 file:bg-emerald-50 file:text-emerald-700" />
           </div>
@@ -1957,30 +2089,14 @@ const StepUploadEvidence = ({ evidenceData, setEvidenceData, handleGenericFileUp
           <h2 className="text-2xl font-bold text-slate-800">Upload Evidence (Bukti)</h2>
           <p className="text-sm text-slate-500 mt-1">Lengkapi seluruh dokumentasi bukti kegiatan perusahaan sesuai urutan standar.</p>
         </div>
-        <button
-          onClick={() => {
-            const content = `PANDUAN UPLOAD EVIDENCE (BUKTI) - JHC HALALFLOW\n\n` +
-              `1. Bukti Foto Sosialisasi/Training Halal\n   - Foto kegiatan sosialisasi atau pelatihan halal bagi karyawan\n   - Format: gambar (.jpg/.png)\n\n` +
-              `2. Bukti Foto Audit Internal\n   - Foto pelaksanaan audit internal SJPH\n   - Format: gambar (.jpg/.png)\n\n` +
-              `3. Upload Daftar Hadir Sosialisasi Halal\n   - Daftar hadir peserta sosialisasi halal (tanda tangan karyawan)\n   - Format: .pdf, .doc, .docx\n\n` +
-              `4. Upload Daftar Hadir Audit Internal\n   - Daftar hadir peserta audit internal (tanda tangan tim audit)\n   - Format: .pdf, .doc, .docx\n\n` +
-              `5. Sampel Catatan Pembelian Bahan\n   - Bukti pembelian bahan halal (nota/faktur/purchase order)\n   - Format: .pdf, .doc, gambar\n\n` +
-              `6. Catatan Penyimpanan Bahan\n   - Dokumen/log penyimpanan dan pengelolaan bahan\n   - Format: .pdf, .doc, gambar\n\n` +
-              `7. Catatan Hasil Produksi\n   - Dokumen/log hasil proses produksi\n   - Format: .pdf, .doc, gambar\n\n` +
-              `8. Bukti Distribusi/Penjualan Produk\n   - Dokumen distribusi atau penjualan produk halal\n   - Format: .pdf, .doc, gambar\n\n` +
-              `Catatan: Semua dokumen harus jelas, terbaca, dan menunjukkan tanggal kegiatan`;
-            const blob = new Blob([content], { type: 'text/plain;charset=utf-8' });
-            const url = URL.createObjectURL(blob);
-            const link = document.createElement('a');
-            link.href = url;
-            link.download = 'panduan_upload_evidence.txt';
-            link.click();
-            URL.revokeObjectURL(url);
-          }}
-          className="px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-lg text-xs font-semibold flex items-center gap-2 transition-colors shrink-0"
+        <a
+          href="https://drive.google.com/drive/folders/1dBh4Okrd3D7KHKOvTKl4RjyyIh1HTzwR?usp=sharing"
+          target="_blank"
+          rel="noopener noreferrer"
+          className="px-4 py-2 bg-emerald-50 hover:bg-emerald-100 text-emerald-800 border border-emerald-200 rounded-lg text-xs font-semibold flex items-center gap-2 transition-all shadow-2xs shrink-0"
         >
-          <Icons.Download className="w-4 h-4" /> Unduh Template
-        </button>
+          <Icons.Download className="w-4 h-4 text-emerald-600" /> Unduh Template
+        </a>
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -2055,7 +2171,7 @@ const StepUploadEvidence = ({ evidenceData, setEvidenceData, handleGenericFileUp
         </div>
 
         <div className="p-4 border rounded-xl bg-slate-50">
-          <h4 className="font-semibold text-sm text-slate-800 mb-1">8. Bukti Distribusi/Penjualan Produk</h4>
+          <h4 className="font-semibold text-sm text-slate-800 mb-1">8. Catatan Penjualan/Distribusi Produk</h4>
           <input type="file" name="distribusiProduk" accept=".pdf,.doc,.docx,image/*" onChange={(e) => handleGenericFileUpload(e, 'distribusiProduk', setEvidenceData)} className="w-full text-xs text-slate-500 mt-2" />
           {evidenceData.distribusiProduk && (
             <a href={`/uploads/${evidenceData.distribusiProduk}`} target="_blank" rel="noreferrer" className="text-xs text-emerald-600 font-semibold mt-1 block truncate w-full hover:underline" title={evidenceData.distribusiProduk}>
@@ -2077,157 +2193,197 @@ const StepUploadEvidence = ({ evidenceData, setEvidenceData, handleGenericFileUp
 
 
 
-const StepPengajuanBPJPH = ({ readinessScore }) => {
-  const [submitted, setSubmitted] = useState(false);
+const StepPengajuanBPJPH = ({ 
+  readinessScore, 
+  certificationStatus, 
+  permohonanStatus, 
+  permohonanCatatan, 
+  nomorSertifikat, 
+  fileSertifikat,
+  onRefreshStatus 
+}) => {
   const [loading, setLoading] = useState(false);
+  const [localSuccess, setLocalSuccess] = useState('');
+  const [errorMsg, setErrorMsg] = useState('');
 
   const handleSubmit = async () => {
     setLoading(true);
+    setErrorMsg('');
     try {
       const res = await apiFetch('/api/submit-application', { method: 'POST' });
+      const data = await res.json();
       if (res.ok) {
-        setSubmitted(true);
+        setLocalSuccess('Permohonan berhasil diajukan! Tim Admin JHC akan segera meninjau berkas Anda.');
+        if (onRefreshStatus) onRefreshStatus();
+      } else {
+        setErrorMsg(data.error || 'Gagal mengajukan permohonan.');
       }
     } catch (e) {
       console.error(e);
+      setErrorMsg('Terjadi kesalahan jaringan.');
     } finally {
       setLoading(false);
     }
   };
 
+  const isPending = permohonanStatus === 'menunggu';
+  const isApproved = permohonanStatus === 'disetujui';
+  const isRejected = permohonanStatus === 'ditolak';
+  const isCertified = (certificationStatus || 0) >= 8;
+
   return (
-    <Card className="p-8 max-w-3xl mx-auto text-center space-y-6 animate-fade-in">
-      <div className="w-16 h-16 bg-emerald-100 text-emerald-600 rounded-full flex items-center justify-center mx-auto">
-        <Icons.ShieldCheck className="w-8 h-8" />
-      </div>
-      <div>
-        <h2 className="text-2xl font-bold text-slate-800">Pengajuan Sertifikasi Halal BPJPH</h2>
-        <p className="text-sm text-slate-500 mt-1">Seluruh tahapan SJPH dan dokumen Anda telah diverifikasi. Siap dikirim ke sistem SIHALAL.</p>
+    <Card className="p-8 max-w-3xl mx-auto text-center space-y-6 animate-fade-in shadow-md">
+      <div className={`w-16 h-16 rounded-full flex items-center justify-center mx-auto ${
+        isRejected ? 'bg-red-100 text-red-600' :
+        isCertified ? 'bg-emerald-100 text-emerald-600 ring-8 ring-emerald-50' :
+        isApproved ? 'bg-emerald-100 text-emerald-600' :
+        isPending ? 'bg-amber-100 text-amber-600' :
+        'bg-emerald-100 text-emerald-600'
+      }`}>
+        {isRejected ? (
+          <svg className="w-8 h-8" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"/></svg>
+        ) : isCertified ? (
+          <Icons.Award className="w-8 h-8" />
+        ) : (
+          <Icons.ShieldCheck className="w-8 h-8" />
+        )}
       </div>
 
-      <div className="p-4 bg-slate-50 rounded-2xl max-w-md mx-auto border text-left space-y-2 text-xs">
+      <div>
+        <h2 className="text-2xl font-black text-slate-800">
+          {isCertified ? '🎉 Sertifikat Halal BPJPH Resmi Terbit!' :
+           isRejected ? 'Pengajuan Permohonan Perlu Perbaikan' :
+           isApproved ? 'Permohonan Sertifikasi Halal Disetujui' :
+           isPending ? 'Permohonan Sedang Ditinjau Admin' :
+           'Pengajuan Sertifikasi Halal BPJPH'}
+        </h2>
+        <p className="text-sm text-slate-500 mt-1 max-w-xl mx-auto">
+          {isCertified ? 'Selamat! Seluruh tahapan sertifikasi halal telah selesai dan sertifikat resmi telah diterbitkan.' :
+           isRejected ? 'Admin telah memeriksa berkas Anda dan memberikan catatan perbaikan di bawah ini.' :
+           isApproved ? 'Pengajuan Anda telah disetujui Admin JHC dan saat ini sedang berjalan pada alur sertifikasi BPJPH.' :
+           isPending ? 'Seluruh tahapan SJPH dan dokumen Anda sedang diperiksa oleh Tim Admin JHC.' :
+           'Seluruh tahapan SJPH dan dokumen Anda telah siap untuk diajukan ke Admin & SIHALAL BPJPH.'}
+        </p>
+      </div>
+
+      <div className="p-5 bg-slate-50 rounded-2xl max-w-md mx-auto border text-left space-y-2.5 text-xs shadow-2xs">
+        <div className="flex justify-between items-center pb-2 border-b border-slate-200">
+          <span className="text-slate-500 font-medium">Status Permohonan:</span>
+          {isRejected ? (
+            <span className="font-bold text-red-600 bg-red-50 border border-red-200 px-2.5 py-0.5 rounded-full">Perlu Perbaikan / Ditolak</span>
+          ) : isApproved ? (
+            <span className="font-bold text-emerald-700 bg-emerald-50 border border-emerald-200 px-2.5 py-0.5 rounded-full">Disetujui Admin</span>
+          ) : isPending ? (
+            <span className="font-bold text-amber-700 bg-amber-50 border border-amber-200 px-2.5 py-0.5 rounded-full">Menunggu Review Admin</span>
+          ) : (
+            <span className="font-bold text-slate-700 bg-slate-200 px-2.5 py-0.5 rounded-full">Belum Diajukan</span>
+          )}
+        </div>
         <div className="flex justify-between">
-          <span className="text-slate-500">Readiness Score:</span>
+          <span className="text-slate-500">Halal Readiness Score:</span>
           <span className="font-bold text-emerald-600">{readinessScore}%</span>
         </div>
         <div className="flex justify-between">
-          <span className="text-slate-500">Status Berkas:</span>
-          <span className="font-bold text-slate-800">Lengkap & Valid</span>
+          <span className="text-slate-500">Status Tahapan:</span>
+          <span className="font-bold text-slate-800">
+            {certificationStatus > 0 ? `Tahap ${certificationStatus} dari 8` : 'Tahap Persiapan Berkas'}
+          </span>
         </div>
+        {nomorSertifikat && (
+          <div className="flex justify-between pt-1 border-t border-slate-200">
+            <span className="text-slate-500">Nomor Sertifikat BPJPH:</span>
+            <span className="font-bold text-emerald-700 font-mono">{nomorSertifikat}</span>
+          </div>
+        )}
       </div>
 
-      {!submitted ? (
-        <button onClick={handleSubmit} disabled={loading} className="px-8 py-3.5 bg-orange-500 hover:bg-orange-600 text-white rounded-xl font-bold text-sm shadow-md transition-all disabled:opacity-50">
-          {loading ? 'Mengajukan...' : 'Ajukan Permohonan Sekarang'}
-        </button>
-      ) : (
-        <div className="p-4 bg-emerald-50 text-emerald-800 rounded-xl font-bold text-sm border border-emerald-200">
-          ✓ Permohonan berhasil diajukan ke BPJPH! Nomor Registrasi: JHC-2026-89410.
+      {/* Rejection Alert Box */}
+      {isRejected && permohonanCatatan && (
+        <div className="p-5 bg-red-50/80 border-2 border-red-300 rounded-2xl text-left max-w-lg mx-auto shadow-sm space-y-2">
+          <div className="flex items-center gap-2 text-red-800 font-bold text-sm">
+            <svg className="w-5 h-5 text-red-600 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
+            <span>Catatan / Alasan Penolakan dari Admin:</span>
+          </div>
+          <div className="p-3 bg-white rounded-xl border border-red-200 text-xs text-red-900 leading-relaxed font-medium whitespace-pre-wrap">
+            {permohonanCatatan}
+          </div>
+          <p className="text-[11px] text-red-700">
+            Silakan periksa kembali data pada tahap sebelumnya, lakukan revisi dokumen, kemudian klik tombol ajukan ulang di bawah ini.
+          </p>
+        </div>
+      )}
+
+      {/* Certified Download Box */}
+      {isCertified && (
+        <div className="p-6 bg-gradient-to-br from-emerald-500 to-teal-700 text-white rounded-2xl max-w-lg mx-auto shadow-lg space-y-3">
+          <Icons.Award className="w-10 h-10 text-amber-300 mx-auto" />
+          <h3 className="font-extrabold text-lg">Sertifikat Halal Resmi Anda Siap Diunduh</h3>
+          <p className="text-xs text-emerald-100 leading-relaxed">
+            Sertifikat telah disahkan oleh BPJPH dan diverifikasi oleh tim JHC HalalFlow.
+          </p>
+          <div className="pt-2">
+            <a
+              href={fileSertifikat ? `/uploads/${fileSertifikat}` : '/api/certificate'}
+              target="_blank"
+              rel="noreferrer"
+              className="inline-flex items-center gap-2 px-6 py-3 bg-white text-emerald-800 hover:bg-emerald-50 rounded-xl font-black text-sm shadow-md transition-all hover:scale-105"
+            >
+              <Icons.Download className="w-5 h-5 text-emerald-600" /> Unduh Sertifikat Halal (PDF / Cetak)
+            </a>
+          </div>
+        </div>
+      )}
+
+      {/* Actions */}
+      {!isCertified && (
+        <div>
+          {isPending ? (
+            <div className="space-y-2">
+              <div className="p-4 bg-amber-50 text-amber-800 rounded-xl font-bold text-sm border border-amber-200 flex items-center justify-center gap-2">
+                <svg className="w-5 h-5 animate-spin text-amber-600" fill="none" viewBox="0 0 24 24"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"/><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"/></svg>
+                Permohonan sedang dalam antrean verifikasi Admin JHC.
+              </div>
+              <p className="text-xs text-slate-400">Status akan terupdate otomatis begitu Admin menyelesaikan review.</p>
+            </div>
+          ) : isRejected ? (
+            <button
+              onClick={handleSubmit}
+              disabled={loading}
+              className="px-8 py-3.5 bg-orange-500 hover:bg-orange-600 text-white rounded-xl font-bold text-sm shadow-md transition-all disabled:opacity-50 hover:scale-[1.02]"
+            >
+              {loading ? 'Mengajukan Ulang...' : 'Ajukan Ulang Permohonan'}
+            </button>
+          ) : isApproved ? (
+            <div className="p-4 bg-emerald-50 text-emerald-800 rounded-xl font-bold text-sm border border-emerald-200">
+              ✓ Permohonan telah disetujui! Anda dapat memantau progres tahap 1 s/d 8 di Dashboard Utama.
+            </div>
+          ) : (
+            <button
+              onClick={handleSubmit}
+              disabled={loading}
+              className="px-8 py-3.5 bg-orange-500 hover:bg-orange-600 text-white rounded-xl font-bold text-sm shadow-md transition-all disabled:opacity-50 hover:scale-[1.02]"
+            >
+              {loading ? 'Mengajukan...' : 'Ajukan Permohonan Sekarang'}
+            </button>
+          )}
+        </div>
+      )}
+
+      {localSuccess && (
+        <div className="p-3 bg-emerald-50 text-emerald-700 text-xs font-semibold rounded-xl border border-emerald-200">
+          {localSuccess}
+        </div>
+      )}
+      {errorMsg && (
+        <div className="p-3 bg-red-50 text-red-600 text-xs font-semibold rounded-xl border border-red-200">
+          {errorMsg}
         </div>
       )}
     </Card>
   );
 };
 
-const AdminPanel = ({ certificationStatus, setCertificationStatus }) => {
-  const [loading, setLoading] = useState(false);
-  const [message, setMessage] = useState('');
 
-  const handleStatusChange = async (newStatus) => {
-    setLoading(true);
-    setMessage('');
-    try {
-      const res = await apiFetch('/api/certification-status', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ status: newStatus })
-      });
-      const data = await res.json();
-      if (res.ok) {
-        setCertificationStatus(data.certificationStatus);
-        setMessage('Status berhasil diperbarui!');
-        setTimeout(() => setMessage(''), 3000);
-      } else {
-        setMessage('Gagal memperbarui status.');
-      }
-    } catch (err) {
-      console.error(err);
-      setMessage('Terjadi kesalahan.');
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const STAGES = [
-    { no: 1, label: 'Diterima oleh Admin', desc: 'Pengajuan telah diterima dan sedang dilakukan pemeriksaan awal oleh Admin JHC.' },
-    { no: 2, label: 'Diproses', desc: 'Data dan dokumen usaha sedang diperiksa serta dipersiapkan untuk proses sertifikasi halal.' },
-    { no: 3, label: 'Disubmit di SIHALAL', desc: 'Pengajuan sertifikasi halal telah diajukan melalui sistem SIHALAL BPJPH.' },
-    { no: 4, label: 'Feedback BPJPH / Dikirim ke LPH', desc: 'Pengajuan sedang menunggu atau menindaklanjuti feedback BPJPH. Jika persyaratan terpenuhi, pengajuan diteruskan ke LPH.' },
-    { no: 5, label: 'Penjadwalan Audit', desc: 'Pengajuan telah diterima LPH dan sedang dalam proses penjadwalan audit/pemeriksaan kehalalan.' },
-    { no: 6, label: 'Perbaikan Hasil Audit', desc: 'Hasil pemeriksaan/audit memerlukan perbaikan atau pemenuhan dokumen/data oleh pelaku usaha.' },
-    { no: 7, label: 'Sidang Fatwa MUI', desc: 'Hasil pemeriksaan telah diproses untuk penetapan kehalalan melalui sidang fatwa sesuai ketentuan yang berlaku.' },
-    { no: 8, label: 'Terbit Sertifikat Halal BPJPH', desc: 'Selamat! Sertifikat Halal resmi BPJPH telah terbit dan dapat diakses melalui sistem.' }
-  ];
-
-  return (
-    <Card className="p-8 max-w-3xl mx-auto space-y-6 animate-fade-in border-violet-200 shadow-xl bg-violet-50/30">
-      <div className="flex items-center gap-3 border-b pb-4 border-violet-100">
-        <div className="w-12 h-12 bg-violet-600 text-white rounded-xl flex items-center justify-center shadow-md">
-          <Icons.Admin className="w-6 h-6" />
-        </div>
-        <div>
-          <h2 className="text-2xl font-bold text-violet-900 tracking-tight">Admin Panel</h2>
-          <p className="text-sm text-violet-600 mt-1">Kelola progres pengajuan sertifikasi halal</p>
-        </div>
-      </div>
-
-      <div className="bg-white p-6 rounded-2xl shadow-sm border border-slate-100 space-y-4">
-        <div>
-          <h3 className="font-bold text-slate-800">Status Progress Sertifikasi Halal</h3>
-          <p className="text-xs text-slate-500 mt-1">Pilih tahapan saat ini untuk diperbarui di Dashboard pengguna.</p>
-        </div>
-
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-          <button
-            onClick={() => handleStatusChange(0)}
-            disabled={loading}
-            className={`p-4 rounded-xl border text-left transition-all ${certificationStatus === 0 ? 'bg-slate-800 text-white border-slate-800 ring-2 ring-slate-400 ring-offset-1' : 'bg-slate-50 text-slate-600 hover:bg-slate-100'}`}
-          >
-            <div className="font-bold text-sm">0. Menunggu Pengajuan</div>
-            <div className={`text-xs mt-1 ${certificationStatus === 0 ? 'text-slate-300' : 'text-slate-400'}`}>Reset ke awal</div>
-          </button>
-          
-          {STAGES.map((s) => {
-            const isCurrent = certificationStatus === s.no;
-            return (
-              <button
-                key={s.no}
-                onClick={() => handleStatusChange(s.no)}
-                disabled={loading}
-                className={`p-4 rounded-xl border text-left transition-all flex items-start gap-3 ${isCurrent ? 'bg-emerald-600 text-white border-emerald-600 shadow-md ring-2 ring-emerald-300 ring-offset-1 scale-[1.02]' : 'bg-white hover:bg-emerald-50 hover:border-emerald-200'}`}
-              >
-                <div className={`w-6 h-6 rounded-full flex items-center justify-center text-xs font-bold shrink-0 mt-0.5 ${isCurrent ? 'bg-white/20 text-white' : 'bg-slate-100 text-slate-500'}`}>
-                  {s.no}
-                </div>
-                <div>
-                  <div className={`font-bold text-sm leading-tight ${isCurrent ? 'text-white' : 'text-slate-700'}`}>{s.label}</div>
-                  <div className={`text-[11px] mt-1 leading-snug ${isCurrent ? 'text-white/80' : 'text-slate-400'}`}>{s.desc}</div>
-                  {isCurrent && <div className="text-[10px] bg-white/20 inline-block px-2 py-0.5 rounded-full mt-1.5 font-semibold tracking-wide">STATUS AKTIF</div>}
-                </div>
-              </button>
-            )
-          })}
-        </div>
-
-        {message && (
-          <div className={`p-3 rounded-lg text-sm font-semibold text-center border ${message.includes('Gagal') || message.includes('Terjadi') ? 'bg-red-50 text-red-600 border-red-200' : 'bg-emerald-50 text-emerald-700 border-emerald-200'}`}>
-            {message}
-          </div>
-        )}
-      </div>
-    </Card>
-  );
-};
 
 const Login = ({ onLogin }) => {
   const [isRegister, setIsRegister] = useState(false);

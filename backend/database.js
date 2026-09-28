@@ -184,6 +184,24 @@ function initializeDatabase() {
     )
   `);
 
+  // Safe migrations for companies table
+  const columns = db.prepare(`PRAGMA table_info(companies)`).all().map(c => c.name);
+  if (!columns.includes('permohonan_status')) {
+    db.exec(`ALTER TABLE companies ADD COLUMN permohonan_status TEXT DEFAULT 'belum'`);
+  }
+  if (!columns.includes('permohonan_catatan')) {
+    db.exec(`ALTER TABLE companies ADD COLUMN permohonan_catatan TEXT DEFAULT ''`);
+  }
+  if (!columns.includes('nomor_sertifikat')) {
+    db.exec(`ALTER TABLE companies ADD COLUMN nomor_sertifikat TEXT DEFAULT ''`);
+  }
+  if (!columns.includes('tgl_terbit_sertifikat')) {
+    db.exec(`ALTER TABLE companies ADD COLUMN tgl_terbit_sertifikat TEXT DEFAULT ''`);
+  }
+  if (!columns.includes('file_sertifikat')) {
+    db.exec(`ALTER TABLE companies ADD COLUMN file_sertifikat TEXT DEFAULT ''`);
+  }
+
   console.log('✅ Database schema initialized successfully');
   return db;
 }

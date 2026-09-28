@@ -5,7 +5,7 @@
 :root {
   --bg-main: #f4f6f9;
   --bg-card: #ffffff;
-  --bg-sidebar: linear-gradient(180deg, #0f1a2e 0%, #162137 50%, #1a2942 100%);
+  --bg-sidebar: linear-gradient(180deg, #f0fdf4 0%, #e8f9ee 50%, #def7e7 100%);
   --bg-navbar: rgba(255,255,255,0.82);
   --emerald-primary: #059669;
   --emerald-light: #d1fae5;
@@ -78,53 +78,80 @@ header h1 {
   letter-spacing: -0.025em;
 }
 
-/* ===== SIDEBAR — Dark Gradient ===== */
+/* ===== SIDEBAR — Light Emerald Gradient (Professional) ===== */
 aside {
   background: var(--bg-sidebar) !important;
-  border-right: none !important;
-  box-shadow: 4px 0 24px rgba(0,0,0,0.08);
+  border-right: 1px solid #d1fae5 !important;
+  box-shadow: 4px 0 20px -3px rgba(6, 78, 59, 0.05) !important;
 }
 
-aside > p {
-  color: rgba(148,163,184,0.7) !important;
+aside > p,
+aside p.sidebar-section-title {
+  color: #065f46 !important;
   letter-spacing: 0.12em;
   font-size: 10px !important;
+  font-weight: 700 !important;
 }
 
 aside button {
-  color: rgba(203,213,225,0.85) !important;
+  color: #064e3b !important;
   border-radius: 12px !important;
   transition: all var(--transition-default);
   border: 1px solid transparent;
-  font-weight: 500 !important;
+  font-weight: 600 !important;
 }
 
 aside button:hover {
-  background: rgba(255,255,255,0.06) !important;
-  color: #f1f5f9 !important;
-  border-color: rgba(255,255,255,0.06);
+  background: rgba(16, 185, 129, 0.12) !important;
+  color: #022c22 !important;
+  border-color: rgba(110, 231, 183, 0.4) !important;
 }
 
 aside button svg {
-  color: rgba(148,163,184,0.65) !important;
+  color: #059669 !important;
   transition: all var(--transition-default);
 }
 
 aside button:hover svg {
-  color: #10b981 !important;
+  color: #047857 !important;
 }
 
 /* Active sidebar item */
-aside button.bg-emerald-600 {
+aside button.bg-emerald-600,
+aside button.bg-emerald-500,
+aside button[data-active="true"] {
   background: linear-gradient(135deg, #059669, #10b981) !important;
   color: #ffffff !important;
-  box-shadow: 0 4px 16px rgba(5,150,105,0.35);
-  border-color: rgba(255,255,255,0.1);
+  box-shadow: 0 4px 14px rgba(5, 150, 105, 0.35) !important;
+  border-color: rgba(255, 255, 255, 0.25) !important;
   font-weight: 700 !important;
 }
 
-aside button.bg-emerald-600 svg {
+aside button.bg-emerald-600 svg,
+aside button.bg-emerald-500 svg,
+aside button[data-active="true"] svg {
   color: #ffffff !important;
+}
+
+/* Logout button special styling */
+aside button.sidebar-logout-btn {
+  color: #065f46 !important;
+  background: rgba(255, 255, 255, 0.8) !important;
+  border: 1px solid #d1fae5 !important;
+}
+
+aside button.sidebar-logout-btn svg {
+  color: #059669 !important;
+}
+
+aside button.sidebar-logout-btn:hover {
+  background: #fef2f2 !important;
+  color: #dc2626 !important;
+  border-color: #fecaca !important;
+}
+
+aside button.sidebar-logout-btn:hover svg {
+  color: #dc2626 !important;
 }
 
 /* ===== CARDS — Refined Elevation ===== */
