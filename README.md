@@ -3,7 +3,7 @@
 > Sistem manajemen produk halal berbasis web untuk **Jamaah Haji Cilegon (JHC)** — memudahkan pengelolaan inventaris, verifikasi kehalalan, dan pelaporan secara terpusat.
 
 ---
-
+akmal
 ## 📋 Daftar Isi
 
 - [Tentang Proyek](#tentang-proyek)
