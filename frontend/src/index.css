@@ -368,3 +368,11 @@ main {
   background: rgba(16,185,129,0.15);
   color: #064e3b;
 }
+
+/* ===== ADMIN-SPECIFIC OVERRIDES ===== */
+/* Admin app uses a navy/dark-blue sidebar instead of emerald */
+.admin-app {
+  --bg-main: #f4f6f9;
+  --bg-sidebar: linear-gradient(180deg, #0f1a2e 0%, #162137 50%, #1a2942 100%);
+}
+
