@@ -932,37 +932,90 @@ function CompanyDetailPage({ companyId, onBack }) {
       {activeTab === 'sertifikasi-bpjph' && (
         <div className="bg-white border border-slate-200 rounded-2xl p-6 shadow-sm">
           <h3 className="font-bold text-slate-800 mb-5">Pengajuan Sertifikasi Halal BPJPH</h3>
-          <div className="bg-slate-50 border border-slate-200 rounded-xl p-6 text-center space-y-4">
-            <h4 className="text-lg font-bold text-emerald-600">Status Saat Ini: Tahap {company.certification_status || 0}</h4>
-            <p className="text-sm text-slate-500">Tahap 8 = Menunggu Persetujuan Admin | Tahap 9 = Lulus / Sertifikat Terbit</p>
-            <div className="flex flex-wrap justify-center gap-2 mt-4">
-              {[0,1,2,3,4,5,6,7,8,9].map(st => (
+
+          {/* Current Status Badge */}
+          <div className="flex items-center justify-between mb-5 p-4 bg-emerald-50 border border-emerald-200 rounded-xl">
+            <div className="flex items-center gap-3">
+              <div className="w-10 h-10 rounded-full bg-emerald-600 text-white flex items-center justify-center font-black text-lg shrink-0">
+                {company.certification_status || 0}
+              </div>
+              <div>
+                <p className="text-xs font-bold text-slate-500 uppercase tracking-wide">Status Saat Ini</p>
+                <p className="font-bold text-slate-800 text-sm">
+                  {(() => {
+                    const st = company.certification_status || 0;
+                    const labels = ['Menunggu Pengajuan','Diterima oleh Admin','Diproses','Disubmit di SIHALAL','Feedback BPJPH / Dikirim ke LPH','Penjadwalan Audit','Perbaikan Hasil Audit','Sidang Fatwa MUI','Terbit Sertifikat Halal BPJPH'];
+                    return labels[st] || `Tahap ${st}`;
+                  })()}
+                </p>
+              </div>
+            </div>
+            {statusMsg && <span className="text-emerald-700 font-bold text-xs bg-emerald-100 px-3 py-1.5 rounded-full">{statusMsg}</span>}
+          </div>
+
+          {/* Stage Cards */}
+          <p className="text-xs text-slate-500 mb-3 font-semibold">Klik tahapan untuk memperbarui status pengguna:</p>
+          <div className="space-y-2">
+            {[
+              { no: 0, label: 'Menunggu Pengajuan', desc: 'Pengguna belum atau sedang mempersiapkan pengajuan sertifikasi halal. Reset ke tahap awal.' },
+              { no: 1, label: 'Diterima oleh Admin', desc: 'Pengajuan telah diterima dan sedang dilakukan pemeriksaan awal oleh Admin JHC.' },
+              { no: 2, label: 'Diproses', desc: 'Data dan dokumen usaha sedang diperiksa serta dipersiapkan untuk proses sertifikasi halal.' },
+              { no: 3, label: 'Disubmit di SIHALAL', desc: 'Pengajuan sertifikasi halal telah diajukan melalui sistem SIHALAL BPJPH.' },
+              { no: 4, label: 'Feedback BPJPH / Dikirim ke LPH', desc: 'Pengajuan sedang menunggu atau menindaklanjuti feedback BPJPH. Jika persyaratan terpenuhi, pengajuan diteruskan ke LPH.' },
+              { no: 5, label: 'Penjadwalan Audit', desc: 'Pengajuan telah diterima LPH dan sedang dalam proses penjadwalan audit/pemeriksaan kehalalan.' },
+              { no: 6, label: 'Perbaikan Hasil Audit', desc: 'Hasil pemeriksaan/audit memerlukan perbaikan atau pemenuhan dokumen/data oleh pelaku usaha.' },
+              { no: 7, label: 'Sidang Fatwa MUI', desc: 'Hasil pemeriksaan telah diproses untuk penetapan kehalalan melalui sidang fatwa sesuai ketentuan yang berlaku.' },
+              { no: 8, label: 'Terbit Sertifikat Halal BPJPH', desc: 'Selamat! Sertifikat Halal resmi BPJPH telah terbit dan dapat diakses melalui sistem.' },
+            ].map(stage => {
+              const isCurrent = (company.certification_status || 0) === stage.no;
+              return (
                 <button
-                  key={st}
+                  key={stage.no}
                   onClick={async () => {
                     setStatusLoading(true);
                     try {
                       const res = await adminFetch(`/api/admin/companies/${companyId}/certification-status`, {
                         method: 'PATCH',
-                        body: JSON.stringify({ status: st })
+                        body: JSON.stringify({ status: stage.no })
                       });
-                      if(res.ok) {
-                        setCompany({...company, certification_status: st});
+                      if (res.ok) {
+                        setCompany({...company, certification_status: stage.no});
                         setStatusMsg('Status BPJPH berhasil diperbarui!');
                         setTimeout(() => setStatusMsg(''), 3000);
                       }
                     } catch (e) {} finally { setStatusLoading(false); }
                   }}
-                  disabled={statusLoading || company.certification_status === st}
-                  className={`px-4 py-2 rounded-xl text-xs font-bold border transition-all ${company.certification_status === st ? 'bg-emerald-600 text-white border-emerald-600 shadow-sm' : 'bg-white text-slate-600 border-slate-200 hover:bg-slate-100'} disabled:opacity-50`}
+                  disabled={statusLoading || isCurrent}
+                  className={`w-full flex items-start gap-4 p-4 rounded-xl border text-left transition-all ${
+                    isCurrent
+                      ? 'bg-emerald-600 border-emerald-600 shadow-md ring-2 ring-emerald-300 ring-offset-1 cursor-default'
+                      : 'bg-white border-slate-200 hover:bg-emerald-50 hover:border-emerald-300'
+                  } disabled:opacity-80`}
                 >
-                  Tahap {st} {st === 9 && '(Lulus)'}
+                  <div className={`w-8 h-8 rounded-full flex items-center justify-center text-xs font-black shrink-0 mt-0.5 ${
+                    isCurrent ? 'bg-white/20 text-white' : 'bg-slate-100 text-slate-600'
+                  }`}>
+                    {stage.no}
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <div className={`font-bold text-sm ${isCurrent ? 'text-white' : 'text-slate-800'}`}>{stage.label}</div>
+                    <div className={`text-xs mt-0.5 leading-snug ${isCurrent ? 'text-white/80' : 'text-slate-400'}`}>{stage.desc}</div>
+                    {isCurrent && (
+                      <span className="inline-block mt-1.5 text-[10px] bg-white/20 text-white font-bold px-2 py-0.5 rounded-full tracking-wide">STATUS AKTIF</span>
+                    )}
+                  </div>
+                  {!isCurrent && (
+                    <span className={`text-[10px] font-bold px-2.5 py-1 rounded-full shrink-0 self-center bg-slate-100 text-slate-500 hover:bg-emerald-100 hover:text-emerald-700 transition-colors`}>
+                      Set Aktif
+                    </span>
+                  )}
                 </button>
-              ))}
-            </div>
+              );
+            })}
           </div>
         </div>
       )}
+
     </div>
   );
 }

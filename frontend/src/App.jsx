@@ -762,9 +762,34 @@ const StepDokumen = ({ legalData, setLegalData, handleGenericFileUpload }) => {
 
   return (
     <Card className="p-8 max-w-4xl mx-auto space-y-6 animate-fade-in">
-      <div>
-        <h2 className="text-2xl font-bold text-slate-800">Dokumen Legal & Kontak Pendaftaran</h2>
-        <p className="text-sm text-slate-500 mt-1">Unggah dokumen format Word (.doc/.docx) atau PDF (.pdf) serta lengkapi kontak resmi pendaftaran SIHALAL.</p>
+      <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
+        <div>
+          <h2 className="text-2xl font-bold text-slate-800">Dokumen Legal & Kontak Pendaftaran</h2>
+          <p className="text-sm text-slate-500 mt-1">Unggah dokumen format Word (.doc/.docx) atau PDF (.pdf) serta lengkapi kontak resmi pendaftaran SIHALAL.</p>
+        </div>
+        <button
+          onClick={() => {
+            const link = document.createElement('a');
+            link.href = '/templates/template_dokumen_legal.docx';
+            link.download = 'template_dokumen_legal.docx';
+            // Fallback: buat file text berisi instruksi jika template tidak tersedia
+            const content = `TEMPLATE DOKUMEN LEGAL - JHC HALALFLOW\n\n` +
+              `1. Permohonan Pendaftaran Sertifikasi Halal\n   - Surat permohonan resmi bermaterai\n   - Ditandatangani pemilik usaha\n\n` +
+              `2. SK Penyelia Halal\n   - Surat Keputusan penetapan Penyelia Halal\n   - Dilengkapi identitas penyelia\n\n` +
+              `3. SK Manajemen Halal\n   - Surat Keputusan penetapan Tim Manajemen Halal\n   - Ditandatangani pimpinan perusahaan\n\n` +
+              `4. Kebijakan Halal Bermaterai\n   - Pernyataan komitmen kebijakan halal perusahaan\n   - Bermaterai 10.000 dan ditandatangani\n\n` +
+              `Catatan: Upload file dalam format .doc, .docx, atau .pdf`;
+            const blob = new Blob([content], { type: 'text/plain;charset=utf-8' });
+            const url = URL.createObjectURL(blob);
+            link.href = url;
+            link.download = 'panduan_dokumen_legal.txt';
+            link.click();
+            URL.revokeObjectURL(url);
+          }}
+          className="px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-lg text-xs font-semibold flex items-center gap-2 transition-colors shrink-0"
+        >
+          <Icons.Download className="w-4 h-4" /> Unduh Template
+        </button>
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4 p-4 bg-slate-50 rounded-xl border">
@@ -950,14 +975,62 @@ const StepMatrixBahanHalal = ({ materials, setMaterials, matrixSubmitted, setMat
 
   const handleDownloadTemplate = () => {
     const data = [
-      { 'nama_bahan': 'Tepung Terigu', 'jenis_bahan': 'Bahan Baku', 'produsen': 'PT Bogasari', 'negara': 'Indonesia', 'supplier': 'PT Distribusi', 'lembaga_penerbit': 'BPJPH', 'nomor_sertifikat/registr': 'ID12345678', 'masa_berlaku': '31/12/2026' },
-      { 'nama_bahan': '', 'jenis_bahan': '', 'produsen': '', 'negara': '', 'supplier': '', 'lembaga_penerbit': '', 'nomor_sertifikat/registr': '', 'masa_berlaku': '' },
+      {
+        'nama_bahan': 'Kecap manis ABC',
+        'jenis_bahan': 'Bahan',
+        'produsen': 'PT. Heinz ABC Indonesia',
+        'negara': 'Indonesia',
+        'supplier': 'UD. Sumber Makmur',
+        'lembaga_penerbit': 'BPJPH',
+        'nomor_sertifikat/registr': 'ID00410000054900720',
+        'masa_berlaku': '1/7/2025'
+      },
+      {
+        'nama_bahan': 'Mayonaise maestro',
+        'jenis_bahan': 'Bahan',
+        'produsen': 'PT. Lasallefood Indonesia',
+        'negara': 'Indonesia',
+        'supplier': 'UD. Sumber Makmur',
+        'lembaga_penerbit': 'BPJPH',
+        'nomor_sertifikat/registr': 'ID00410000009281119',
+        'masa_berlaku': '3/10/2024'
+      },
+      {
+        'nama_bahan': 'Cheffy plastik wrap',
+        'jenis_bahan': 'Kemasan',
+        'produsen': 'PT. Altindo Mulia',
+        'negara': 'Indonesia',
+        'supplier': 'Toko Plastik Andalas',
+        'lembaga_penerbit': 'BPJPH',
+        'nomor_sertifikat/registr': 'ID36210018283020723',
+        'masa_berlaku': '14/06/2025'
+      },
+      {
+        'nama_bahan': 'Food tray SUS304',
+        'jenis_bahan': 'Kemasan',
+        'produsen': 'PT. Makmur Bersama Indonesia',
+        'negara': 'Indonesia',
+        'supplier': 'PT. Kinken Utomo Jaya',
+        'lembaga_penerbit': 'BPJPH',
+        'nomor_sertifikat/registr': 'ID32310030990121025',
+        'masa_berlaku': '17/10/2025'
+      },
+      {
+        'nama_bahan': 'SUNLIGHT Cairan Pencuci Piring, Jeruk Nipis Platinum',
+        'jenis_bahan': 'Cleaning Agent',
+        'produsen': 'PT. UNILEVER INDONESIA',
+        'negara': 'Indonesia',
+        'supplier': '',
+        'lembaga_penerbit': 'BPJPH',
+        'nomor_sertifikat/registr': 'ID00410000008400120',
+        'masa_berlaku': '2/6/2026'
+      },
     ];
     const wb = XLSX.utils.book_new();
     const ws = XLSX.utils.json_to_sheet(data);
-    ws['!cols'] = [{ wch: 20 }, { wch: 15 }, { wch: 20 }, { wch: 15 }, { wch: 20 }, { wch: 20 }, { wch: 25 }, { wch: 15 }];
+    ws['!cols'] = [{ wch: 55 }, { wch: 16 }, { wch: 28 }, { wch: 12 }, { wch: 25 }, { wch: 18 }, { wch: 28 }, { wch: 14 }];
     XLSX.utils.book_append_sheet(wb, ws, 'Matrix Bahan');
-    XLSX.writeFile(wb, 'nama-bahan.xlsx');
+    XLSX.writeFile(wb, 'template_matrix_bahan.xlsx');
   };
 
   const handleExcelUpload = (e) => {
@@ -1085,12 +1158,17 @@ const StepMatrixBahanHalal = ({ materials, setMaterials, matrixSubmitted, setMat
         </div>
         <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-3">
           <div>
-            <label className="block text-xs font-semibold text-slate-600 mb-1">Nama Bahan</label>
+            <label className="block text-xs font-semibold text-slate-600 mb-1">Nama Bahan (Merk)</label>
             <input type="text" placeholder="Contoh: Tepung Terigu" value={newMaterial.name} onChange={e => setNewMaterial({...newMaterial, name: e.target.value})} className="w-full bg-white border rounded-lg px-3 py-2 text-sm outline-none focus:border-emerald-500" required />
           </div>
           <div>
             <label className="block text-xs font-semibold text-slate-600 mb-1">Jenis Bahan</label>
-            <input type="text" placeholder="Contoh: Bahan Baku" value={newMaterial.jenis} onChange={e => setNewMaterial({...newMaterial, jenis: e.target.value})} className="w-full bg-white border rounded-lg px-3 py-2 text-sm outline-none focus:border-emerald-500" />
+            <CustomDropdown 
+              value={newMaterial.jenis}
+              onChange={(val) => setNewMaterial({...newMaterial, jenis: val})}
+              options={["Bahan", "Cleaning Agent", "Kemasan"]}
+              placeholder="Pilih Jenis Bahan"
+            />
           </div>
           <div>
             <label className="block text-xs font-semibold text-slate-600 mb-1">Produsen</label>
@@ -1113,8 +1191,8 @@ const StepMatrixBahanHalal = ({ materials, setMaterials, matrixSubmitted, setMat
             <input type="text" placeholder="Contoh: ID12345678" value={newMaterial.sertifikat} onChange={e => setNewMaterial({...newMaterial, sertifikat: e.target.value})} className="w-full bg-white border rounded-lg px-3 py-2 text-sm outline-none focus:border-emerald-500" />
           </div>
           <div>
-            <label className="block text-xs font-semibold text-slate-600 mb-1">Masa Berlaku (Expired)</label>
-            <input type="text" placeholder="dd/mm/yyyy" value={newMaterial.expired} onChange={e => setNewMaterial({...newMaterial, expired: e.target.value})} className="w-full bg-white border rounded-lg px-3 py-2 text-sm outline-none focus:border-emerald-500" />
+            <label className="block text-xs font-semibold text-slate-600 mb-1">Tanggal Terbit</label>
+            <input type="date" value={newMaterial.expired} onChange={e => setNewMaterial({...newMaterial, expired: e.target.value})} className="w-full bg-white border rounded-lg px-3 py-2 text-sm outline-none focus:border-emerald-500" />
           </div>
         </div>
         <div className="flex justify-end items-center gap-2 mt-2 pt-2 border-t border-slate-200">
@@ -1134,14 +1212,14 @@ const StepMatrixBahanHalal = ({ materials, setMaterials, matrixSubmitted, setMat
           <table className="w-full text-left border-collapse min-w-max">
             <thead>
               <tr className="bg-slate-100 text-slate-700 text-xs font-bold uppercase tracking-wider">
-                <th className="p-3.5">Nama Bahan</th>
+                <th className="p-3.5">Nama Bahan (Merk)</th>
                 <th className="p-3.5">Jenis</th>
                 <th className="p-3.5">Produsen</th>
                 <th className="p-3.5">Negara</th>
                 <th className="p-3.5">Supplier</th>
                 <th className="p-3.5">Lembaga Penerbit</th>
                 <th className="p-3.5">No. Sertifikat</th>
-                <th className="p-3.5">Expired</th>
+                <th className="p-3.5">Tanggal Terbit</th>
                 <th className="p-3.5 text-center">Aksi</th>
               </tr>
             </thead>
@@ -1234,7 +1312,7 @@ const StepUploadProduk = ({ products, setProducts, materials, productsSubmitted,
     e.preventDefault();
     if (!newProductName.trim()) return;
     const id = Date.now();
-    setPendingProducts(prev => [...prev, { id, name: newProductName.trim(), bahan: [] }]);
+    setPendingProducts(prev => [...prev, { id, name: newProductName.trim(), bahan: [], createdAt: id }]);
     setNewProductName('');
     setSuccessMsg(`Produk "${newProductName.trim()}" berhasil didaftarkan!`);
     setTimeout(() => setSuccessMsg(''), 3000);
@@ -1315,7 +1393,7 @@ const StepUploadProduk = ({ products, setProducts, materials, productsSubmitted,
       return;
     }
 
-    const newBomEntry = { ...prod, bahan: selectedIngredients };
+    const newBomEntry = { ...prod, bahan: selectedIngredients, createdAt: prod.createdAt || prod.id };
 
     try {
       const res = await apiFetch('/api/products', {
@@ -1354,11 +1432,73 @@ const StepUploadProduk = ({ products, setProducts, materials, productsSubmitted,
 
   const selectedPendingProduct = pendingProducts.find(p => p.id === selectedPendingId);
 
+  const handleDownloadProductTemplate = () => {
+    const data = [
+      { 'nama_produk': 'Nasi Gurih' },
+      { 'nama_produk': 'Spaghetti Bolognese' },
+      { 'nama_produk': 'Ayam Kecap' },
+      { 'nama_produk': 'dan seterusnya' },
+    ];
+    const wb = XLSX.utils.book_new();
+    const ws = XLSX.utils.json_to_sheet(data);
+    ws['!cols'] = [{ wch: 30 }];
+    XLSX.utils.book_append_sheet(wb, ws, 'Daftar Produk');
+    XLSX.writeFile(wb, 'template_produk.xlsx');
+  };
+
+  const handleProductExcelUpload = (e) => {
+    if (e.target.files && e.target.files[0]) {
+      const file = e.target.files[0];
+      const reader = new FileReader();
+      reader.onload = (evt) => {
+        try {
+          const wb = XLSX.read(evt.target.result, { type: 'binary' });
+          const sheetName = wb.SheetNames[0];
+          const sheet = wb.Sheets[sheetName];
+          const rows = XLSX.utils.sheet_to_json(sheet, { raw: false });
+
+          const parsed = rows.map((row, i) => ({
+            id: Date.now() + i,
+            name: row['nama_produk'] || row['Nama Produk'] || row['name'] || '',
+            bahan: []
+          })).filter(p => p.name && p.name.toLowerCase() !== 'dan seterusnya');
+
+          if (parsed.length === 0) {
+            alert('Tidak ada data yang bisa dibaca. Pastikan format kolom sesuai template.');
+            return;
+          }
+
+          setPendingProducts(prev => [...prev, ...parsed]);
+          setSuccessMsg(`${parsed.length} produk berhasil diimpor dari Excel!`);
+          setTimeout(() => setSuccessMsg(''), 4000);
+        } catch (err) {
+          console.error(err);
+          alert('Gagal membaca file Excel. Pastikan format file sesuai template.');
+        }
+      };
+      reader.readAsBinaryString(file);
+    }
+  };
+
   return (
     <Card className="p-8 max-w-5xl mx-auto space-y-8 animate-fade-in">
-      <div>
-        <h2 className="text-2xl font-bold text-slate-800">Upload Produk & Komposisi (BOM)</h2>
-        <p className="text-sm text-slate-500 mt-1">Daftarkan produk dan tentukan komposisi bahan sesuai Matrix Bahan Halal melalui 3 tahap berikut.</p>
+      <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
+        <div>
+          <h2 className="text-2xl font-bold text-slate-800">Upload Produk & Komposisi (BOM)</h2>
+          <p className="text-sm text-slate-500 mt-1">Daftarkan produk dan tentukan komposisi bahan sesuai Matrix Bahan Halal melalui 3 tahap berikut.</p>
+        </div>
+        <div className="flex items-center gap-2 flex-wrap">
+          <button
+            onClick={handleDownloadProductTemplate}
+            className="px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-lg text-xs font-semibold flex items-center gap-2 transition-colors"
+          >
+            <Icons.Download className="w-4 h-4" /> Unduh Template Excel
+          </button>
+          <label className="px-4 py-2 bg-emerald-50 hover:bg-emerald-100 text-emerald-700 rounded-lg text-xs font-semibold cursor-pointer flex items-center gap-2 transition-colors">
+            <Icons.Upload className="w-4 h-4" /> Upload Excel
+            <input type="file" accept=".xlsx,.xls" onChange={handleProductExcelUpload} className="hidden" />
+          </label>
+        </div>
       </div>
 
       {/* ========= TABEL 1: Input Produk ========= */}
@@ -1401,74 +1541,83 @@ const StepUploadProduk = ({ products, setProducts, materials, productsSubmitted,
             <tbody className="divide-y text-sm text-slate-700">
               {pendingProducts.length === 0 && bomProducts.length === 0 ? (
                 <tr><td colSpan="4" className="p-4 text-center text-slate-400 text-xs">Belum ada produk. Input produk di atas.</td></tr>
-              ) : (
-                <>
-                  {pendingProducts.map((p, idx) => (
-                    <tr key={p.id} className="hover:bg-slate-50">
-                      <td className="p-3 text-slate-500">
-                        {editingPendingId === p.id ? (
-                          <span className="text-xs font-semibold text-slate-500">{bomProducts.length + idx + 1}</span>
-                        ) : bomProducts.length + idx + 1}
-                      </td>
-                      <td className="p-3 font-semibold text-slate-800">
-                        {editingPendingId === p.id ? (
-                          <input
-                            type="text"
-                            value={editingProductName}
-                            onChange={e => setEditingProductName(e.target.value)}
-                            className="w-full border rounded-lg px-2 py-1 text-sm outline-none focus:border-emerald-500"
-                            autoFocus
-                          />
-                        ) : p.name}
-                      </td>
-                      <td className="p-3"><span className="text-xs bg-amber-100 text-amber-700 font-bold px-2 py-0.5 rounded-full">Menunggu BOM</span></td>
-                      <td className="p-3">
-                        <div className="flex items-center justify-center gap-1.5">
+              ) : (() => {
+                // Merge all products and sort by creation time to preserve insertion order
+                const allProducts = [
+                  ...bomProducts.map(p => ({ ...p, _status: 'bom' })),
+                  ...pendingProducts.map(p => ({ ...p, _status: 'pending' }))
+                ].sort((a, b) => (a.createdAt || a.id) - (b.createdAt || b.id));
+
+                return allProducts.map((p, idx) => {
+                  if (p._status === 'pending') {
+                    return (
+                      <tr key={p.id} className="hover:bg-slate-50">
+                        <td className="p-3 text-slate-500">
                           {editingPendingId === p.id ? (
-                            <>
-                              <button
-                                onClick={() => handleSaveEditPending(p.id)}
-                                className="px-2.5 py-1 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg text-xs font-bold transition-colors"
-                              >
-                                Simpan
-                              </button>
-                              <button
-                                onClick={() => setEditingPendingId(null)}
-                                className="px-2.5 py-1 bg-slate-200 hover:bg-slate-300 text-slate-700 rounded-lg text-xs font-bold transition-colors"
-                              >
-                                Batal
-                              </button>
-                            </>
-                          ) : (
-                            <>
-                              <button
-                                onClick={() => handleEditPending(p)}
-                                className="px-2.5 py-1 bg-amber-50 hover:bg-amber-100 text-amber-700 border border-amber-200 rounded-lg text-xs font-semibold flex items-center gap-1 transition-colors"
-                              >
-                                <Icons.Edit className="w-3.5 h-3.5" /> Edit
-                              </button>
-                              <button
-                                onClick={() => handleDeletePending(p.id)}
-                                className="px-2.5 py-1 bg-red-50 hover:bg-red-100 text-red-700 border border-red-200 rounded-lg text-xs font-semibold flex items-center gap-1 transition-colors"
-                              >
-                                <Icons.Trash className="w-3.5 h-3.5" /> Hapus
-                              </button>
-                            </>
-                          )}
-                        </div>
-                      </td>
-                    </tr>
-                  ))}
-                  {bomProducts.map((p, idx) => (
-                    <tr key={p.id} className="hover:bg-slate-50">
-                      <td className="p-3 text-slate-500">{idx + 1}</td>
-                      <td className="p-3 font-semibold text-slate-800">{p.name}</td>
-                      <td className="p-3"><span className="text-xs bg-emerald-100 text-emerald-700 font-bold px-2 py-0.5 rounded-full">✓ BOM Lengkap</span></td>
-                      <td className="p-3 text-center"><span className="text-xs text-slate-400">-</span></td>
-                    </tr>
-                  ))}
-                </>
-              )}
+                            <span className="text-xs font-semibold text-slate-500">{idx + 1}</span>
+                          ) : idx + 1}
+                        </td>
+                        <td className="p-3 font-semibold text-slate-800">
+                          {editingPendingId === p.id ? (
+                            <input
+                              type="text"
+                              value={editingProductName}
+                              onChange={e => setEditingProductName(e.target.value)}
+                              className="w-full border rounded-lg px-2 py-1 text-sm outline-none focus:border-emerald-500"
+                              autoFocus
+                            />
+                          ) : p.name}
+                        </td>
+                        <td className="p-3"><span className="text-xs bg-amber-100 text-amber-700 font-bold px-2 py-0.5 rounded-full">Menunggu BOM</span></td>
+                        <td className="p-3">
+                          <div className="flex items-center justify-center gap-1.5">
+                            {editingPendingId === p.id ? (
+                              <>
+                                <button
+                                  onClick={() => handleSaveEditPending(p.id)}
+                                  className="px-2.5 py-1 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg text-xs font-bold transition-colors"
+                                >
+                                  Simpan
+                                </button>
+                                <button
+                                  onClick={() => setEditingPendingId(null)}
+                                  className="px-2.5 py-1 bg-slate-200 hover:bg-slate-300 text-slate-700 rounded-lg text-xs font-bold transition-colors"
+                                >
+                                  Batal
+                                </button>
+                              </>
+                            ) : (
+                              <>
+                                <button
+                                  onClick={() => handleEditPending(p)}
+                                  className="px-2.5 py-1 bg-amber-50 hover:bg-amber-100 text-amber-700 border border-amber-200 rounded-lg text-xs font-semibold flex items-center gap-1 transition-colors"
+                                >
+                                  <Icons.Edit className="w-3.5 h-3.5" /> Edit
+                                </button>
+                                <button
+                                  onClick={() => handleDeletePending(p.id)}
+                                  className="px-2.5 py-1 bg-red-50 hover:bg-red-100 text-red-700 border border-red-200 rounded-lg text-xs font-semibold flex items-center gap-1 transition-colors"
+                                >
+                                  <Icons.Trash className="w-3.5 h-3.5" /> Hapus
+                                </button>
+                              </>
+                            )}
+                          </div>
+                        </td>
+                      </tr>
+                    );
+                  } else {
+                    return (
+                      <tr key={p.id} className="hover:bg-slate-50">
+                        <td className="p-3 text-slate-500">{idx + 1}</td>
+                        <td className="p-3 font-semibold text-slate-800">{p.name}</td>
+                        <td className="p-3"><span className="text-xs bg-emerald-100 text-emerald-700 font-bold px-2 py-0.5 rounded-full">✓ BOM Lengkap</span></td>
+                        <td className="p-3 text-center"><span className="text-xs text-slate-400">-</span></td>
+                      </tr>
+                    );
+                  }
+                });
+              })()}
             </tbody>
           </table>
         </div>
@@ -1649,9 +1798,30 @@ const StepProsesProduksi = ({ productionData, setProductionData, handleGenericFi
 
   return (
     <Card className="p-8 max-w-4xl mx-auto space-y-6 animate-fade-in">
-      <div>
-        <h2 className="text-2xl font-bold text-slate-800">Proses Produksi Halal</h2>
-        <p className="text-sm text-slate-500 mt-1">Unggah dokumen alur proses produksi (jpeg), layout ruang produksi (jpeg), dan surat pernyataan bebas babi (pdf).</p>
+      <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
+        <div>
+          <h2 className="text-2xl font-bold text-slate-800">Proses Produksi Halal</h2>
+          <p className="text-sm text-slate-500 mt-1">Unggah dokumen alur proses produksi (jpeg), layout ruang produksi (jpeg), dan surat pernyataan bebas babi (pdf).</p>
+        </div>
+        <button
+          onClick={() => {
+            const content = `PANDUAN PROSES PRODUKSI HALAL - JHC HALALFLOW\n\n` +
+              `1. Alur Proses Produksi\n   - Diagram/flowchart alur produksi dari bahan baku hingga produk jadi\n   - Format gambar: .jpeg\n   - Sertakan setiap tahap proses produksi secara detail\n\n` +
+              `2. Layout Ruang Produksi\n   - Denah/layout tata letak ruang produksi\n   - Format gambar: .jpeg\n   - Tunjukkan pemisahan area produk halal dan non-halal (jika ada)\n\n` +
+              `3. Surat Pernyataan Bebas Babi\n   - Surat pernyataan bahwa fasilitas produksi bebas dari babi dan turunannya\n   - Format: .pdf\n   - Bermaterai dan ditandatangani pimpinan perusahaan\n\n` +
+              `Catatan: Semua file harus jelas dan dapat terbaca`;
+            const blob = new Blob([content], { type: 'text/plain;charset=utf-8' });
+            const url = URL.createObjectURL(blob);
+            const link = document.createElement('a');
+            link.href = url;
+            link.download = 'panduan_proses_produksi_halal.txt';
+            link.click();
+            URL.revokeObjectURL(url);
+          }}
+          className="px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-lg text-xs font-semibold flex items-center gap-2 transition-colors shrink-0"
+        >
+          <Icons.Download className="w-4 h-4" /> Unduh Template
+        </button>
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
@@ -1782,9 +1952,35 @@ const StepUploadEvidence = ({ evidenceData, setEvidenceData, handleGenericFileUp
 
   return (
     <Card className="p-8 max-w-4xl mx-auto space-y-6 animate-fade-in">
-      <div>
-        <h2 className="text-2xl font-bold text-slate-800">Upload Evidence (Bukti)</h2>
-        <p className="text-sm text-slate-500 mt-1">Lengkapi seluruh dokumentasi bukti kegiatan perusahaan sesuai urutan standar.</p>
+      <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
+        <div>
+          <h2 className="text-2xl font-bold text-slate-800">Upload Evidence (Bukti)</h2>
+          <p className="text-sm text-slate-500 mt-1">Lengkapi seluruh dokumentasi bukti kegiatan perusahaan sesuai urutan standar.</p>
+        </div>
+        <button
+          onClick={() => {
+            const content = `PANDUAN UPLOAD EVIDENCE (BUKTI) - JHC HALALFLOW\n\n` +
+              `1. Bukti Foto Sosialisasi/Training Halal\n   - Foto kegiatan sosialisasi atau pelatihan halal bagi karyawan\n   - Format: gambar (.jpg/.png)\n\n` +
+              `2. Bukti Foto Audit Internal\n   - Foto pelaksanaan audit internal SJPH\n   - Format: gambar (.jpg/.png)\n\n` +
+              `3. Upload Daftar Hadir Sosialisasi Halal\n   - Daftar hadir peserta sosialisasi halal (tanda tangan karyawan)\n   - Format: .pdf, .doc, .docx\n\n` +
+              `4. Upload Daftar Hadir Audit Internal\n   - Daftar hadir peserta audit internal (tanda tangan tim audit)\n   - Format: .pdf, .doc, .docx\n\n` +
+              `5. Sampel Catatan Pembelian Bahan\n   - Bukti pembelian bahan halal (nota/faktur/purchase order)\n   - Format: .pdf, .doc, gambar\n\n` +
+              `6. Catatan Penyimpanan Bahan\n   - Dokumen/log penyimpanan dan pengelolaan bahan\n   - Format: .pdf, .doc, gambar\n\n` +
+              `7. Catatan Hasil Produksi\n   - Dokumen/log hasil proses produksi\n   - Format: .pdf, .doc, gambar\n\n` +
+              `8. Bukti Distribusi/Penjualan Produk\n   - Dokumen distribusi atau penjualan produk halal\n   - Format: .pdf, .doc, gambar\n\n` +
+              `Catatan: Semua dokumen harus jelas, terbaca, dan menunjukkan tanggal kegiatan`;
+            const blob = new Blob([content], { type: 'text/plain;charset=utf-8' });
+            const url = URL.createObjectURL(blob);
+            const link = document.createElement('a');
+            link.href = url;
+            link.download = 'panduan_upload_evidence.txt';
+            link.click();
+            URL.revokeObjectURL(url);
+          }}
+          className="px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-lg text-xs font-semibold flex items-center gap-2 transition-colors shrink-0"
+        >
+          <Icons.Download className="w-4 h-4" /> Unduh Template
+        </button>
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -1963,14 +2159,14 @@ const AdminPanel = ({ certificationStatus, setCertificationStatus }) => {
   };
 
   const STAGES = [
-    { no: 1, label: 'Diterima oleh Admin' },
-    { no: 2, label: 'Diproses' },
-    { no: 3, label: 'Disubmit di SIHALAL' },
-    { no: 4, label: 'Feedback BPJPH / Dikirim ke LPH' },
-    { no: 5, label: 'Penjadwalan Audit' },
-    { no: 6, label: 'Perbaikan Hasil Audit' },
-    { no: 7, label: 'Sidang Fatwa MUI' },
-    { no: 8, label: 'Terbit Sertifikat Halal BPJPH' }
+    { no: 1, label: 'Diterima oleh Admin', desc: 'Pengajuan telah diterima dan sedang dilakukan pemeriksaan awal oleh Admin JHC.' },
+    { no: 2, label: 'Diproses', desc: 'Data dan dokumen usaha sedang diperiksa serta dipersiapkan untuk proses sertifikasi halal.' },
+    { no: 3, label: 'Disubmit di SIHALAL', desc: 'Pengajuan sertifikasi halal telah diajukan melalui sistem SIHALAL BPJPH.' },
+    { no: 4, label: 'Feedback BPJPH / Dikirim ke LPH', desc: 'Pengajuan sedang menunggu atau menindaklanjuti feedback BPJPH. Jika persyaratan terpenuhi, pengajuan diteruskan ke LPH.' },
+    { no: 5, label: 'Penjadwalan Audit', desc: 'Pengajuan telah diterima LPH dan sedang dalam proses penjadwalan audit/pemeriksaan kehalalan.' },
+    { no: 6, label: 'Perbaikan Hasil Audit', desc: 'Hasil pemeriksaan/audit memerlukan perbaikan atau pemenuhan dokumen/data oleh pelaku usaha.' },
+    { no: 7, label: 'Sidang Fatwa MUI', desc: 'Hasil pemeriksaan telah diproses untuk penetapan kehalalan melalui sidang fatwa sesuai ketentuan yang berlaku.' },
+    { no: 8, label: 'Terbit Sertifikat Halal BPJPH', desc: 'Selamat! Sertifikat Halal resmi BPJPH telah terbit dan dapat diakses melalui sistem.' }
   ];
 
   return (
@@ -2010,11 +2206,12 @@ const AdminPanel = ({ certificationStatus, setCertificationStatus }) => {
                 disabled={loading}
                 className={`p-4 rounded-xl border text-left transition-all flex items-start gap-3 ${isCurrent ? 'bg-emerald-600 text-white border-emerald-600 shadow-md ring-2 ring-emerald-300 ring-offset-1 scale-[1.02]' : 'bg-white hover:bg-emerald-50 hover:border-emerald-200'}`}
               >
-                <div className={`w-6 h-6 rounded-full flex items-center justify-center text-xs font-bold shrink-0 ${isCurrent ? 'bg-white/20' : 'bg-slate-100 text-slate-500'}`}>
+                <div className={`w-6 h-6 rounded-full flex items-center justify-center text-xs font-bold shrink-0 mt-0.5 ${isCurrent ? 'bg-white/20 text-white' : 'bg-slate-100 text-slate-500'}`}>
                   {s.no}
                 </div>
                 <div>
                   <div className={`font-bold text-sm leading-tight ${isCurrent ? 'text-white' : 'text-slate-700'}`}>{s.label}</div>
+                  <div className={`text-[11px] mt-1 leading-snug ${isCurrent ? 'text-white/80' : 'text-slate-400'}`}>{s.desc}</div>
                   {isCurrent && <div className="text-[10px] bg-white/20 inline-block px-2 py-0.5 rounded-full mt-1.5 font-semibold tracking-wide">STATUS AKTIF</div>}
                 </div>
               </button>
@@ -2181,8 +2378,14 @@ const Login = ({ onLogin }) => {
       });
       const data = await res.json();
       if (res.ok) {
-        const userProfile = data.user || { name: formData.name, email: formData.email };
-        onLogin(userProfile, data.token);
+        if (isRegister) {
+          setMessage({ text: 'Registrasi berhasil. Silakan Masuk.', type: 'success' });
+          setIsRegister(false);
+          setFormData({ ...formData, password: '', confirmPassword: '' });
+        } else {
+          const userProfile = data.user || { name: formData.name, email: formData.email };
+          onLogin(userProfile, data.token);
+        }
       } else {
         setMessage({ text: data.error || 'Terjadi kesalahan', type: 'error' });
       }
