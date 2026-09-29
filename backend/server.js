@@ -26,6 +26,19 @@ const transporter = nodemailer.createTransport({
   },
   tls: {
     rejectUnauthorized: false // handle SSL certificate issues on cloud
+  },
+  connectionTimeout: 10000, // 10 detik connection timeout
+  greetingTimeout: 10000,
+  socketTimeout: 25000
+});
+
+// Verifikasi koneksi SMTP saat startup (log saja, jangan crash)
+transporter.verify((error) => {
+  if (error) {
+    console.error('[SMTP] Koneksi GAGAL saat startup:', error.message);
+    console.error('[SMTP] Pastikan App Password Gmail masih valid dan 2FA aktif.');
+  } else {
+    console.log('[SMTP] Koneksi berhasil — siap kirim email.');
   }
 });
 
@@ -227,14 +240,25 @@ app.post('/api/auth/forgot-password', async (req, res) => {
     `
   };
 
+  // Send the OTP via email (dengan timeout 25 detik)
   try {
-    await transporter.sendMail(mailOptions);
+    const sendPromise = transporter.sendMail(mailOptions);
+    const timeoutPromise = new Promise((_, reject) =>
+      setTimeout(() => reject(new Error('EMAIL_TIMEOUT')), 25000)
+    );
+    await Promise.race([sendPromise, timeoutPromise]);
     res.json({ message: 'Kode verifikasi telah dikirim ke email Anda. Periksa inbox/spam.' });
   } catch (error) {
-    console.error("Email send error:", error);
+    console.error("Email send error:", error.message);
     // Hapus token dari DB jika email gagal agar tidak ada OTP invalid tersimpan
     db.prepare('DELETE FROM password_resets WHERE email = ?').run(email);
-    res.status(500).json({ error: 'Gagal mengirim email. Pastikan alamat email benar dan coba lagi.' });
+    if (error.message === 'EMAIL_TIMEOUT') {
+      res.status(500).json({ error: 'Gagal mengirim email: koneksi SMTP timeout. Coba lagi sebentar.' });
+    } else if (error.message && error.message.includes('Invalid login')) {
+      res.status(500).json({ error: 'Konfigurasi email server bermasalah. Hubungi admin.' });
+    } else {
+      res.status(500).json({ error: 'Gagal mengirim email. Pastikan alamat email benar dan coba lagi.' });
+    }
   }
 });
 

@@ -107,6 +107,23 @@ function getAuthHeaders() {
   return token ? { 'Authorization': `Bearer ${token}` } : {};
 }
 
+// Fetch dengan timeout — mencegah button stuck "Memproses..." saat backend cold start (Render free tier)
+async function fetchWithTimeout(url, options = {}, timeoutMs = 35000) {
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), timeoutMs);
+  try {
+    const res = await fetch(url, { ...options, signal: controller.signal });
+    return res;
+  } catch (err) {
+    if (err.name === 'AbortError') {
+      throw new Error('TIMEOUT');
+    }
+    throw err;
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
 async function apiFetch(url, options = {}) {
   const isFormData = options.body instanceof FormData;
   const headers = { 
@@ -2398,6 +2415,7 @@ const Login = ({ onLogin }) => {
   const [isRegister, setIsRegister] = useState(false);
   const [isForgotPassword, setIsForgotPassword] = useState(false);
   const [forgotPasswordStep, setForgotPasswordStep] = useState(1);
+  const [isWarmingUp, setIsWarmingUp] = useState(false); // true saat server sedang cold start
   
   const [formData, setFormData] = useState({ name: '', email: '', phone: '', password: '', confirmPassword: '', token: '' });
   const [showPwd, setShowPwd] = useState(false);
@@ -2409,9 +2427,12 @@ const Login = ({ onLogin }) => {
   const handleResendCode = async () => {
     if (!formData.email) return;
     setLoading(true);
+    setIsWarmingUp(false);
     setMessage({ text: '', type: '' });
+    // Tunjukkan pesan warm up setelah 5 detik jika masih loading
+    const warmupTimer = setTimeout(() => setIsWarmingUp(true), 5000);
     try {
-      const res = await fetch(getFullUrl('/api/auth/forgot-password'), {
+      const res = await fetchWithTimeout(getFullUrl('/api/auth/forgot-password'), {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ email: formData.email })
@@ -2425,8 +2446,14 @@ const Login = ({ onLogin }) => {
         setMessage({ text: data.error || 'Gagal mengirim ulang kode.', type: 'error' });
       }
     } catch (err) {
-      setMessage({ text: 'Terjadi kesalahan koneksi.', type: 'error' });
+      if (err.message === 'TIMEOUT') {
+        setMessage({ text: 'Server butuh waktu lebih lama. Coba lagi dalam 30 detik.', type: 'error' });
+      } else {
+        setMessage({ text: 'Terjadi kesalahan koneksi. Periksa koneksi internet Anda.', type: 'error' });
+      }
     } finally {
+      clearTimeout(warmupTimer);
+      setIsWarmingUp(false);
       setLoading(false);
     }
   };
@@ -2439,8 +2466,11 @@ const Login = ({ onLogin }) => {
     if (isForgotPassword) {
       if (forgotPasswordStep === 1) {
         // Handle Forgot Password (request token)
+        // Tunjukkan pesan warm up setelah 5 detik jika masih loading (Render cold start)
+        setIsWarmingUp(false);
+        const warmupTimer = setTimeout(() => setIsWarmingUp(true), 5000);
         try {
-          const res = await fetch(getFullUrl('/api/auth/forgot-password'), {
+          const res = await fetchWithTimeout(getFullUrl('/api/auth/forgot-password'), {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ email: formData.email })
@@ -2455,8 +2485,14 @@ const Login = ({ onLogin }) => {
             setMessage({ text: data.error || 'Terjadi kesalahan', type: 'error' });
           }
         } catch (err) {
-          setMessage({ text: 'Terjadi kesalahan koneksi.', type: 'error' });
+          if (err.message === 'TIMEOUT') {
+            setMessage({ text: 'Server sedang aktif kembali (cold start). Silakan coba lagi dalam 30 detik.', type: 'error' });
+          } else {
+            setMessage({ text: 'Terjadi kesalahan koneksi. Periksa koneksi internet Anda.', type: 'error' });
+          }
         } finally {
+          clearTimeout(warmupTimer);
+          setIsWarmingUp(false);
           setLoading(false);
         }
         return;
@@ -2590,6 +2626,14 @@ const Login = ({ onLogin }) => {
               )}
               {forgotPasswordStep === 3 && 'Masukkan password baru Anda.'}
             </p>
+            {/* Pesan warm-up saat server Render sedang cold start */}
+            {isWarmingUp && (
+              <div style={{ marginTop: '8px', padding: '8px 12px', background: '#fff7ed', border: '1px solid #fed7aa', borderRadius: '8px' }}>
+                <p style={{ fontSize: '11px', color: '#9a3412', fontWeight: '600', margin: 0 }}>
+                  ⏳ Server sedang aktif kembali, mohon tunggu sebentar...
+                </p>
+              </div>
+            )}
           </div>
         )}
 
@@ -2677,7 +2721,12 @@ const Login = ({ onLogin }) => {
           )}
 
           <button type="submit" disabled={loading} className="w-full py-3.5 bg-gradient-to-r from-orange-500 to-orange-600 hover:from-orange-600 hover:to-orange-700 disabled:from-orange-400 disabled:to-orange-400 text-white rounded-xl font-bold text-sm shadow-[0_4px_14px_0_rgba(249,115,22,0.39)] hover:shadow-[0_6px_20px_rgba(249,115,22,0.23)] hover:-translate-y-0.5 transition-all mt-2">
-            {loading ? 'Memproses...' : isForgotPassword ? (forgotPasswordStep === 1 ? 'Kirim Kode Verifikasi' : forgotPasswordStep === 2 ? 'Verifikasi Kode' : 'Simpan Password Baru') : isRegister ? 'Daftar Sekarang' : 'Masuk'}
+            {loading
+              ? (isWarmingUp ? '⏳ Server aktif kembali...' : 'Memproses...')
+              : isForgotPassword
+                ? (forgotPasswordStep === 1 ? 'Kirim Kode Verifikasi' : forgotPasswordStep === 2 ? 'Verifikasi Kode' : 'Simpan Password Baru')
+                : isRegister ? 'Daftar Sekarang' : 'Masuk'
+            }
           </button>
           
           {isForgotPassword && (
