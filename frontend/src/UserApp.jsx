@@ -107,20 +107,26 @@ function getAuthHeaders() {
   return token ? { 'Authorization': `Bearer ${token}` } : {};
 }
 
-// Fetch dengan timeout — mencegah button stuck "Memproses..." saat backend cold start (Render free tier)
-async function fetchWithTimeout(url, options = {}, timeoutMs = 35000) {
-  const controller = new AbortController();
-  const timer = setTimeout(() => controller.abort(), timeoutMs);
-  try {
-    const res = await fetch(url, { ...options, signal: controller.signal });
-    return res;
-  } catch (err) {
-    if (err.name === 'AbortError') {
-      throw new Error('TIMEOUT');
+// Fetch dengan auto-retry saat backend cold start (Render free tier)
+// Attempt 1: timeout 38 detik. Kalau gagal, tunggu 4 detik lalu retry sekali lagi.
+async function fetchWithRetry(url, options = {}, timeoutMs = 38000, maxRetries = 1) {
+  for (let attempt = 0; attempt <= maxRetries; attempt++) {
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), timeoutMs);
+    try {
+      const res = await fetch(url, { ...options, signal: controller.signal });
+      clearTimeout(timer);
+      return res;
+    } catch (err) {
+      clearTimeout(timer);
+      if (err.name === 'AbortError' && attempt < maxRetries) {
+        // Timeout tapi masih ada retry — tunggu sebentar lalu coba lagi
+        await new Promise(r => setTimeout(r, 4000));
+        continue;
+      }
+      if (err.name === 'AbortError') throw new Error('TIMEOUT');
+      throw err;
     }
-    throw err;
-  } finally {
-    clearTimeout(timer);
   }
 }
 
@@ -165,6 +171,12 @@ export default function UserApp() {
   const [tglTerbitSertifikat, setTglTerbitSertifikat] = useState('');
   const [fileSertifikat, setFileSertifikat] = useState('');
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+  const [globalToast, setGlobalToast] = useState({ text: '', type: '' });
+
+  const showToast = (text, type = 'error', duration = 5000) => {
+    setGlobalToast({ text, type });
+    setTimeout(() => setGlobalToast({ text: '', type: '' }), duration);
+  };
 
   // Refresh status function
   const refreshCertStatus = async () => {
@@ -267,11 +279,11 @@ export default function UserApp() {
         }));
         return data.filename;
       } else {
-        alert('Gagal mengunggah berkas: ' + (data.error || 'Server error'));
+        showToast('Gagal mengunggah berkas: ' + (data.error || 'Server error'));
       }
     } catch (err) {
       console.error('Upload error:', err);
-      alert('Terjadi kesalahan saat mengunggah berkas.');
+      showToast('Terjadi kesalahan saat mengunggah berkas.');
     }
   };
 
@@ -491,8 +503,8 @@ export default function UserApp() {
           )}
           {currentStep === 1 && <StepRegistrasi />}
           {currentStep === 2 && <StepDokumen legalData={legalData} setLegalData={setLegalData} handleGenericFileUpload={handleGenericFileUpload} />}
-          {currentStep === 3 && <StepMatrixBahanHalal materials={materials} setMaterials={setMaterials} matrixSubmitted={matrixSubmitted} setMatrixSubmitted={setMatrixSubmitted} />}
-          {currentStep === 4 && <StepUploadProduk products={products} setProducts={setProducts} materials={materials} productsSubmitted={productsSubmitted} setProductsSubmitted={setProductsSubmitted} />}
+          {currentStep === 3 && <StepMatrixBahanHalal materials={materials} setMaterials={setMaterials} matrixSubmitted={matrixSubmitted} setMatrixSubmitted={setMatrixSubmitted} showToast={showToast} />}
+          {currentStep === 4 && <StepUploadProduk products={products} setProducts={setProducts} materials={materials} productsSubmitted={productsSubmitted} setProductsSubmitted={setProductsSubmitted} showToast={showToast} />}
           {currentStep === 5 && <StepProsesProduksi productionData={productionData} setProductionData={setProductionData} handleGenericFileUpload={handleGenericFileUpload} />}
           {currentStep === 6 && <StepUploadEvidence evidenceData={evidenceData} setEvidenceData={setEvidenceData} handleGenericFileUpload={handleGenericFileUpload} />}
           {currentStep === 7 && (
@@ -543,6 +555,14 @@ export default function UserApp() {
           </div>
         )}
       </div>
+
+      {/* Global Toast Notification */}
+      {globalToast.text && (
+        <div className={`fixed top-5 right-5 z-[100] px-5 py-3.5 rounded-xl shadow-xl text-sm font-semibold flex items-center gap-3 max-w-sm ${globalToast.type === 'success' ? 'bg-emerald-600 text-white' : 'bg-red-600 text-white'}`}>
+          <span>{globalToast.text}</span>
+          <button onClick={() => setGlobalToast({ text: '', type: '' })} className="opacity-70 hover:opacity-100 text-xl leading-none shrink-0">×</button>
+        </div>
+      )}
     </div>
   );
 }
@@ -1057,7 +1077,7 @@ const StepDokumen = ({ legalData, setLegalData, handleGenericFileUpload }) => {
   );
 };
 
-const StepMatrixBahanHalal = ({ materials, setMaterials, matrixSubmitted, setMatrixSubmitted }) => {
+const StepMatrixBahanHalal = ({ materials, setMaterials, matrixSubmitted, setMatrixSubmitted, showToast = () => {} }) => {
   const [successMsg, setSuccessMsg] = useState('');
   const [editingId, setEditingId] = useState(null);
   const [newMaterial, setNewMaterial] = useState({ name: '', jenis: '', produsen: '', negara: '', supplier: '', lembaga: '', sertifikat: '', expired: '' });
@@ -1229,7 +1249,7 @@ const StepMatrixBahanHalal = ({ materials, setMaterials, matrixSubmitted, setMat
           })).filter(m => m.name);
 
           if (parsed.length === 0) {
-            alert('Tidak ada data yang bisa dibaca. Pastikan format kolom sesuai template.');
+            showToast('Tidak ada data yang bisa dibaca. Pastikan format kolom sesuai template.');
             return;
           }
 
@@ -1253,7 +1273,7 @@ const StepMatrixBahanHalal = ({ materials, setMaterials, matrixSubmitted, setMat
 
         } catch (err) {
           console.error(err);
-          alert('Gagal membaca file Excel. Pastikan format file sesuai template.');
+          showToast('Gagal membaca file Excel. Pastikan format file sesuai template.');
         }
       };
       reader.readAsBinaryString(file);
@@ -1448,7 +1468,7 @@ const StepMatrixBahanHalal = ({ materials, setMaterials, matrixSubmitted, setMat
   );
 };
 
-const StepUploadProduk = ({ products, setProducts, materials, productsSubmitted, setProductsSubmitted }) => {
+const StepUploadProduk = ({ products, setProducts, materials, productsSubmitted, setProductsSubmitted, showToast = () => {} }) => {
   const [successMsg, setSuccessMsg] = useState('');
 
   // --- TABEL 1: Daftar Nama Produk ---
@@ -1558,7 +1578,7 @@ const StepUploadProduk = ({ products, setProducts, materials, productsSubmitted,
     const prod = pendingProducts.find(p => p.id === selectedPendingId);
     if (!prod) return;
     if (selectedIngredients.length === 0) {
-      alert('Pilih minimal 1 bahan penyusun untuk produk ini.');
+      showToast('Pilih minimal 1 bahan penyusun untuk produk ini.');
       return;
     }
 
@@ -1633,7 +1653,7 @@ const StepUploadProduk = ({ products, setProducts, materials, productsSubmitted,
           })).filter(p => p.name && p.name.toLowerCase() !== 'dan seterusnya');
 
           if (parsed.length === 0) {
-            alert('Tidak ada data yang bisa dibaca. Pastikan format kolom sesuai template.');
+            showToast('Tidak ada data yang bisa dibaca. Pastikan format kolom sesuai template.');
             return;
           }
 
@@ -1642,7 +1662,7 @@ const StepUploadProduk = ({ products, setProducts, materials, productsSubmitted,
           setTimeout(() => setSuccessMsg(''), 4000);
         } catch (err) {
           console.error(err);
-          alert('Gagal membaca file Excel. Pastikan format file sesuai template.');
+          showToast('Gagal membaca file Excel. Pastikan format file sesuai template.');
         }
       };
       reader.readAsBinaryString(file);
@@ -2415,7 +2435,6 @@ const Login = ({ onLogin }) => {
   const [isRegister, setIsRegister] = useState(false);
   const [isForgotPassword, setIsForgotPassword] = useState(false);
   const [forgotPasswordStep, setForgotPasswordStep] = useState(1);
-  const [isWarmingUp, setIsWarmingUp] = useState(false); // true saat server sedang cold start
   
   const [formData, setFormData] = useState({ name: '', email: '', phone: '', password: '', confirmPassword: '', token: '' });
   const [showPwd, setShowPwd] = useState(false);
@@ -2427,12 +2446,9 @@ const Login = ({ onLogin }) => {
   const handleResendCode = async () => {
     if (!formData.email) return;
     setLoading(true);
-    setIsWarmingUp(false);
     setMessage({ text: '', type: '' });
-    // Tunjukkan pesan warm up setelah 5 detik jika masih loading
-    const warmupTimer = setTimeout(() => setIsWarmingUp(true), 5000);
     try {
-      const res = await fetchWithTimeout(getFullUrl('/api/auth/forgot-password'), {
+      const res = await fetchWithRetry(getFullUrl('/api/auth/forgot-password'), {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ email: formData.email })
@@ -2440,20 +2456,13 @@ const Login = ({ onLogin }) => {
       const data = await res.json();
       if (res.ok) {
         setMessage({ text: data.message || 'Kode verifikasi telah dikirim ulang ke email Anda.', type: 'success' });
-        // Reset field kode — user harus cek email dan isi sendiri
         setFormData(prev => ({ ...prev, token: '' }));
       } else {
         setMessage({ text: data.error || 'Gagal mengirim ulang kode.', type: 'error' });
       }
     } catch (err) {
-      if (err.message === 'TIMEOUT') {
-        setMessage({ text: 'Server butuh waktu lebih lama. Coba lagi dalam 30 detik.', type: 'error' });
-      } else {
-        setMessage({ text: 'Terjadi kesalahan koneksi. Periksa koneksi internet Anda.', type: 'error' });
-      }
+      setMessage({ text: 'Gagal terhubung ke server. Periksa koneksi internet Anda.', type: 'error' });
     } finally {
-      clearTimeout(warmupTimer);
-      setIsWarmingUp(false);
       setLoading(false);
     }
   };
@@ -2465,12 +2474,8 @@ const Login = ({ onLogin }) => {
 
     if (isForgotPassword) {
       if (forgotPasswordStep === 1) {
-        // Handle Forgot Password (request token)
-        // Tunjukkan pesan warm up setelah 5 detik jika masih loading (Render cold start)
-        setIsWarmingUp(false);
-        const warmupTimer = setTimeout(() => setIsWarmingUp(true), 5000);
         try {
-          const res = await fetchWithTimeout(getFullUrl('/api/auth/forgot-password'), {
+          const res = await fetchWithRetry(getFullUrl('/api/auth/forgot-password'), {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ email: formData.email })
@@ -2478,21 +2483,14 @@ const Login = ({ onLogin }) => {
           const data = await res.json();
           if (res.ok) {
             setMessage({ text: data.message, type: 'success' });
-            // Token harus diisi manual dari email — tidak ada auto-fill
             setFormData(prev => ({ ...prev, token: '' }));
             setForgotPasswordStep(2);
           } else {
             setMessage({ text: data.error || 'Terjadi kesalahan', type: 'error' });
           }
         } catch (err) {
-          if (err.message === 'TIMEOUT') {
-            setMessage({ text: 'Server sedang aktif kembali (cold start). Silakan coba lagi dalam 30 detik.', type: 'error' });
-          } else {
-            setMessage({ text: 'Terjadi kesalahan koneksi. Periksa koneksi internet Anda.', type: 'error' });
-          }
+          setMessage({ text: 'Gagal terhubung ke server. Periksa koneksi internet Anda.', type: 'error' });
         } finally {
-          clearTimeout(warmupTimer);
-          setIsWarmingUp(false);
           setLoading(false);
         }
         return;
@@ -2626,14 +2624,6 @@ const Login = ({ onLogin }) => {
               )}
               {forgotPasswordStep === 3 && 'Masukkan password baru Anda.'}
             </p>
-            {/* Pesan warm-up saat server Render sedang cold start */}
-            {isWarmingUp && (
-              <div style={{ marginTop: '8px', padding: '8px 12px', background: '#fff7ed', border: '1px solid #fed7aa', borderRadius: '8px' }}>
-                <p style={{ fontSize: '11px', color: '#9a3412', fontWeight: '600', margin: 0 }}>
-                  ⏳ Server sedang aktif kembali, mohon tunggu sebentar...
-                </p>
-              </div>
-            )}
           </div>
         )}
 
@@ -2722,7 +2712,7 @@ const Login = ({ onLogin }) => {
 
           <button type="submit" disabled={loading} className="w-full py-3.5 bg-gradient-to-r from-orange-500 to-orange-600 hover:from-orange-600 hover:to-orange-700 disabled:from-orange-400 disabled:to-orange-400 text-white rounded-xl font-bold text-sm shadow-[0_4px_14px_0_rgba(249,115,22,0.39)] hover:shadow-[0_6px_20px_rgba(249,115,22,0.23)] hover:-translate-y-0.5 transition-all mt-2">
             {loading
-              ? (isWarmingUp ? '⏳ Server aktif kembali...' : 'Memproses...')
+              ? 'Memproses...'
               : isForgotPassword
                 ? (forgotPasswordStep === 1 ? 'Kirim Kode Verifikasi' : forgotPasswordStep === 2 ? 'Verifikasi Kode' : 'Simpan Password Baru')
                 : isRegister ? 'Daftar Sekarang' : 'Masuk'

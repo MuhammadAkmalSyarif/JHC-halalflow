@@ -396,11 +396,13 @@ function ApplicationsPage({ onSelectCompany }) {
         fetchApplications(filter, search);
         setTimeout(() => setNotification({ text: '', type: '' }), 4000);
       } else {
-        alert(data.error || 'Gagal menyetujui permohonan.');
+        setNotification({ text: data.error || 'Gagal menyetujui permohonan.', type: 'error' });
+        setTimeout(() => setNotification({ text: '', type: '' }), 5000);
       }
     } catch (err) {
       console.error(err);
-      alert('Terjadi kesalahan.');
+      setNotification({ text: 'Terjadi kesalahan koneksi.', type: 'error' });
+      setTimeout(() => setNotification({ text: '', type: '' }), 5000);
     } finally {
       setActionLoading(false);
     }
@@ -415,7 +417,8 @@ function ApplicationsPage({ onSelectCompany }) {
   const handleReject = async (e) => {
     e.preventDefault();
     if (!rejectReason.trim()) {
-      alert('Alasan dan penjelasan penolakan wajib diisi.');
+      setNotification({ text: 'Alasan dan penjelasan penolakan wajib diisi.', type: 'error' });
+      setTimeout(() => setNotification({ text: '', type: '' }), 5000);
       return;
     }
     setActionLoading(true);
@@ -433,11 +436,13 @@ function ApplicationsPage({ onSelectCompany }) {
         fetchApplications(filter, search);
         setTimeout(() => setNotification({ text: '', type: '' }), 4000);
       } else {
-        alert(data.error || 'Gagal menolak permohonan.');
+        setNotification({ text: data.error || 'Gagal menolak permohonan.', type: 'error' });
+        setTimeout(() => setNotification({ text: '', type: '' }), 5000);
       }
     } catch (err) {
       console.error(err);
-      alert('Terjadi kesalahan koneksi.');
+      setNotification({ text: 'Terjadi kesalahan koneksi.', type: 'error' });
+      setTimeout(() => setNotification({ text: '', type: '' }), 5000);
     } finally {
       setActionLoading(false);
     }
@@ -475,11 +480,13 @@ function ApplicationsPage({ onSelectCompany }) {
         fetchApplications(filter, search);
         setTimeout(() => setNotification({ text: '', type: '' }), 4000);
       } else {
-        alert(data.error || 'Gagal menerbitkan sertifikat.');
+        setNotification({ text: data.error || 'Gagal menerbitkan sertifikat.', type: 'error' });
+        setTimeout(() => setNotification({ text: '', type: '' }), 5000);
       }
     } catch (err) {
       console.error(err);
-      alert('Terjadi kesalahan koneksi.');
+      setNotification({ text: 'Terjadi kesalahan koneksi.', type: 'error' });
+      setTimeout(() => setNotification({ text: '', type: '' }), 5000);
     } finally {
       setActionLoading(false);
     }
@@ -1210,6 +1217,12 @@ function CompaniesPage({ onSelectCompany }) {
   const [pagination, setPagination] = useState({ total: 0, page: 1, totalPages: 1 });
   const [search, setSearch] = useState('');
   const [loading, setLoading] = useState(true);
+  const [notification, setNotification] = useState({ text: '', type: '' });
+
+  const showNotif = (text, type = 'error', duration = 5000) => {
+    setNotification({ text, type });
+    setTimeout(() => setNotification({ text: '', type: '' }), duration);
+  };
 
   const fetchCompanies = useCallback(async (page = 1, q = search) => {
     setLoading(true);
@@ -1236,14 +1249,24 @@ function CompaniesPage({ onSelectCompany }) {
       const res = await adminFetch(`/api/admin/companies/${id}`, { method: 'DELETE' });
       if (res.ok) {
         fetchCompanies(pagination.page, search);
+        showNotif('Data perusahaan berhasil dihapus.', 'success', 4000);
       } else {
-        alert('Gagal menghapus data perusahaan.');
+        showNotif('Gagal menghapus data perusahaan.');
       }
-    } catch (e) { console.error(e); }
+    } catch (e) {
+      console.error(e);
+      showNotif('Terjadi kesalahan koneksi.');
+    }
   };
 
   return (
     <div className="space-y-6">
+      {notification.text && (
+        <div className={`fixed top-5 right-5 z-50 px-5 py-3 rounded-xl shadow-lg text-sm font-semibold flex items-center gap-3 animate-fade-in ${notification.type === 'success' ? 'bg-emerald-600 text-white' : 'bg-red-600 text-white'}`}>
+          <span>{notification.text}</span>
+          <button onClick={() => setNotification({ text: '', type: '' })} className="opacity-70 hover:opacity-100 text-lg leading-none">×</button>
+        </div>
+      )}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
           <h1 className="text-2xl font-black text-slate-800">Data Perusahaan</h1>
