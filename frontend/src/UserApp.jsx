@@ -2431,6 +2431,13 @@ const StepPengajuanBPJPH = ({
 
 
 
+// Helper: wake-up ping ke Render agar server tidak cold-start saat request utama dikirim
+async function wakeUpServer() {
+  try {
+    await fetch(getFullUrl('/api/status'), { method: 'GET', signal: AbortSignal.timeout(8000) });
+  } catch (_) { /* abaikan error ping */ }
+}
+
 const Login = ({ onLogin }) => {
   const [isRegister, setIsRegister] = useState(false);
   const [isForgotPassword, setIsForgotPassword] = useState(false);
@@ -2439,6 +2446,7 @@ const Login = ({ onLogin }) => {
   const [formData, setFormData] = useState({ name: '', email: '', phone: '', password: '', confirmPassword: '', token: '' });
   const [showPwd, setShowPwd] = useState(false);
   const [loading, setLoading] = useState(false);
+  const [loadingMsg, setLoadingMsg] = useState('Memproses...');
   const [message, setMessage] = useState({ text: '', type: '' });
 
   const handleChange = (e) => setFormData({ ...formData, [e.target.name]: e.target.value });
@@ -2446,13 +2454,18 @@ const Login = ({ onLogin }) => {
   const handleResendCode = async () => {
     if (!formData.email) return;
     setLoading(true);
+    setLoadingMsg('Mengirim ulang kode...');
     setMessage({ text: '', type: '' });
     try {
+      // Wake-up ping dulu agar Render tidak cold start
+      setLoadingMsg('Menghubungi server...');
+      await wakeUpServer();
+      setLoadingMsg('Mengirim kode ke email...');
       const res = await fetchWithRetry(getFullUrl('/api/auth/forgot-password'), {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ email: formData.email })
-      });
+      }, 45000, 1);
       const data = await res.json();
       if (res.ok) {
         setMessage({ text: data.message || 'Kode verifikasi telah dikirim ulang ke email Anda.', type: 'success' });
@@ -2464,6 +2477,7 @@ const Login = ({ onLogin }) => {
       setMessage({ text: 'Gagal terhubung ke server. Periksa koneksi internet Anda.', type: 'error' });
     } finally {
       setLoading(false);
+      setLoadingMsg('Memproses...');
     }
   };
 
@@ -2475,11 +2489,15 @@ const Login = ({ onLogin }) => {
     if (isForgotPassword) {
       if (forgotPasswordStep === 1) {
         try {
+          // Wake-up ping dulu agar Render tidak cold start saat kirim email
+          setLoadingMsg('Menghubungi server...');
+          await wakeUpServer();
+          setLoadingMsg('Mengirim kode verifikasi ke email...');
           const res = await fetchWithRetry(getFullUrl('/api/auth/forgot-password'), {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ email: formData.email })
-          });
+          }, 45000, 1);
           const data = await res.json();
           if (res.ok) {
             setMessage({ text: data.message, type: 'success' });
@@ -2489,9 +2507,14 @@ const Login = ({ onLogin }) => {
             setMessage({ text: data.error || 'Terjadi kesalahan', type: 'error' });
           }
         } catch (err) {
-          setMessage({ text: 'Gagal terhubung ke server. Periksa koneksi internet Anda.', type: 'error' });
+          if (err.message === 'TIMEOUT') {
+            setMessage({ text: 'Server sedang membangun koneksi (cold start). Coba lagi dalam 10 detik.', type: 'error' });
+          } else {
+            setMessage({ text: 'Gagal terhubung ke server. Periksa koneksi internet Anda.', type: 'error' });
+          }
         } finally {
           setLoading(false);
+          setLoadingMsg('Memproses...');
         }
         return;
       } else if (forgotPasswordStep === 2) {
@@ -2712,7 +2735,7 @@ const Login = ({ onLogin }) => {
 
           <button type="submit" disabled={loading} className="w-full py-3.5 bg-gradient-to-r from-orange-500 to-orange-600 hover:from-orange-600 hover:to-orange-700 disabled:from-orange-400 disabled:to-orange-400 text-white rounded-xl font-bold text-sm shadow-[0_4px_14px_0_rgba(249,115,22,0.39)] hover:shadow-[0_6px_20px_rgba(249,115,22,0.23)] hover:-translate-y-0.5 transition-all mt-2">
             {loading
-              ? 'Memproses...'
+              ? loadingMsg
               : isForgotPassword
                 ? (forgotPasswordStep === 1 ? 'Kirim Kode Verifikasi' : forgotPasswordStep === 2 ? 'Verifikasi Kode' : 'Simpan Password Baru')
                 : isRegister ? 'Daftar Sekarang' : 'Masuk'
