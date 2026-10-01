@@ -18,9 +18,9 @@ const { getDb, initializeDatabase, initCompanyProgress, logActivity } = require(
 const cleanSmtpPass = (process.env.SMTP_PASS || '').replace(/\s+/g, '');
 const transporter = nodemailer.createTransport({
   host: 'smtp.gmail.com',
-  port: 587,
-  secure: false, // false = STARTTLS
-  pool: false,   // non-pool lebih stabil di Render (reconnect fresh tiap kirim)
+  port: 465,
+  secure: true, // true for 465, false for other ports
+  pool: false,
   auth: {
     user: process.env.SMTP_USER,
     pass: cleanSmtpPass
