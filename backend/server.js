@@ -127,6 +127,20 @@ app.get('/api/status', (req, res) => {
   });
 });
 
+app.get('/api/test-email', async (req, res) => {
+  try {
+    const info = await transporter.sendMail({
+      from: process.env.EMAIL_FROM || `"JHC HalalFlow" <${process.env.SMTP_USER}>`,
+      to: process.env.SMTP_USER,
+      subject: 'Test SMTP Config - JHC HalalFlow',
+      text: 'If you see this, your SMTP configuration is correct!'
+    });
+    res.json({ success: true, message: 'Email sent successfully', info });
+  } catch (error) {
+    res.status(500).json({ success: false, error: error.message, stack: error.stack });
+  }
+});
+
 // =============================================
 // API: USER AUTHENTICATION
 // =============================================
