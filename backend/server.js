@@ -57,21 +57,14 @@ const ADMIN_JWT_SECRET = process.env.ADMIN_JWT_SECRET || 'jhc_admin_jwt_secret_2
 const db = initializeDatabase();
 
 app.use(cors({
-  origin: [
-    'https://jhc-halalflow.vercel.app',
-    'https://halalflow.vercel.app',
-    /\.vercel\.app$/,
-    'http://localhost:5173',
-    'http://localhost:5174',
-    'http://localhost:4173',
-    process.env.FRONTEND_URL
-  ].filter(Boolean),
+  origin: true, // izinkan semua origin (aman karena auth pakai JWT)
   credentials: true,
   methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH', 'OPTIONS'],
   allowedHeaders: ['Content-Type', 'Authorization']
 }));
 app.use(express.json({ limit: '10mb' }));
 app.use(express.urlencoded({ extended: true, limit: '10mb' }));
+
 
 // Uploads directory
 const uploadsDir = path.join(__dirname, 'uploads');

@@ -2591,11 +2591,16 @@ const Login = ({ onLogin }) => {
       : { email: formData.email, password: formData.password };
 
     try {
-      const res = await fetch(getFullUrl(endpoint), {
+      // Wake-up ping dulu agar Render tidak cold start
+      setLoadingMsg('Menghubungi server...');
+      await wakeUpServer();
+      setLoadingMsg(isRegister ? 'Mendaftarkan akun...' : 'Masuk ke akun...');
+
+      const res = await fetchWithRetry(getFullUrl(endpoint), {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(payload)
-      });
+      }, 45000, 1);
       const data = await res.json();
       if (res.ok) {
         if (isRegister) {
@@ -2611,11 +2616,17 @@ const Login = ({ onLogin }) => {
       }
     } catch (err) {
       console.error(err);
-      setMessage({ text: 'Terjadi kesalahan koneksi. Pastikan server berjalan.', type: 'error' });
+      if (err.message === 'TIMEOUT') {
+        setMessage({ text: 'Server sedang memuat (cold start Render). Tunggu 30 detik lalu coba lagi.', type: 'error' });
+      } else {
+        setMessage({ text: 'Gagal terhubung ke server. Periksa koneksi internet Anda.', type: 'error' });
+      }
     } finally {
       setLoading(false);
+      setLoadingMsg('Memproses...');
     }
   };
+
 
   return (
     <div className="min-h-screen bg-slate-50 flex items-center justify-center p-4 font-sans text-slate-900 relative overflow-hidden">
