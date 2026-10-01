@@ -238,57 +238,60 @@ app.post('/api/auth/forgot-password', async (req, res) => {
   db.prepare('DELETE FROM password_resets WHERE email = ?').run(email);
   db.prepare('INSERT INTO password_resets (email, token, expires_at) VALUES (?, ?, ?)').run(email, otp, expires);
 
-  // Send the OTP via email
-  const mailOptions = {
-    from: process.env.EMAIL_FROM || `"JHC HalalFlow" <${process.env.SMTP_USER || 'jhc.halalflow@gmail.com'}>`,
-    to: email,
-    subject: 'Kode Verifikasi Reset Password - JHC HalalFlow',
-    html: `
-      <div style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; max-width: 500px; margin: 0 auto; padding: 32px 24px; background: #ffffff; border: 1px solid #e2e8f0; border-radius: 16px;">
-        <div style="text-align: center; margin-bottom: 24px;">
-          <h2 style="color: #059669; margin: 0; font-size: 24px; font-weight: 800; letter-spacing: -0.5px;">JHC HalalFlow</h2>
-          <p style="color: #64748b; margin: 4px 0 0 0; font-size: 13px;">Sistem Manajemen Sertifikasi Halal</p>
-        </div>
-        <div style="border-top: 1px solid #f1f5f9; padding-top: 20px;">
-          <p style="color: #1e293b; font-size: 15px; line-height: 1.6; margin: 0 0 12px 0;">Halo,</p>
-          <p style="color: #475569; font-size: 14px; line-height: 1.6; margin: 0 0 20px 0;">
-            Anda telah meminta untuk mereset kata sandi akun JHC HalalFlow Anda. Masukkan kode verifikasi berikut untuk melanjutkan proses reset password:
-          </p>
-          <div style="background: linear-gradient(135deg, #ecfdf5 0%, #f0fdf4 100%); border: 1.5px dashed #059669; padding: 20px; text-align: center; border-radius: 12px; margin: 24px 0;">
-            <span style="font-size: 12px; font-weight: 700; color: #065f46; letter-spacing: 1px; text-transform: uppercase;">Kode Verifikasi</span>
-            <div style="font-size: 34px; font-weight: 800; color: #047857; letter-spacing: 8px; margin-top: 8px; font-family: monospace;">${otp}</div>
-          </div>
-          <p style="color: #64748b; font-size: 13px; line-height: 1.6; margin: 0 0 8px 0;">
-            ⏳ Kode verifikasi ini berlaku selama <strong>1 jam</strong>. Demi keamanan, jangan bagikan kode ini kepada siapa pun.
-          </p>
-          <p style="color: #94a3b8; font-size: 12px; line-height: 1.5; margin: 24px 0 0 0; border-top: 1px solid #f1f5f9; padding-top: 16px;">
-            Jika Anda tidak meminta reset kata sandi, silakan abaikan email ini. Akun Anda tetap aman.
-          </p>
-        </div>
-      </div>
-    `
-  };
-
-  // Send the OTP via email (dengan timeout yang cukup untuk cloud Render)
+  // Call Vercel API to send email (Render Free Tier blocks SMTP)
   try {
-    const sendPromise = transporter.sendMail(mailOptions);
-    const timeoutPromise = new Promise((_, reject) =>
-      setTimeout(() => reject(new Error('EMAIL_TIMEOUT')), 40000) // 40 detik
-    );
-    await Promise.race([sendPromise, timeoutPromise]);
-    console.log(`[OTP] Email berhasil dikirim ke: ${email}`);
-    res.json({ message: 'Kode verifikasi telah dikirim ke email Anda. Periksa inbox/spam.' });
-  } catch (error) {
-    console.error("[OTP] Email send error:", error.message);
-    // Hapus token dari DB jika email gagal agar tidak ada OTP invalid tersimpan
-    db.prepare('DELETE FROM password_resets WHERE email = ?').run(email);
-    if (error.message === 'EMAIL_TIMEOUT') {
-      res.status(500).json({ error: 'Gagal mengirim email: koneksi SMTP timeout. Coba lagi sebentar.' });
-    } else if (error.message && (error.message.includes('Invalid login') || error.message.includes('535'))) {
-      res.status(500).json({ error: 'Konfigurasi email server bermasalah. Hubungi admin. Error: ' + error.message });
+    const fetch = require('node-fetch'); // we need node-fetch if Node is < 18, but wait, Render supports native fetch.
+    // Let's use global.fetch or native https to be safe.
+    
+    // Check if fetch is available
+    if (typeof fetch === 'undefined') {
+      const https = require('https');
+      const data = JSON.stringify({ email, otp, internalSecret: process.env.JWT_SECRET });
+      const vercelUrl = new URL((process.env.FRONTEND_URL || 'https://jhc-halalflow.vercel.app') + '/api/send-email');
+      
+      const req = https.request(vercelUrl, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Content-Length': Buffer.byteLength(data)
+        }
+      }, (resp) => {
+        let body = '';
+        resp.on('data', chunk => body += chunk);
+        resp.on('end', () => {
+          if (resp.statusCode === 200) {
+            console.log(`[OTP] Email berhasil dikirim via Vercel ke: ${email}`);
+            return res.json({ message: 'Kode verifikasi telah dikirim ke email Anda. Periksa inbox/spam.' });
+          } else {
+            db.prepare('DELETE FROM password_resets WHERE email = ?').run(email);
+            return res.status(500).json({ error: 'Gagal mengirim email (Vercel). Error detail: ' + body });
+          }
+        });
+      });
+      req.on('error', (error) => {
+        db.prepare('DELETE FROM password_resets WHERE email = ?').run(email);
+        res.status(500).json({ error: 'Koneksi ke Vercel gagal. Error: ' + error.message });
+      });
+      req.write(data);
+      req.end();
     } else {
-      res.status(500).json({ error: 'Gagal mengirim email. Error detail: ' + error.message });
+      const resp = await fetch((process.env.FRONTEND_URL || 'https://jhc-halalflow.vercel.app') + '/api/send-email', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email, otp, internalSecret: process.env.JWT_SECRET })
+      });
+      if (resp.ok) {
+        console.log(`[OTP] Email berhasil dikirim via Vercel ke: ${email}`);
+        res.json({ message: 'Kode verifikasi telah dikirim ke email Anda. Periksa inbox/spam.' });
+      } else {
+        const errorText = await resp.text();
+        db.prepare('DELETE FROM password_resets WHERE email = ?').run(email);
+        res.status(500).json({ error: 'Gagal mengirim email (Vercel API). Error detail: ' + errorText });
+      }
     }
+  } catch (error) {
+    db.prepare('DELETE FROM password_resets WHERE email = ?').run(email);
+    res.status(500).json({ error: 'Gagal terhubung ke Vercel API. Error detail: ' + error.message });
   }
 });
 
