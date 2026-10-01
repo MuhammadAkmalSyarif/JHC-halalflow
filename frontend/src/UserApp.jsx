@@ -236,7 +236,7 @@ export default function UserApp() {
     }
     loadData();
 
-    // Set up polling for real-time status updates
+    // Set up polling for real-time status updates (30 detik agar server tidak kewalahan)
     const statusInterval = setInterval(async () => {
       try {
         const certRes = await apiFetch('/api/certification-status', { headers: getAuthHeaders() });
@@ -250,9 +250,19 @@ export default function UserApp() {
       } catch (err) {
         // ignore polling errors
       }
-    }, 4000);
+    }, 30000); // 30 detik — jauh lebih ringan untuk server Render
 
-    return () => clearInterval(statusInterval);
+    // Keep-alive ping setiap 10 menit agar Render tidak sleep
+    const keepAliveInterval = setInterval(async () => {
+      try {
+        await fetch(getFullUrl('/api/status'), { method: 'GET', signal: AbortSignal.timeout(5000) });
+      } catch (_) { /* abaikan */ }
+    }, 10 * 60 * 1000);
+
+    return () => {
+      clearInterval(statusInterval);
+      clearInterval(keepAliveInterval);
+    };
   }, [isLoggedIn]);
 
   // Shared file upload function (with JWT)
