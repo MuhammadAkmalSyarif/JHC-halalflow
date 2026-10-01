@@ -285,9 +285,9 @@ app.post('/api/auth/forgot-password', async (req, res) => {
     if (error.message === 'EMAIL_TIMEOUT') {
       res.status(500).json({ error: 'Gagal mengirim email: koneksi SMTP timeout. Coba lagi sebentar.' });
     } else if (error.message && (error.message.includes('Invalid login') || error.message.includes('535'))) {
-      res.status(500).json({ error: 'Konfigurasi email server bermasalah. Hubungi admin.' });
+      res.status(500).json({ error: 'Konfigurasi email server bermasalah. Hubungi admin. Error: ' + error.message });
     } else {
-      res.status(500).json({ error: 'Gagal mengirim email. Pastikan alamat email benar dan coba lagi.' });
+      res.status(500).json({ error: 'Gagal mengirim email. Error detail: ' + error.message });
     }
   }
 });
