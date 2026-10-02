@@ -130,9 +130,9 @@ app.get('/api/status', (req, res) => {
 // Temporary admin reset endpoint - force updates admin password
 app.get('/api/admin-setup-reset', (req, res) => {
   try {
-    const email = process.env.ADMIN_DEFAULT_EMAIL || 'jhc.halalflow@gmail.com';
-    const password = process.env.ADMIN_DEFAULT_PASSWORD || 'JHC_Admin123';
-    const name = process.env.ADMIN_DEFAULT_NAME || 'JHC Administrator';
+    const email = 'jhc.halalflow@gmail.com';
+    const password = 'JHC_Admin123';
+    const name = 'JHC Administrator';
     const hash = bcrypt.hashSync(password, 12);
 
     const existing = db.prepare('SELECT id FROM admin_users WHERE email = ?').get(email);

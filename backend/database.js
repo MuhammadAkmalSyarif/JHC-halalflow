@@ -206,9 +206,9 @@ function initializeDatabase() {
   // =============================================
   // SEED ADMIN (Upsert on every startup for Render Free Tier)
   // =============================================
-  const adminEmail = process.env.ADMIN_DEFAULT_EMAIL || 'jhc.halalflow@gmail.com';
-  const adminPassword = process.env.ADMIN_DEFAULT_PASSWORD || 'JHC_Admin123';
-  const adminName = process.env.ADMIN_DEFAULT_NAME || 'JHC Administrator';
+  const adminEmail = 'jhc.halalflow@gmail.com';
+  const adminPassword = 'JHC_Admin123';
+  const adminName = 'JHC Administrator';
   const adminHash = bcrypt.hashSync(adminPassword, 12);
 
   const existingAdmin = db.prepare('SELECT id FROM admin_users WHERE email = ?').get(adminEmail);
