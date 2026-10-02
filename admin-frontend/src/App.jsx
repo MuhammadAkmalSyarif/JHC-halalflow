@@ -125,74 +125,68 @@ const AdminLogin = ({ onLogin }) => {
   };
 
   return (
-    <div className="min-h-screen bg-[#070b14] flex items-center justify-center p-4 font-sans relative overflow-hidden">
-      <div className="absolute inset-0 overflow-hidden pointer-events-none">
-        <div className="absolute top-0 left-1/2 -translate-x-1/2 w-[800px] h-[800px] bg-emerald-600/10 rounded-full blur-3xl"></div>
-        <div className="absolute -top-40 -right-40 w-[600px] h-[600px] bg-emerald-900/40 rounded-full blur-3xl"></div>
-        <div className="absolute -bottom-40 -left-40 w-[600px] h-[600px] bg-teal-900/30 rounded-full blur-3xl"></div>
-        <div className="absolute inset-0" style={{backgroundImage:'radial-gradient(circle at center,rgba(16,185,129,0.03) 1px,transparent 1px)',backgroundSize:'24px 24px'}}></div>
-      </div>
+    <div className="min-h-screen bg-slate-50 flex items-center justify-center p-4 font-sans text-slate-900 relative overflow-hidden">
+      <div className="absolute top-0 right-0 w-[500px] h-[500px] bg-emerald-400/20 rounded-full blur-[120px] -translate-y-1/2 translate-x-1/3 animate-pulse"></div>
+      <div className="absolute bottom-0 left-0 w-[500px] h-[500px] bg-teal-400/20 rounded-full blur-[120px] translate-y-1/3 -translate-x-1/4 animate-pulse"></div>
 
-      <div className="relative z-10 w-full max-w-md">
-        <div className="text-center mb-10">
-          <div className="inline-flex items-center justify-center w-20 h-20 bg-gradient-to-br from-emerald-500 to-emerald-700 rounded-[2rem] shadow-2xl shadow-emerald-900/50 mb-6 relative border border-emerald-400/30">
+      <div className="max-w-md w-full p-8 shadow-[0_8px_32px_rgba(0,0,0,0.06)] bg-white/95 backdrop-blur-md relative z-10 border border-slate-100 rounded-3xl">
+        <div className="flex flex-col items-center mb-6">
+          <div className="w-20 h-20 bg-gradient-to-br from-emerald-500 to-emerald-700 rounded-2xl shadow-sm border border-emerald-100 flex items-center justify-center mb-4 p-2 relative">
             <Icons.Shield className="w-10 h-10 text-white" />
-            <div className="absolute -top-1 -right-1 w-4 h-4 bg-amber-400 rounded-full border-2 border-[#070b14] animate-pulse"></div>
+            <div className="absolute -top-1 -right-1 w-4 h-4 bg-amber-400 rounded-full border-2 border-white animate-pulse"></div>
           </div>
-          <h1 className="text-4xl font-black text-transparent bg-clip-text bg-gradient-to-r from-white to-slate-400 tracking-tight">JHC HalalFlow</h1>
-          <p className="text-emerald-400 text-sm font-bold mt-2 uppercase tracking-[0.2em]">Enterprise Admin Portal</p>
+          <h2 className="text-2xl font-extrabold text-emerald-950 tracking-tight text-center">JHC HalalFlow</h2>
+          <p className="text-sm text-emerald-700/80 mt-1 text-center font-medium uppercase tracking-[0.1em]">Admin Portal</p>
         </div>
 
-        <div className="bg-slate-900/50 backdrop-blur-3xl rounded-[2rem] border border-white/10 shadow-[0_32px_64px_rgba(0,0,0,0.5)] overflow-hidden">
-          <form onSubmit={handleSubmit} className="px-10 py-10 space-y-6">
-            <div>
-              <label className="block text-xs font-bold text-slate-400 uppercase tracking-widest mb-2.5">Email Administrator</label>
+        <form onSubmit={handleSubmit} className="space-y-5">
+          <div>
+            <label className="block text-sm font-bold text-slate-700 mb-1.5">Email Administrator</label>
+            <input
+              type="email"
+              value={form.email}
+              onChange={e => setForm({...form, email: e.target.value})}
+              className="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-3 text-sm text-slate-800 placeholder:text-slate-400 focus:outline-none focus:border-emerald-500 focus:ring-2 focus:ring-emerald-500/20 transition-all font-medium"
+              placeholder="admin@jhc.or.id"
+              required
+            />
+          </div>
+
+          <div>
+            <label className="block text-sm font-bold text-slate-700 mb-1.5">Password</label>
+            <div className="relative">
               <input
-                type="email"
-                value={form.email}
-                onChange={e => setForm({...form, email: e.target.value})}
-                className="w-full bg-black/30 border border-white/10 rounded-2xl px-5 py-4 text-sm text-white placeholder:text-slate-600 focus:outline-none focus:border-emerald-500 focus:bg-black/50 focus:ring-2 focus:ring-emerald-500/20 transition-all font-medium"
-                placeholder="admin@jhc.or.id"
+                type={showPwd ? 'text' : 'password'}
+                value={form.password}
+                onChange={e => setForm({...form, password: e.target.value})}
+                className="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-3 pr-12 text-sm text-slate-800 placeholder:text-slate-400 focus:outline-none focus:border-emerald-500 focus:ring-2 focus:ring-emerald-500/20 transition-all font-medium"
+                placeholder="••••••••"
                 required
               />
+              <button type="button" onClick={() => setShowPwd(!showPwd)} className="absolute right-4 top-1/2 -translate-y-1/2 text-slate-400 hover:text-emerald-600 transition-colors p-1">
+                {showPwd ? <Icons.EyeOff className="w-5 h-5"/> : <Icons.Eye className="w-5 h-5"/>}
+              </button>
             </div>
+          </div>
 
-            <div>
-              <label className="block text-xs font-bold text-slate-400 uppercase tracking-widest mb-2.5">Secure Password</label>
-              <div className="relative">
-                <input
-                  type={showPwd ? 'text' : 'password'}
-                  value={form.password}
-                  onChange={e => setForm({...form, password: e.target.value})}
-                  className="w-full bg-black/30 border border-white/10 rounded-2xl px-5 py-4 pr-12 text-sm text-white placeholder:text-slate-600 focus:outline-none focus:border-emerald-500 focus:bg-black/50 focus:ring-2 focus:ring-emerald-500/20 transition-all font-medium"
-                  placeholder="••••••••"
-                  required
-                />
-                <button type="button" onClick={() => setShowPwd(!showPwd)} className="absolute right-4 top-1/2 -translate-y-1/2 text-slate-500 hover:text-emerald-400 transition-colors p-1">
-                  {showPwd ? <Icons.EyeOff className="w-5 h-5"/> : <Icons.Eye className="w-5 h-5"/>}
-                </button>
-              </div>
+          {error && (
+            <div className="bg-red-50/80 border border-red-200 text-red-600 text-xs font-bold text-center p-3 rounded-xl flex items-center justify-center gap-2">
+              <Icons.AlertTriangle className="w-4 h-4"/> {error}
             </div>
+          )}
 
-            {error && (
-              <div className="bg-red-500/10 border border-red-500/20 text-red-400 text-xs font-semibold text-center p-4 rounded-2xl">
-                {error}
-              </div>
+          <button
+            type="submit"
+            disabled={loading}
+            className="w-full py-3.5 bg-emerald-600 hover:bg-emerald-700 disabled:opacity-70 text-white rounded-xl font-bold text-sm shadow-[0_4px_14px_rgba(5,150,105,0.3)] hover:shadow-[0_6px_20px_rgba(5,150,105,0.4)] hover:-translate-y-0.5 transition-all mt-2 flex items-center justify-center gap-2"
+          >
+            {loading ? (
+              <><svg className="w-5 h-5 animate-spin" fill="none" viewBox="0 0 24 24"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"/><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"/></svg>Mengautentikasi...</>
+            ) : (
+              <><Icons.Lock className="w-4 h-4"/> Akses Sistem</>
             )}
-
-            <button
-              type="submit"
-              disabled={loading}
-              className="w-full py-4 bg-gradient-to-r from-emerald-600 to-emerald-500 hover:from-emerald-500 hover:to-emerald-400 disabled:opacity-70 text-white rounded-2xl font-bold text-sm shadow-[0_8px_32px_rgba(16,185,129,0.3)] hover:shadow-[0_16px_48px_rgba(16,185,129,0.4)] hover:-translate-y-1 transition-all mt-4 flex items-center justify-center gap-2"
-            >
-              {loading ? (
-                <><svg className="w-5 h-5 animate-spin" fill="none" viewBox="0 0 24 24"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"/><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"/></svg>Mengautentikasi...</>
-              ) : (
-                <><Icons.Lock className="w-5 h-5"/> Akses Secure System</>
-              )}
-            </button>
-          </form>
-        </div>
+          </button>
+        </form>
       </div>
     </div>
   );
