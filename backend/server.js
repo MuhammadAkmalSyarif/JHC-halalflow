@@ -127,6 +127,29 @@ app.get('/api/status', (req, res) => {
   });
 });
 
+// Temporary admin reset endpoint - force updates admin password
+app.get('/api/admin-setup-reset', (req, res) => {
+  try {
+    const email = process.env.ADMIN_DEFAULT_EMAIL || 'jhc.halalflow@gmail.com';
+    const password = process.env.ADMIN_DEFAULT_PASSWORD || 'JHC_Admin123';
+    const name = process.env.ADMIN_DEFAULT_NAME || 'JHC Administrator';
+    const hash = bcrypt.hashSync(password, 12);
+
+    const existing = db.prepare('SELECT id FROM admin_users WHERE email = ?').get(email);
+    if (existing) {
+      db.prepare(`UPDATE admin_users SET password_hash = ?, name = ?, updated_at = datetime('now') WHERE email = ?`).run(hash, name, email);
+    } else {
+      db.prepare(`INSERT INTO admin_users (name, email, password_hash) VALUES (?, ?, ?)`).run(name, email, hash);
+    }
+
+    const verify = db.prepare('SELECT * FROM admin_users WHERE email = ?').get(email);
+    const valid = bcrypt.compareSync(password, verify.password_hash);
+    res.json({ success: true, email, passwordValid: valid, message: 'Admin credentials updated successfully' });
+  } catch (err) {
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
 app.get('/api/test-email', async (req, res) => {
   try {
     const info = await transporter.sendMail({
