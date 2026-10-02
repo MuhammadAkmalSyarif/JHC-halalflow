@@ -1,6 +1,7 @@
 const Database = require('better-sqlite3');
 const path = require('path');
 const fs = require('fs');
+const bcrypt = require('bcryptjs');
 
 const DB_PATH = path.join(__dirname, 'halalflow.db');
 
@@ -200,6 +201,30 @@ function initializeDatabase() {
   }
   if (!columns.includes('file_sertifikat')) {
     db.exec(`ALTER TABLE companies ADD COLUMN file_sertifikat TEXT DEFAULT ''`);
+  }
+
+  // =============================================
+  // SEED ADMIN (Upsert on every startup for Render Free Tier)
+  // =============================================
+  const adminEmail = process.env.ADMIN_DEFAULT_EMAIL || 'jhc.halalflow@gmail.com';
+  const adminPassword = process.env.ADMIN_DEFAULT_PASSWORD || 'JHC_Admin123';
+  const adminName = process.env.ADMIN_DEFAULT_NAME || 'JHC Administrator';
+  const adminHash = bcrypt.hashSync(adminPassword, 12);
+
+  const existingAdmin = db.prepare('SELECT id FROM admin_users WHERE email = ?').get(adminEmail);
+  if (!existingAdmin) {
+    db.prepare(`
+      INSERT INTO admin_users (name, email, password_hash)
+      VALUES (?, ?, ?)
+    `).run(adminName, adminEmail, adminHash);
+    console.log(`✅ Admin created: ${adminEmail}`);
+  } else {
+    // Always update password hash on startup to ensure credentials are correct
+    db.prepare(`
+      UPDATE admin_users SET password_hash = ?, name = ?, updated_at = datetime('now')
+      WHERE email = ?
+    `).run(adminHash, adminName, adminEmail);
+    console.log(`🔄 Admin credentials refreshed: ${adminEmail}`);
   }
 
   console.log('✅ Database schema initialized successfully');
