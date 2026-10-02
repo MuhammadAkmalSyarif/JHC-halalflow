@@ -222,15 +222,6 @@ npm run dev
 | **Panel Admin** | http://localhost:5173/admin |
 | **Backend API** | http://localhost:5000 |
 
-### Login Admin Default
-
-| Field | Value |
-|---|---|
-| Email | `admin@jhc.or.id` |
-| Password | `JHC_Admin_2026!` |
-
-> **⚠️ Segera ganti password default setelah login pertama.**
-
 ---
 
 ## 📜 Skrip yang Tersedia
@@ -254,12 +245,4 @@ npm run dev
 
 ---
 
-## 📄 Lisensi
 
-Proyek ini dikembangkan untuk keperluan internal **Jamaah Haji Cilegon (JHC)**.
-
----
-
-<p align="center">
-  Dibuat dengan ❤️ untuk JHC &mdash; Jamaah Haji Cilegon
-</p>
