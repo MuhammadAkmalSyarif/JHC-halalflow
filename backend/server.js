@@ -240,55 +240,35 @@ app.post('/api/auth/forgot-password', async (req, res) => {
 
   // Call Vercel API to send email (Render Free Tier blocks SMTP)
   try {
-    const fetch = require('node-fetch'); // we need node-fetch if Node is < 18, but wait, Render supports native fetch.
-    // Let's use global.fetch or native https to be safe.
+    const https = require('https');
+    const data = JSON.stringify({ email, otp, internalSecret: process.env.JWT_SECRET });
+    const vercelUrl = new URL((process.env.FRONTEND_URL || 'https://jhc-halalflow.vercel.app') + '/api/send-email');
     
-    // Check if fetch is available
-    if (typeof fetch === 'undefined') {
-      const https = require('https');
-      const data = JSON.stringify({ email, otp, internalSecret: process.env.JWT_SECRET });
-      const vercelUrl = new URL((process.env.FRONTEND_URL || 'https://jhc-halalflow.vercel.app') + '/api/send-email');
-      
-      const req = https.request(vercelUrl, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Content-Length': Buffer.byteLength(data)
-        }
-      }, (resp) => {
-        let body = '';
-        resp.on('data', chunk => body += chunk);
-        resp.on('end', () => {
-          if (resp.statusCode === 200) {
-            console.log(`[OTP] Email berhasil dikirim via Vercel ke: ${email}`);
-            return res.json({ message: 'Kode verifikasi telah dikirim ke email Anda. Periksa inbox/spam.' });
-          } else {
-            db.prepare('DELETE FROM password_resets WHERE email = ?').run(email);
-            return res.status(500).json({ error: 'Gagal mengirim email (Vercel). Error detail: ' + body });
-          }
-        });
-      });
-      req.on('error', (error) => {
-        db.prepare('DELETE FROM password_resets WHERE email = ?').run(email);
-        res.status(500).json({ error: 'Koneksi ke Vercel gagal. Error: ' + error.message });
-      });
-      req.write(data);
-      req.end();
-    } else {
-      const resp = await fetch((process.env.FRONTEND_URL || 'https://jhc-halalflow.vercel.app') + '/api/send-email', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ email, otp, internalSecret: process.env.JWT_SECRET })
-      });
-      if (resp.ok) {
-        console.log(`[OTP] Email berhasil dikirim via Vercel ke: ${email}`);
-        res.json({ message: 'Kode verifikasi telah dikirim ke email Anda. Periksa inbox/spam.' });
-      } else {
-        const errorText = await resp.text();
-        db.prepare('DELETE FROM password_resets WHERE email = ?').run(email);
-        res.status(500).json({ error: 'Gagal mengirim email (Vercel API). Error detail: ' + errorText });
+    const req = https.request(vercelUrl, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Content-Length': Buffer.byteLength(data)
       }
-    }
+    }, (resp) => {
+      let body = '';
+      resp.on('data', chunk => body += chunk);
+      resp.on('end', () => {
+        if (resp.statusCode === 200) {
+          console.log(`[OTP] Email berhasil dikirim via Vercel ke: ${email}`);
+          return res.json({ message: 'Kode verifikasi telah dikirim ke email Anda. Periksa inbox/spam.' });
+        } else {
+          db.prepare('DELETE FROM password_resets WHERE email = ?').run(email);
+          return res.status(500).json({ error: 'Gagal mengirim email (Vercel). Error detail: ' + body });
+        }
+      });
+    });
+    req.on('error', (error) => {
+      db.prepare('DELETE FROM password_resets WHERE email = ?').run(email);
+      res.status(500).json({ error: 'Koneksi ke Vercel gagal. Error: ' + error.message });
+    });
+    req.write(data);
+    req.end();
   } catch (error) {
     db.prepare('DELETE FROM password_resets WHERE email = ?').run(email);
     res.status(500).json({ error: 'Gagal terhubung ke Vercel API. Error detail: ' + error.message });
