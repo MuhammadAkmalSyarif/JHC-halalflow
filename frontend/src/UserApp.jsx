@@ -139,6 +139,11 @@ async function apiFetch(url, options = {}) {
     ...(options.headers || {})
   };
   
+  if (!options.method || options.method.toUpperCase() === 'GET') {
+    const separator = url.includes('?') ? '&' : '?';
+    url = `${url}${separator}t=${Date.now()}`;
+  }
+  
   const finalUrl = getFullUrl(url);
   const res = await fetch(finalUrl, { ...options, headers });
   if (res.status === 401) {

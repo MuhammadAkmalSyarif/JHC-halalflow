@@ -20,6 +20,11 @@ function getAdminHeaders() {
 }
 
 async function adminFetch(url, options = {}) {
+  if (!options.method || options.method.toUpperCase() === 'GET') {
+    const separator = url.includes('?') ? '&' : '?';
+    url = `${url}${separator}t=${Date.now()}`;
+  }
+  
   const finalUrl = getFullUrl(url);
   const res = await fetch(finalUrl, { ...options, headers: { ...getAdminHeaders(), ...(options.headers || {}) } });
   if (res.status === 401) {
