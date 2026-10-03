@@ -575,6 +575,8 @@ export default function UserApp() {
               isPphComplete={isPphComplete} 
               isProdukComplete={isProdukComplete} 
               isEvaluasiComplete={isEvaluasiComplete} 
+              jadwalAudit={jadwalAudit}
+              auditorName={auditorName}
             />
           )}
           {currentStep === 1 && <StepRegistrasi />}
@@ -691,7 +693,9 @@ const Dashboard = ({
   isBahanComplete, 
   isPphComplete, 
   isProdukComplete, 
-  isEvaluasiComplete 
+  isEvaluasiComplete,
+  jadwalAudit,
+  auditorName
 }) => {
 
   const CERT_STAGES = [
