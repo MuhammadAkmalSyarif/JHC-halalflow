@@ -595,8 +595,12 @@ app.post('/api/companies/:id/materials/import', authMiddleware, upload.single('f
       let count = 0;
       rows.forEach((row, idx) => {
         const nama = (row['nama_bahan'] || row['Nama Bahan'] || row['name'] || '').toString().trim();
-        const expired = (row['masa_berlaku'] || row['Expired'] || row['expired'] || '').toString().trim();
-        const sertifikat = (row['nomor_sertifikat/registr'] || row['nomor_sertifikat'] || row['Nomor Sertifikat'] || '').toString().trim();
+        const expired = (row['masa_berlaku'] || row['Expired'] || row['expired'] || row['Tanggal Terbit'] || row['tanggal_terbit'] || '').toString().trim();
+        const sertifikat = (
+          row['nomor_sertifikat/registr'] || row['nomor_sertifikat'] || row['Nomor Sertifikat'] ||
+          row['No. Sertifikat'] || row['No Sertifikat'] || row['sertifikat'] ||
+          row['ID Halal'] || row['id_halal'] || row['No. Registrasi'] || ''
+        ).toString().trim();
 
         if (!nama) {
           errors.push(`Baris ${idx + 2}: Nama bahan wajib diisi`);
@@ -612,7 +616,7 @@ app.post('/api/companies/:id/materials/import', authMiddleware, upload.single('f
           (row['produsen'] || '').toString().trim(),
           (row['negara'] || '').toString().trim(),
           (row['supplier'] || row['Supplier'] || '').toString().trim(),
-          (row['lembaga_penerbit'] || '').toString().trim(),
+          (row['lembaga_penerbit'] || row['Lembaga Penerbit'] || row['lembaga'] || '').toString().trim(),
           sertifikat, expired, status
         );
         count++;
@@ -864,7 +868,16 @@ app.post('/api/materials/import', authMiddleware, upload.single('file'), (req, r
         if (!name) continue;
         let status = (row['Status Halal']||row['status']||'hijau').toString().toLowerCase().trim();
         if (!['hijau','kuning','merah'].includes(status)) status = 'hijau';
-        insertMat.run(company.id, name, (row['jenis_bahan']||'').toString().trim(), (row['produsen']||'').toString().trim(), (row['negara']||'').toString().trim(), (row['supplier']||row['Supplier']||'').toString().trim(), (row['lembaga_penerbit']||'').toString().trim(), (row['nomor_sertifikat/registr']||row['nomor_sertifikat']||'').toString().trim(), (row['masa_berlaku']||row['Expired']||row['expired']||'').toString().trim(), status);
+        const sertifikat = (
+          row['nomor_sertifikat/registr'] || row['nomor_sertifikat'] || row['Nomor Sertifikat'] ||
+          row['No. Sertifikat'] || row['No Sertifikat'] || row['sertifikat'] ||
+          row['ID Halal'] || row['id_halal'] || row['No. Registrasi'] || ''
+        ).toString().trim();
+        const expired = (
+          row['masa_berlaku'] || row['Masa Berlaku'] || row['Expired'] || row['expired'] ||
+          row['Tanggal Terbit'] || row['tanggal_terbit'] || ''
+        ).toString().trim();
+        insertMat.run(company.id, name, (row['jenis_bahan']||'').toString().trim(), (row['produsen']||'').toString().trim(), (row['negara']||'').toString().trim(), (row['supplier']||row['Supplier']||'').toString().trim(), (row['lembaga_penerbit']||row['Lembaga Penerbit']||row['lembaga']||'').toString().trim(), sertifikat, expired, status);
         count++;
       }
     });
@@ -922,14 +935,16 @@ app.get('/api/progress', authMiddleware, (req, res) => {
 // GET /api/certification-status
 app.get('/api/certification-status', authMiddleware, (req, res) => {
   const userId = req.user.id;
-  const company = db.prepare('SELECT certification_status, permohonan_status, permohonan_catatan, nomor_sertifikat, tgl_terbit_sertifikat, file_sertifikat FROM companies WHERE user_id=?').get(userId);
+  const company = db.prepare('SELECT certification_status, permohonan_status, permohonan_catatan, nomor_sertifikat, tgl_terbit_sertifikat, file_sertifikat, jadwal_audit, auditor_name FROM companies WHERE user_id=?').get(userId);
   res.json({
     certificationStatus: company?.certification_status || 0,
     permohonanStatus: company?.permohonan_status || 'belum',
     permohonanCatatan: company?.permohonan_catatan || '',
     nomorSertifikat: company?.nomor_sertifikat || '',
     tglTerbitSertifikat: company?.tgl_terbit_sertifikat || '',
-    fileSertifikat: company?.file_sertifikat || ''
+    fileSertifikat: company?.file_sertifikat || '',
+    jadwalAudit: company?.jadwal_audit || '',
+    auditorName: company?.auditor_name || ''
   });
 });
 
@@ -1422,12 +1437,137 @@ app.get('/api/certificate', authMiddleware, (req, res) => {
 });
 
 // =============================================
-// API: CHAT (USER)
+// API: CHAT (USER) — Smart HalalFlow Assistant
 // =============================================
-app.get('/api/chat', authMiddleware, (req, res) => res.json([{ sender: 'ai', text: 'Halo! Saya AI Halal Assistant JHC. Ada yang ingin ditanyakan?' }]));
+app.get('/api/chat', authMiddleware, (req, res) => res.json([{ sender: 'ai', text: 'Halo! 👋 Saya AI Halal Assistant JHC HalalFlow.\n\nSaya siap membantu Anda seputar:\n• Proses sertifikasi halal BPJPH\n• Cara penggunaan aplikasi JHC HalalFlow\n• Regulasi SJPH & dokumen yang dibutuhkan\n• Bahan halal & status halal produk\n\nSilakan tanyakan apa yang ingin Anda ketahui! 😊' }]));
+
 app.post('/api/chat', authMiddleware, (req, res) => {
-  const reply = 'Berdasarkan standar SJPH BPJPH, pastikan seluruh bahan baku utama telah memiliki sertifikat halal yang valid.';
-  res.json({ messages: [{ sender: 'user', text: req.body.text }, { sender: 'ai', text: reply }] });
+  const userText = (req.body.text || '').toLowerCase().trim();
+
+  // Knowledge base - keyword matching
+  const KB = [
+    // === HALALFLOW PLATFORM ===
+    {
+      keys: ['halalflow', 'jhc halalflow', 'platform', 'aplikasi ini', 'sistem ini', 'halalflow.or.id'],
+      answer: 'JHC HalalFlow adalah platform digital resmi dari Jasa Halal Consulting (JHC) yang membantu pelaku usaha dalam proses pendampingan sertifikasi halal BPJPH secara online.\n\nMelalui JHC HalalFlow di halalflow.or.id, Anda dapat:\n✅ Mendaftar dan mengelola profil perusahaan\n✅ Upload dokumen SJPH secara digital\n✅ Memantau progress sertifikasi halal secara real-time\n✅ Berkomunikasi langsung dengan pendamping JHC\n✅ Mengunduh sertifikat halal yang sudah terbit\n\nInfo lebih lanjut: halalflow.or.id'
+    },
+    // === SERTIFIKASI HALAL UMUM ===
+    {
+      keys: ['sertifikasi halal', 'sertifikat halal', 'cara daftar', 'proses sertifikasi', 'bagaimana cara', 'mulai dari mana', 'langkah'],
+      answer: 'Proses Sertifikasi Halal melalui JHC HalalFlow:\n\n1️⃣ Registrasi Perusahaan — Lengkapi profil usaha Anda\n2️⃣ Dokumen Legal — Upload SK Penyelia Halal, SK Manajemen, Kebijakan Halal\n3️⃣ Matrix Bahan Halal — Daftarkan semua bahan baku beserta sertifikat halalnya\n4️⃣ Upload Produk & BOM — Masukkan daftar produk beserta komposisi bahan\n5️⃣ Proses Produksi — Upload alur proses, layout, surat pernyataan bebas babi\n6️⃣ Upload Evidence (Bukti) — Foto sosialisasi, audit internal, dll\n7️⃣ Pengajuan ke BPJPH — Submit permohonan resmi\n\nSetelah diajukan, Admin JHC akan memproses pengajuan Anda ke BPJPH/SIHALAL.'
+    },
+    // === SJPH ===
+    {
+      keys: ['sjph', 'sistem jaminan produk halal', 'jaminan halal'],
+      answer: 'SJPH (Sistem Jaminan Produk Halal) adalah sistem yang terintegrasi dan komprehensif yang mencakup keseluruhan proses untuk menghasilkan produk halal.\n\nKomponen utama SJPH:\n📋 Komitmen & Tanggung Jawab Manajemen\n👤 Penyelia Halal yang tersertifikasi\n📚 Prosedur dan panduan halal tertulis\n🔬 Pengelolaan bahan (harus bersertifikat halal)\n🏭 Proses produksi yang terjamin kehalalannya\n🧪 Produk yang diklaim halal\n📦 Pengemasan & penyimpanan yang sesuai\n📝 Audit internal & evaluasi berkala\n\nSemua komponen ini harus didokumentasikan dan diupload melalui JHC HalalFlow.'
+    },
+    // === BPJPH ===
+    {
+      keys: ['bpjph', 'badan penyelenggara', 'sihalal', 'lph', 'lembaga pemeriksa halal'],
+      answer: 'BPJPH (Badan Penyelenggara Jaminan Produk Halal) adalah badan pemerintah di bawah Kemenag RI yang berwenang menyelenggarakan sertifikasi halal.\n\nAlur di BPJPH:\n1. Pelaku usaha daftar di SIHALAL (sihalal.bpjph.go.id)\n2. BPJPH memeriksa kelengkapan dokumen\n3. Diteruskan ke LPH (Lembaga Pemeriksa Halal) untuk audit\n4. LPH melakukan pemeriksaan/audit\n5. MUI melakukan Sidang Fatwa penetapan kehalalan\n6. BPJPH menerbitkan Sertifikat Halal\n\nJHC HalalFlow membantu Anda mempersiapkan semua dokumen sebelum pengajuan ke BPJPH.'
+    },
+    // === PENYELIA HALAL ===
+    {
+      keys: ['penyelia halal', 'penyelia', 'sk penyelia', 'sertifikat penyelia'],
+      answer: 'Penyelia Halal adalah orang yang bertanggung jawab atas penerapan SJPH di perusahaan.\n\nSyarat Penyelia Halal:\n✅ Beragama Islam\n✅ Memiliki wawasan luas seputar kehalalan produk\n✅ Sudah mengikuti pelatihan/sertifikasi Penyelia Halal\n✅ Mendapatkan SK (Surat Keputusan) penunjukan dari pimpinan perusahaan\n\nDokumen yang perlu diupload:\n📄 SK Penyelia Halal (dari pimpinan perusahaan)\n📄 Sertifikat Pelatihan Penyelia Halal\n\nUpload di Tahap 2: Dokumen Legal di JHC HalalFlow.'
+    },
+    // === BAHAN HALAL / MATRIX ===
+    {
+      keys: ['bahan halal', 'matrix bahan', 'bahan baku', 'daftar bahan', 'nomor sertifikat bahan', 'id halal bahan'],
+      answer: 'Matrix Bahan Halal adalah daftar seluruh bahan baku yang digunakan dalam proses produksi.\n\nSetiap bahan harus mencantumkan:\n📝 Nama bahan (merk)\n🏭 Jenis bahan (Bahan Baku, Cleaning Agent, Kemasan)\n🏢 Produsen & Supplier\n🌍 Negara asal\n🏛️ Lembaga penerbit sertifikat (misal: BPJPH, MUI)\n🔢 Nomor Sertifikat Halal (format: ID + 17 digit angka)\n📅 Tanggal terbit sertifikat\n\nCara cek nomor sertifikat bahan:\n👉 Kunjungi cekhalal.bpjph.go.id atau bpjph.halal.go.id\n\nAnda bisa upload bahan via Excel (gunakan template yang tersedia) atau input manual satu per satu.'
+    },
+    // === CEK HALAL ===
+    {
+      keys: ['cek halal', 'cek sertifikat', 'verifikasi halal', 'cekhalal', 'nomor sertifikat'],
+      answer: 'Untuk mengecek keaslian dan status sertifikat halal suatu bahan/produk:\n\n🔍 Website Resmi BPJPH:\n• cekhalal.bpjph.go.id\n• bpjph.halal.go.id\n\nMasukkan nama produk atau nomor sertifikat halal untuk memverifikasi.\n\nFormat Nomor Sertifikat Halal BPJPH:\nID + [Kode Wilayah] + [Kode LPH] + [Nomor Urut] + [Tahun]\nContoh: ID00410000054900720\n\nTip: Pastikan sertifikat masih berlaku (belum melewati tanggal terbit + 4 tahun).'
+    },
+    // === DOKUMEN LEGAL ===
+    {
+      keys: ['dokumen legal', 'dokumen apa', 'persyaratan dokumen', 'sk manajemen', 'kebijakan halal', 'permohonan'],
+      answer: 'Dokumen Legal yang dibutuhkan untuk sertifikasi halal:\n\n📄 Surat Permohonan Halal — Ditandatangani pimpinan\n📄 SK Manajemen Halal — Surat keputusan penunjukan Tim Manajemen Halal\n📄 SK Penyelia Halal — Surat keputusan penunjukan Penyelia Halal\n📄 Kebijakan Halal Perusahaan — Komitmen tertulis manajemen\n📄 Tanda Tangan Digital Pemilik & Penyelia\n\nSemua dokumen dapat diupload langsung di Tahap 2: Dokumen Legal pada JHC HalalFlow.\n\nJika Anda membutuhkan template dokumen, hubungi Admin JHC melalui WhatsApp: 0851-1702-1977'
+    },
+    // === BIAYA SERTIFIKASI ===
+    {
+      keys: ['biaya', 'harga', 'tarif', 'berapa biaya', 'gratis', 'bayar'],
+      answer: 'Biaya Sertifikasi Halal bervariasi tergantung jenis dan skala usaha:\n\n💰 Biaya Sertifikasi melalui BPJPH:\n• UMK (Usaha Mikro & Kecil): Dapat mengajukan sertifikasi gratis melalui program fasilitasi pemerintah\n• Usaha Menengah & Besar: Dikenakan biaya sesuai Peraturan BPJPH\n\n💼 Biaya Pendampingan JHC:\nUntuk info biaya pendampingan JHC HalalFlow, silakan hubungi:\n📱 WhatsApp: 0851-1702-1977\n🌐 Website: halalflow.or.id\n\n📌 Catatan: Penggunaan platform JHC HalalFlow untuk mengelola dokumen tersedia untuk klien JHC.'
+    },
+    // === AUDIT HALAL ===
+    {
+      keys: ['audit', 'audit internal', 'audit halal', 'pemeriksaan', 'inspeksi'],
+      answer: 'Audit Internal Halal adalah evaluasi berkala yang dilakukan perusahaan untuk memastikan penerapan SJPH berjalan dengan baik.\n\nAudit Internal meliputi:\n🔍 Pemeriksaan bahan baku\n🔍 Pemeriksaan proses produksi\n🔍 Pemeriksaan kebersihan & sanitasi\n🔍 Pemeriksaan pembersihan peralatan\n🔍 Pemeriksaan karyawan (khususnya area produksi)\n\nBukti Audit Internal yang harus diupload di JHC HalalFlow:\n📸 Foto kegiatan audit internal\n📋 Absensi peserta audit\n\nUpload di Tahap 6: Upload Evidence (Bukti).\n\nUntuk Audit Eksternal, LPH yang ditunjuk BPJPH akan melakukan pemeriksaan langsung ke lokasi usaha Anda.'
+    },
+    // === SOSIALISASI HALAL ===
+    {
+      keys: ['sosialisasi', 'training halal', 'pelatihan halal', 'edukasi halal'],
+      answer: 'Sosialisasi/Training Halal adalah kegiatan edukasi kepada seluruh karyawan tentang pentingnya kehalalan produk dan penerapan SJPH.\n\nMateri Sosialisasi Halal:\n📚 Pemahaman dasar kehalalan\n📚 Kebijakan halal perusahaan\n📚 Prosedur produksi halal\n📚 Penanganan bahan non-halal\n📚 Tanggung jawab masing-masing karyawan\n\nBukti yang harus diupload:\n📸 Foto kegiatan sosialisasi/training\n📋 Daftar hadir (absensi) peserta\n\nUpload di Tahap 6: Upload Evidence (Bukti) pada aplikasi JHC HalalFlow.'
+    },
+    // === PRODUK HALAL ===
+    {
+      keys: ['produk halal', 'produk yang didaftarkan', 'bom', 'bill of material', 'komposisi produk'],
+      answer: 'Di JHC HalalFlow, Anda perlu mendaftarkan:\n\n🍽️ Daftar Produk yang akan disertifikasi:\n• Nama produk yang diklaim halal\n• Komposisi/BOM (Bill of Material) — daftar bahan pembentuk produk\n\nCara Input Produk:\n1. Buka Tahap 4: Upload Produk & BOM\n2. Klik "+ Tambah Produk" atau upload via Excel\n3. Untuk setiap produk, tambahkan bahan-bahan pembentuknya dari Matrix Bahan\n4. Klik Submit setelah semua produk selesai\n\n📌 Penting: Pastikan semua bahan yang digunakan dalam produk sudah terdaftar di Matrix Bahan Halal terlebih dahulu.'
+    },
+    // === STATUS PROGRESS ===
+    {
+      keys: ['status', 'progress', 'sudah sampai mana', 'tahap berapa', 'proses berjalan'],
+      answer: 'Anda dapat memantau status pengajuan sertifikasi halal di Dashboard JHC HalalFlow.\n\nTahapan Status Pengajuan:\n1️⃣ Menunggu Pengajuan — Belum/sedang mempersiapkan dokumen\n2️⃣ Diterima Admin — Admin JHC sedang memeriksa\n3️⃣ Diproses — Dokumen sedang dipersiapkan untuk BPJPH\n4️⃣ Disubmit di SIHALAL — Sudah diajukan ke sistem BPJPH\n5️⃣ Feedback BPJPH/LPH — Menunggu/menindaklanjuti feedback\n6️⃣ Penjadwalan Audit — LPH menjadwalkan audit\n7️⃣ Perbaikan Hasil Audit — Perlu perbaikan dokumen\n8️⃣ Sidang Fatwa MUI — Proses penetapan kehalalan\n9️⃣ Sertifikat Terbit! 🎉 — Sertifikat Halal resmi terbit\n\nJika ada pertanyaan tentang status, hubungi Admin JHC: 0851-1702-1977'
+    },
+    // === MASA BERLAKU SERTIFIKAT ===
+    {
+      keys: ['masa berlaku', 'berlaku berapa lama', 'expire', 'expired', 'perpanjang', 'renewal'],
+      answer: 'Masa Berlaku Sertifikat Halal BPJPH:\n\n⏰ Sertifikat Halal berlaku selama 4 (empat) tahun sejak tanggal diterbitkan.\n\nPerbaruan/Perpanjangan Sertifikat:\n• Pengajuan perpanjangan dapat dilakukan H-6 bulan sebelum habis masa berlaku\n• Proses perpanjangan serupa dengan pengajuan baru\n• Pelaku usaha wajib memastikan tidak ada perubahan bahan/proses yang mempengaruhi kehalalan\n\n📌 JHC HalalFlow akan membantu proses perpanjangan sertifikat Anda. Hubungi Admin JHC untuk info lebih lanjut.'
+    },
+    // === KONTAK JHC ===
+    {
+      keys: ['kontak', 'hubungi', 'whatsapp', 'admin jhc', 'bantuan', 'konsultasi', 'telepon'],
+      answer: '📞 Hubungi JHC HalalFlow:\n\n💬 WhatsApp Admin JHC:\n0851-1702-1977\n(Senin-Jumat, 08.00-17.00 WIB)\n\n🌐 Website Resmi:\nhalalflow.or.id\n\n📧 Email:\njhc.halalflow@gmail.com\n\nKami siap membantu Anda dalam proses sertifikasi halal! Jangan ragu untuk menghubungi kami jika ada pertanyaan atau kendala dalam penggunaan aplikasi JHC HalalFlow.'
+    },
+    // === CARA UPLOAD ===
+    {
+      keys: ['cara upload', 'upload file', 'upload dokumen', 'upload foto', 'cara input', 'cara tambah'],
+      answer: 'Cara Upload Dokumen/File di JHC HalalFlow:\n\n📄 Upload Dokumen Legal (Tahap 2):\n• Klik area upload pada kolom dokumen yang sesuai\n• Pilih file dari komputer (format: PDF, JPG, PNG)\n• File akan tersimpan otomatis\n\n📊 Upload Bahan Halal via Excel (Tahap 3):\n• Unduh template Excel yang tersedia\n• Isi data bahan sesuai format kolom\n• Klik "Upload Excel" dan pilih file\n\n📸 Upload Foto Evidence (Tahap 6):\n• Klik area upload foto\n• Pilih satu atau lebih foto (JPG, PNG)\n• Foto tersimpan otomatis\n\n💡 Tips: Pastikan ukuran file tidak melebihi 20MB per file.'
+    },
+    // === USAHA MIKRO KECIL ===
+    {
+      keys: ['umk', 'usaha mikro', 'usaha kecil', 'ukm', 'umkm', 'self declare'],
+      answer: 'Sertifikasi Halal untuk UMK (Usaha Mikro & Kecil):\n\n✅ Program Sertifikasi Halal Gratis (SEHATI) untuk UMK:\n• Didanai oleh pemerintah melalui Kemenag\n• Dapat diajukan melalui BPJPH\n• Prosesnya lebih sederhana (pernyataan mandiri/self-declare)\n\n📋 Syarat UMK Self-Declare:\n• Usaha berskala mikro/kecil\n• Produk diproduksi sendiri (rumahan)\n• Proses produksi sederhana\n• Tidak menggunakan bahan yang diragukan kehalalannya\n\n🤝 JHC HalalFlow juga membantu UMK dalam proses sertifikasi. Hubungi kami untuk konsultasi: 0851-1702-1977'
+    },
+    // === PERMOHONAN DITOLAK ===
+    {
+      keys: ['ditolak', 'tidak diterima', 'revisi', 'perbaikan', 'catatan admin'],
+      answer: 'Jika permohonan Anda ditolak atau perlu perbaikan:\n\n⚠️ Penyebab Umum Penolakan:\n• Dokumen tidak lengkap atau tidak sesuai format\n• Bahan baku belum memiliki sertifikat halal\n• Data produk/BOM belum lengkap\n• Foto evidence kurang jelas\n\n📋 Langkah Perbaikan:\n1. Baca catatan dari Admin JHC di Dashboard\n2. Perbaiki dokumen/data yang diminta\n3. Upload ulang dokumen yang sudah diperbaiki\n4. Klik "Ajukan Ulang" di Dashboard\n\n💬 Jika tidak jelas, segera hubungi Admin JHC:\nWhatsApp: 0851-1702-1977'
+    },
+    // === TENTANG JHC ===
+    {
+      keys: ['jhc', 'jasa halal consulting', 'tentang jhc', 'siapa jhc', 'konsultan halal'],
+      answer: 'JHC (Jasa Halal Consulting) adalah lembaga konsultan halal yang berpengalaman membantu pelaku usaha dalam proses sertifikasi halal BPJPH.\n\n🏢 Layanan JHC:\n✅ Pendampingan lengkap proses sertifikasi halal\n✅ Konsultasi SJPH (Sistem Jaminan Produk Halal)\n✅ Pelatihan Penyelia Halal\n✅ Audit Halal Internal\n✅ Pengelolaan dokumen melalui platform JHC HalalFlow\n\n🌐 Platform Digital: halalflow.or.id\n📱 WhatsApp: 0851-1702-1977\n📧 Email: jhc.halalflow@gmail.com\n\nDengan JHC, proses sertifikasi halal Anda menjadi lebih mudah, cepat, dan terstruktur!'
+    },
+  ];
+
+  // Find best matching answer
+  let reply = null;
+  for (const item of KB) {
+    if (item.keys.some(k => userText.includes(k))) {
+      reply = item.answer;
+      break;
+    }
+  }
+
+  // Greeting handler
+  if (!reply && (userText.match(/^(halo|hai|hi|hello|assalam|selamat|pagi|siang|sore|malam|permisi|hei)/) || userText.length < 5)) {
+    reply = 'Halo! 😊 Selamat datang di JHC HalalFlow Assistant!\n\nSaya bisa membantu Anda dengan:\n• Cara sertifikasi halal BPJPH\n• Penggunaan aplikasi JHC HalalFlow\n• Dokumen yang dibutuhkan\n• Bahan & produk halal\n• Kontak dan informasi JHC\n\nAda yang ingin Anda tanyakan?';
+  }
+
+  // Fallback
+  if (!reply) {
+    reply = 'Terima kasih atas pertanyaan Anda! 🙏\n\nUntuk pertanyaan spesifik yang belum dapat saya jawab secara otomatis, silakan hubungi Admin JHC langsung:\n\n💬 WhatsApp: 0851-1702-1977\n🌐 Website: halalflow.or.id\n📧 Email: jhc.halalflow@gmail.com\n\nKami siap membantu Anda! Atau coba tanyakan dengan kata kunci seperti: "sertifikasi halal", "dokumen yang dibutuhkan", "cara upload", "status pengajuan", dll.';
+  }
+
+  const messages = [
+    { sender: 'user', text: req.body.text },
+    { sender: 'ai', text: reply }
+  ];
+
+  res.json({ messages });
 });
 
 // Legacy: Template downloads
@@ -1571,6 +1711,18 @@ app.get('/api/admin/companies/:id', adminAuthMiddleware, (req, res) => {
   res.json({ company, progress });
 });
 
+// Admin: Update Jadwal Audit
+app.put('/api/admin/companies/:id/audit-schedule', adminAuthMiddleware, (req, res) => {
+  const companyId = parseInt(req.params.id);
+  const { jadwal_audit, auditor_name } = req.body;
+  try {
+    db.prepare('UPDATE companies SET jadwal_audit=?, auditor_name=? WHERE id=?').run(jadwal_audit, auditor_name, companyId);
+    res.json({ success: true, message: 'Jadwal audit berhasil diperbarui' });
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
 // GET /api/admin/companies/:id/legal-documents
 app.get('/api/admin/companies/:id/legal-documents', adminAuthMiddleware, (req, res) => {
   const companyId = parseInt(req.params.id);
@@ -1596,7 +1748,9 @@ app.get('/api/admin/companies/:id/materials', adminAuthMiddleware, (req, res) =>
   query += ' ORDER BY id LIMIT ? OFFSET ?';
   params.push(parseInt(limit), offset);
 
-  const materials = db.prepare(query).all(...params);
+  const rawMaterials = db.prepare(query).all(...params);
+  // Add sertifikat alias so frontend can read both m.nomor_sertifikat and m.sertifikat
+  const materials = rawMaterials.map(m => ({ ...m, sertifikat: m.nomor_sertifikat }));
   const total = db.prepare('SELECT COUNT(*) as c FROM halal_materials WHERE company_id=?').get(companyId).c;
   const progress = db.prepare('SELECT status FROM certification_progress WHERE company_id=? AND stage=3').get(companyId);
 

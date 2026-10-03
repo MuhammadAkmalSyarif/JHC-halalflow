@@ -26,7 +26,8 @@ const Icons = {
   List: (props) => <svg {...props} fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M4 6h16M4 10h16M4 14h16M4 18h16"/></svg>,
   Package: (props) => <svg {...props} fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4"/></svg>,
   User: (props) => <svg {...props} fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z"/></svg>,
-  Menu: (props) => <svg {...props} fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M4 6h16M4 12h16M4 18h16"/></svg>
+  Menu: (props) => <svg {...props} fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M4 6h16M4 12h16M4 18h16"/></svg>,
+  Send: (props) => <svg {...props} fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8"/></svg>
 };
 
 const Card = ({ children, className = "" }) => (
@@ -172,6 +173,8 @@ export default function UserApp() {
   const [fileSertifikat, setFileSertifikat] = useState('');
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [globalToast, setGlobalToast] = useState({ text: '', type: '' });
+  const [jadwalAudit, setJadwalAudit] = useState('');
+  const [auditorName, setAuditorName] = useState('');
 
   const showToast = (text, type = 'error', duration = 5000) => {
     setGlobalToast({ text, type });
@@ -189,6 +192,8 @@ export default function UserApp() {
       setNomorSertifikat(certVal.nomorSertifikat || '');
       setTglTerbitSertifikat(certVal.tglTerbitSertifikat || '');
       setFileSertifikat(certVal.fileSertifikat || '');
+      setJadwalAudit(certVal.jadwalAudit || '');
+      setAuditorName(certVal.auditorName || '');
     } catch (err) {
       // ignore
     }
@@ -230,6 +235,8 @@ export default function UserApp() {
         setNomorSertifikat(certVal.nomorSertifikat || '');
         setTglTerbitSertifikat(certVal.tglTerbitSertifikat || '');
         setFileSertifikat(certVal.fileSertifikat || '');
+        setJadwalAudit(certVal.jadwalAudit || '');
+        setAuditorName(certVal.auditorName || '');
       } catch (err) {
         console.error('Error fetching data from API:', err);
       }
@@ -247,6 +254,8 @@ export default function UserApp() {
         setNomorSertifikat(certVal.nomorSertifikat || '');
         setTglTerbitSertifikat(certVal.tglTerbitSertifikat || '');
         setFileSertifikat(certVal.fileSertifikat || '');
+        setJadwalAudit(certVal.jadwalAudit || '');
+        setAuditorName(certVal.auditorName || '');
       } catch (err) {
         // ignore polling errors
       }
@@ -297,6 +306,47 @@ export default function UserApp() {
     }
   };
 
+  const handleMultiFileUpload = async (e, fieldName, setLocalStateVal) => {
+    const files = Array.from(e.target.files);
+    if (!files.length) return;
+
+    const token = localStorage.getItem('jhc_token');
+    
+    try {
+      const uploadedNames = [];
+      for (const file of files) {
+        const formData = new FormData();
+        formData.append('file', file);
+        if (token) formData.append('_token', token);
+
+        const res = await apiFetch('/api/upload', {
+          method: 'POST',
+          headers: token ? { 'Authorization': `Bearer ${token}` } : {},
+          body: formData
+        });
+        const data = await res.json();
+        if (res.ok) {
+          uploadedNames.push(data.filename);
+        } else {
+          showToast('Gagal mengunggah berkas: ' + (data.error || 'Server error'));
+        }
+      }
+      
+      if (uploadedNames.length > 0) {
+        setLocalStateVal(prev => {
+          const existing = prev[fieldName] ? (prev[fieldName] + ',') : '';
+          return {
+            ...prev,
+            [fieldName]: existing + uploadedNames.join(',')
+          };
+        });
+      }
+    } catch (err) {
+      console.error('Upload error:', err);
+      showToast('Terjadi kesalahan saat mengunggah berkas.');
+    }
+  };
+
   // Criteria calculations
   const isKomitmenComplete = Boolean(
     (legalData?.permohonan || legalData?.sk_penyelia || legalData?.sk_manajemen || legalData?.kebijakan) &&
@@ -327,6 +377,8 @@ export default function UserApp() {
 
   const readinessScore = Math.round((completedCriteriaCount / 5) * 100);
 
+  const chatEndRef = React.useRef(null);
+
   const handleSendMessage = async (e) => {
     e.preventDefault();
     if (!chatInput.trim()) return;
@@ -335,6 +387,9 @@ export default function UserApp() {
     setChatMessages(prev => [...prev, { sender: 'user', text: userMsg }]);
     setChatInput('');
 
+    // Show thinking indicator
+    setChatMessages(prev => [...prev, { sender: 'ai', text: '...', isThinking: true }]);
+
     try {
       const res = await apiFetch('/api/chat', {
         method: 'POST',
@@ -342,14 +397,25 @@ export default function UserApp() {
         body: JSON.stringify({ text: userMsg })
       });
       const data = await res.json();
-      setChatMessages(data.messages);
+      // Remove thinking indicator, append AI reply
+      setChatMessages(prev => {
+        const withoutThinking = prev.filter(m => !m.isThinking);
+        const aiReply = data.messages?.find(m => m.sender === 'ai');
+        return aiReply ? [...withoutThinking, aiReply] : withoutThinking;
+      });
     } catch (err) {
       console.error('Error sending chat message:', err);
-      setTimeout(() => {
-        setChatMessages(prev => [...prev, { sender: 'ai', text: 'Maaf, terjadi gangguan saat menghubungi asisten AI.' }]);
-      }, 1000);
+      setChatMessages(prev => [
+        ...prev.filter(m => !m.isThinking),
+        { sender: 'ai', text: 'Maaf, terjadi gangguan. Silakan coba lagi atau hubungi Admin JHC di 0851-1702-1977.' }
+      ]);
     }
   };
+
+  // Auto-scroll chat to bottom
+  React.useEffect(() => {
+    chatEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+  }, [chatMessages]);
 
   if (!isLoggedIn) {
     return <Login onLogin={(profile, token) => {
@@ -516,7 +582,7 @@ export default function UserApp() {
           {currentStep === 3 && <StepMatrixBahanHalal materials={materials} setMaterials={setMaterials} matrixSubmitted={matrixSubmitted} setMatrixSubmitted={setMatrixSubmitted} showToast={showToast} />}
           {currentStep === 4 && <StepUploadProduk products={products} setProducts={setProducts} materials={materials} productsSubmitted={productsSubmitted} setProductsSubmitted={setProductsSubmitted} showToast={showToast} />}
           {currentStep === 5 && <StepProsesProduksi productionData={productionData} setProductionData={setProductionData} handleGenericFileUpload={handleGenericFileUpload} />}
-          {currentStep === 6 && <StepUploadEvidence evidenceData={evidenceData} setEvidenceData={setEvidenceData} handleGenericFileUpload={handleGenericFileUpload} />}
+          {currentStep === 6 && <StepUploadEvidence evidenceData={evidenceData} setEvidenceData={setEvidenceData} handleGenericFileUpload={handleGenericFileUpload} handleMultiFileUpload={handleMultiFileUpload} />}
           {currentStep === 7 && (
             <StepPengajuanBPJPH 
               readinessScore={readinessScore}
@@ -535,32 +601,68 @@ export default function UserApp() {
       {/* Floating AI Chatbot Toggle & Drawer */}
       <div className="fixed bottom-6 right-6 z-50">
         {!chatOpen ? (
-          <button onClick={() => setChatOpen(true)} className="flex items-center gap-2 bg-emerald-600 hover:bg-emerald-700 text-white px-5 py-3 rounded-full shadow-lg font-bold text-sm transition-all hover:scale-105">
+          <button onClick={() => setChatOpen(true)} className="flex items-center gap-2 bg-emerald-600 hover:bg-emerald-700 text-white px-5 py-3 rounded-full shadow-lg font-bold text-sm transition-all hover:scale-105 active:scale-95">
             <Icons.Bot className="w-5 h-5" /> Tanya AI Halal Assistant
           </button>
         ) : (
-          <div className="w-96 bg-white rounded-2xl shadow-2xl border flex flex-col overflow-hidden animate-fade-in h-[500px]">
-            <div className="bg-emerald-600 text-white p-4 flex justify-between items-center">
-              <div className="flex items-center gap-2">
-                <Icons.Bot className="w-5 h-5" />
-                <span className="font-bold text-sm">AI Halal Assistant JHC</span>
+          <div className="w-[360px] bg-white rounded-2xl shadow-2xl border border-slate-200 flex flex-col overflow-hidden animate-fade-in" style={{height: '520px'}}>
+            {/* Header */}
+            <div className="bg-gradient-to-r from-emerald-600 to-emerald-500 text-white px-4 py-3 flex justify-between items-center shrink-0">
+              <div className="flex items-center gap-2.5">
+                <div className="w-8 h-8 rounded-full bg-white/20 flex items-center justify-center">
+                  <Icons.Bot className="w-5 h-5" />
+                </div>
+                <div>
+                  <div className="font-bold text-sm leading-tight">AI Halal Assistant JHC</div>
+                  <div className="text-[10px] text-emerald-100">halalflow.or.id • Online</div>
+                </div>
               </div>
-              <button onClick={() => setChatOpen(false)} className="text-white hover:opacity-80">
-                <Icons.X className="w-5 h-5" />
+              <button onClick={() => setChatOpen(false)} className="text-white/80 hover:text-white hover:bg-white/20 p-1.5 rounded-lg transition-all">
+                <Icons.X className="w-4 h-4" />
               </button>
             </div>
-            <div className="flex-1 p-4 overflow-y-auto space-y-3 bg-slate-50">
+
+            {/* Messages */}
+            <div className="flex-1 px-4 py-3 overflow-y-auto space-y-3 bg-slate-50">
               {chatMessages.map((m, idx) => (
-                <div key={idx} className={`flex ${m.sender === 'user' ? 'justify-end' : 'justify-start'}`}>
-                  <div className={`max-w-[80%] p-3 rounded-2xl text-xs ${m.sender === 'user' ? 'bg-emerald-600 text-white rounded-br-xs' : 'bg-white border text-slate-700 rounded-bl-xs shadow-xs'}`}>
-                    {m.text}
+                <div key={idx} className={`flex gap-2 ${m.sender === 'user' ? 'justify-end' : 'justify-start'}`}>
+                  {m.sender === 'ai' && (
+                    <div className="w-6 h-6 rounded-full bg-emerald-100 border border-emerald-200 flex items-center justify-center shrink-0 mt-0.5">
+                      <Icons.Bot className="w-3.5 h-3.5 text-emerald-600" />
+                    </div>
+                  )}
+                  <div className={`max-w-[78%] px-3 py-2.5 rounded-2xl text-xs leading-relaxed ${
+                    m.sender === 'user'
+                      ? 'bg-emerald-600 text-white rounded-tr-sm'
+                      : 'bg-white border border-slate-200 text-slate-700 rounded-tl-sm shadow-sm'
+                  }`}>
+                    {m.isThinking ? (
+                      <span className="flex items-center gap-1">
+                        <span className="w-1.5 h-1.5 bg-emerald-400 rounded-full animate-bounce" style={{animationDelay:'0ms'}}></span>
+                        <span className="w-1.5 h-1.5 bg-emerald-400 rounded-full animate-bounce" style={{animationDelay:'150ms'}}></span>
+                        <span className="w-1.5 h-1.5 bg-emerald-400 rounded-full animate-bounce" style={{animationDelay:'300ms'}}></span>
+                      </span>
+                    ) : (
+                      <span style={{whiteSpace: 'pre-wrap'}}>{m.text}</span>
+                    )}
                   </div>
                 </div>
               ))}
+              <div ref={chatEndRef} />
             </div>
-            <form onSubmit={handleSendMessage} className="p-3 bg-white border-t flex gap-2">
-              <input type="text" placeholder="Tanyakan seputar regulasi halal..." value={chatInput} onChange={e => setChatInput(e.target.value)} className="flex-1 bg-slate-50 border rounded-xl px-3 py-2 text-xs focus:bg-white outline-none" />
-              <button type="submit" className="bg-emerald-600 hover:bg-emerald-700 text-white px-4 py-2 rounded-xl text-xs font-bold">Kirim</button>
+
+            {/* Input */}
+            <form onSubmit={handleSendMessage} className="p-3 bg-white border-t border-slate-100 flex gap-2 shrink-0">
+              <input
+                type="text"
+                placeholder="Tanya seputar halal, BPJPH, SJPH..."
+                value={chatInput}
+                onChange={e => setChatInput(e.target.value)}
+                className="flex-1 bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-xs focus:bg-white focus:border-emerald-400 outline-none transition-colors"
+              />
+              <button type="submit" className="bg-emerald-600 hover:bg-emerald-700 text-white px-3 py-2 rounded-xl text-xs font-bold transition-colors active:scale-95">
+                <Icons.Send className="w-4 h-4" />
+              </button>
             </form>
           </div>
         )}
@@ -677,8 +779,17 @@ const Dashboard = ({
 
         <Card className="p-6">
           <p className="text-slate-500 text-sm font-medium">Jadwal Audit</p>
-          <h3 className="text-lg font-bold text-slate-800 mt-2">15 November 2026</h3>
-          <p className="text-xs text-emerald-600 mt-2 font-medium">Oleh Pendamping JHC</p>
+          {jadwalAudit ? (
+            <>
+              <h3 className="text-lg font-bold text-slate-800 mt-2">{jadwalAudit}</h3>
+              <p className="text-xs text-emerald-600 mt-2 font-medium">Oleh {auditorName || 'Pendamping JHC'}</p>
+            </>
+          ) : (
+            <>
+              <h3 className="text-base font-semibold text-slate-400 mt-2 italic">Belum ditentukan</h3>
+              <p className="text-xs text-slate-400 mt-2">Menunggu jadwal dari admin</p>
+            </>
+          )}
         </Card>
       </div>
 
@@ -712,104 +823,7 @@ const Dashboard = ({
         isEvaluasiComplete={isEvaluasiComplete} 
       />
 
-      {/* Status Progress Sertifikasi Halal */}
-      <Card className="p-6">
-        <div className="flex items-center justify-between mb-5 flex-wrap gap-2">
-          <div className="flex items-center gap-3">
-            <div className="w-9 h-9 rounded-xl bg-emerald-600 flex items-center justify-center shadow-sm">
-              <Icons.Award className="w-5 h-5 text-white" />
-            </div>
-            <div>
-              <h3 className="text-base font-extrabold text-slate-800">Status Progress Sertifikasi Halal</h3>
-              <p className="text-xs text-slate-400 mt-0.5">Tahapan proses verifikasi oleh BPJPH • Dikelola Admin JHC • Real-time</p>
-            </div>
-          </div>
-          {certificationStatus === 0 ? (
-            <span className="text-xs bg-slate-100 text-slate-500 font-semibold px-3 py-1 rounded-full border">Menunggu Pengajuan</span>
-          ) : certificationStatus >= 8 ? (
-            <span className="text-xs bg-emerald-100 text-emerald-800 font-bold px-3 py-1 rounded-full border border-emerald-300 flex items-center gap-1">🎉 Sertifikat Terbit!</span>
-          ) : (
-            <span className="text-xs bg-blue-100 text-blue-700 font-semibold px-3 py-1 rounded-full border border-blue-200">Tahap {certificationStatus} dari 8</span>
-          )}
-        </div>
 
-        {certificationStatus === 0 ? (
-          <div className="text-center py-8 text-slate-400">
-            <Icons.ShieldCheck className="w-10 h-10 mx-auto mb-2 text-slate-200" />
-            <p className="text-sm font-semibold">Proses sertifikasi belum dimulai.</p>
-            <p className="text-xs mt-1">Admin JHC akan memperbarui status setelah pengajuan diterima.</p>
-          </div>
-        ) : (
-          <div className="space-y-2.5">
-            {CERT_STAGES.map((stage) => {
-              const isDone = stage.no < certificationStatus;
-              const isCurrent = stage.no === certificationStatus;
-              return (
-                <div
-                  key={stage.no}
-                  className={`p-3.5 rounded-xl border transition-all ${
-                    stage.no === 8 && certificationStatus >= 8 ? 'bg-gradient-to-r from-emerald-50 to-teal-50 border-emerald-400 shadow-md ring-1 ring-emerald-300' :
-                    isCurrent ? 'bg-emerald-50 border-emerald-300 shadow-sm' :
-                    isDone ? 'bg-slate-50 border-slate-100' :
-                    'border-slate-100 opacity-40'
-                  }`}
-                >
-                  <div className="flex items-start gap-3">
-                    <div className={`w-7 h-7 rounded-full flex items-center justify-center text-xs font-extrabold shrink-0 mt-0.5 ${
-                      isDone || (stage.no === 8 && certificationStatus >= 8) ? 'bg-emerald-500 text-white' :
-                      isCurrent ? 'bg-emerald-600 text-white ring-4 ring-emerald-200' :
-                      'bg-slate-200 text-slate-400'
-                    }`}>
-                      {isDone || (stage.no === 8 && certificationStatus >= 8) ? '✓' : stage.no}
-                    </div>
-                    <div className="flex-1 min-w-0">
-                      <div className="flex items-center justify-between gap-2 flex-wrap">
-                        <p className={`text-sm font-bold leading-tight ${
-                          stage.no === 8 && certificationStatus >= 8 ? 'text-emerald-900 font-extrabold' :
-                          isCurrent ? 'text-emerald-800' : isDone ? 'text-slate-600' : 'text-slate-400'
-                        }`}>{stage.label}</p>
-                        {isCurrent && stage.no !== 8 && (
-                          <span className="text-[10px] bg-emerald-600 text-white font-bold px-2 py-0.5 rounded-full shrink-0 animate-pulse">SAAT INI</span>
-                        )}
-                        {stage.no === 8 && certificationStatus >= 8 && (
-                          <span className="text-[10px] bg-emerald-600 text-white font-bold px-2.5 py-0.5 rounded-full shrink-0">SELESAI & TERBIT</span>
-                        )}
-                      </div>
-                      {(isCurrent || isDone || (stage.no === 8 && certificationStatus >= 8)) && (
-                        <p className="text-xs text-slate-500 mt-1 leading-relaxed">{stage.desc}</p>
-                      )}
-
-                      {/* FEATURE: Download Sertifikat at Stage 8 */}
-                      {stage.no === 8 && certificationStatus >= 8 && (
-                        <div className="mt-3 pt-3 border-t border-emerald-200/80 flex flex-col sm:flex-row sm:items-center justify-between gap-3 bg-white/70 p-3 rounded-xl">
-                          <div>
-                            <p className="text-xs font-bold text-emerald-950 flex items-center gap-1.5">
-                              <Icons.Award className="w-4 h-4 text-emerald-600 shrink-0"/> Sertifikat Halal BPJPH Resmi Terbit
-                            </p>
-                            {nomorSertifikat && (
-                              <p className="text-[11px] text-slate-500 font-mono mt-0.5">
-                                No: <span className="font-bold text-emerald-800">{nomorSertifikat}</span>
-                              </p>
-                            )}
-                          </div>
-                          <a
-                            href={fileSertifikat ? getFullUrl(`/uploads/${fileSertifikat}`) : getFullUrl('/api/certificate')}
-                            target="_blank"
-                            rel="noreferrer"
-                            className="inline-flex items-center justify-center gap-2 px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-bold shadow-sm transition-all hover:scale-105"
-                          >
-                            <Icons.Download className="w-4 h-4"/> Download Sertifikat Halal
-                          </a>
-                        </div>
-                      )}
-                    </div>
-                  </div>
-                </div>
-              );
-            })}
-          </div>
-        )}
-      </Card>
     </div>
   );
 };
@@ -1251,8 +1265,8 @@ const StepMatrixBahanHalal = ({ materials, setMaterials, matrixSubmitted, setMat
             negara: row['negara'] || row['Negara'] || '',
             supplier: row['supplier'] || row['Supplier'] || '',
             lembaga: row['lembaga_penerbit'] || row['Lembaga Penerbit'] || '',
-            sertifikat: row['nomor_sertifikat/registr'] || row['nomor_sertifikat'] || '',
-            expired: row['masa_berlaku'] || row['Masa Berlaku'] || row['Expired'] || '',
+            sertifikat: row['nomor_sertifikat/registr'] || row['nomor_sertifikat'] || row['Nomor Sertifikat'] || row['No. Sertifikat'] || row['No Sertifikat'] || row['sertifikat'] || row['ID Halal'] || row['id_halal'] || '',
+            expired: row['masa_berlaku'] || row['Masa Berlaku'] || row['Expired'] || row['expired'] || row['Tanggal Terbit'] || row['tanggal_terbit'] || '',
             status: 'hijau',
             coa: 'tersedia',
             sds: 'tersedia'
@@ -1438,7 +1452,7 @@ const StepMatrixBahanHalal = ({ materials, setMaterials, matrixSubmitted, setMat
                     <td className="p-3.5 text-slate-500">{m.negara || '-'}</td>
                     <td className="p-3.5 text-slate-500">{m.supplier || '-'}</td>
                     <td className="p-3.5 text-slate-500">{m.lembaga || '-'}</td>
-                    <td className="p-3.5 text-slate-500">{m.sertifikat || '-'}</td>
+                    <td className="p-3.5 text-slate-500 font-mono text-xs">{m.sertifikat || m.nomor_sertifikat || '-'}</td>
                     <td className="p-3.5 text-xs text-slate-500">{m.expired || '-'}</td>
                     <td className="p-3.5 text-center">
                       <div className="flex items-center justify-center gap-1.5">
@@ -2119,7 +2133,7 @@ const StepImplementasiSJPH = ({ isKomitmenComplete, isBahanComplete, isPphComple
   );
 };
 
-const StepUploadEvidence = ({ evidenceData, setEvidenceData, handleGenericFileUpload }) => {
+const StepUploadEvidence = ({ evidenceData, setEvidenceData, handleGenericFileUpload, handleMultiFileUpload }) => {
   const [successMsg, setSuccessMsg] = useState('');
 
   const handleSave = async () => {
@@ -2158,21 +2172,29 @@ const StepUploadEvidence = ({ evidenceData, setEvidenceData, handleGenericFileUp
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
         <div className="p-4 border rounded-xl bg-slate-50">
           <h4 className="font-semibold text-sm text-slate-800 mb-1">1. Bukti Foto Sosialisasi/Training Halal</h4>
-          <input type="file" name="sosialisasiFoto" accept="image/*" onChange={(e) => handleGenericFileUpload(e, 'sosialisasiFoto', setEvidenceData)} className="w-full text-xs text-slate-500 mt-2" />
+          <input type="file" multiple name="sosialisasiFoto" accept="image/*" onChange={(e) => handleMultiFileUpload(e, 'sosialisasiFoto', setEvidenceData)} className="w-full text-xs text-slate-500 mt-2" />
           {evidenceData.sosialisasiFoto && (
-            <a href={`/uploads/${evidenceData.sosialisasiFoto}`} target="_blank" rel="noreferrer" className="text-xs text-emerald-600 font-semibold mt-1 block truncate w-full hover:underline" title={evidenceData.sosialisasiFoto}>
-              ✓ {evidenceData.sosialisasiFoto} (Klik untuk Lihat)
-            </a>
+            <div className="mt-2 space-y-1">
+              {evidenceData.sosialisasiFoto.split(',').map((f, i) => (
+                <a key={i} href={`/uploads/${f.trim()}`} target="_blank" rel="noreferrer" className="text-xs text-emerald-600 font-semibold block truncate w-full hover:underline" title={f.trim()}>
+                  ✓ {f.trim()} (Klik untuk Lihat)
+                </a>
+              ))}
+            </div>
           )}
         </div>
 
         <div className="p-4 border rounded-xl bg-slate-50">
           <h4 className="font-semibold text-sm text-slate-800 mb-1">2. Bukti Foto Audit Internal</h4>
-          <input type="file" name="auditInternalFoto" accept="image/*" onChange={(e) => handleGenericFileUpload(e, 'auditInternalFoto', setEvidenceData)} className="w-full text-xs text-slate-500 mt-2" />
+          <input type="file" multiple name="auditInternalFoto" accept="image/*" onChange={(e) => handleMultiFileUpload(e, 'auditInternalFoto', setEvidenceData)} className="w-full text-xs text-slate-500 mt-2" />
           {evidenceData.auditInternalFoto && (
-            <a href={`/uploads/${evidenceData.auditInternalFoto}`} target="_blank" rel="noreferrer" className="text-xs text-emerald-600 font-semibold mt-1 block truncate w-full hover:underline" title={evidenceData.auditInternalFoto}>
-              ✓ {evidenceData.auditInternalFoto} (Klik untuk Lihat)
-            </a>
+            <div className="mt-2 space-y-1">
+              {evidenceData.auditInternalFoto.split(',').map((f, i) => (
+                <a key={i} href={`/uploads/${f.trim()}`} target="_blank" rel="noreferrer" className="text-xs text-emerald-600 font-semibold block truncate w-full hover:underline" title={f.trim()}>
+                  ✓ {f.trim()} (Klik untuk Lihat)
+                </a>
+              ))}
+            </div>
           )}
         </div>
 

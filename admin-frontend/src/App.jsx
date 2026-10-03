@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useCallback } from 'react';
+import * as XLSX from 'xlsx';
 
 // =============================================
 // ADMIN AUTH HELPER
@@ -1352,6 +1353,9 @@ function CompanyDetailPage({ companyId, onBack }) {
   const [loading, setLoading] = useState(true);
   const [statusLoading, setStatusLoading] = useState(false);
   const [statusMsg, setStatusMsg] = useState('');
+  const [isEditingAudit, setIsEditingAudit] = useState(false);
+  const [jadwalAudit, setJadwalAudit] = useState('');
+  const [auditorName, setAuditorName] = useState('');
 
   const fetchAll = useCallback(async () => {
     try {
@@ -1366,6 +1370,8 @@ function CompanyDetailPage({ companyId, onBack }) {
       ]);
       const compData = await compRes.json();
       setCompany(compData.company);
+      setJadwalAudit(compData.company.jadwal_audit || '');
+      setAuditorName(compData.company.auditor_name || '');
       setProgress(compData.progress || []);
       const legalData = await legalRes.json();
       setLegal(legalData.legal || {});
@@ -1387,6 +1393,57 @@ function CompanyDetailPage({ companyId, onBack }) {
   }, [companyId]);
 
   useEffect(() => { fetchAll(); }, [fetchAll]);
+
+  const updateAuditSchedule = async () => {
+    setStatusLoading(true);
+    try {
+      const res = await adminFetch(`/api/admin/companies/${companyId}/audit-schedule`, {
+        method: 'PUT',
+        body: JSON.stringify({ jadwal_audit: jadwalAudit, auditor_name: auditorName })
+      });
+      if (res.ok) {
+        setStatusMsg('Jadwal audit diperbarui');
+        setCompany(prev => ({...prev, jadwal_audit: jadwalAudit, auditor_name: auditorName}));
+        setIsEditingAudit(false);
+      } else {
+        setStatusMsg('Gagal memperbarui jadwal audit');
+      }
+    } catch (e) {
+      console.error(e);
+      setStatusMsg('Terjadi kesalahan');
+    } finally {
+      setStatusLoading(false);
+      setTimeout(() => setStatusMsg(''), 3000);
+    }
+  };
+
+  const handleExportMatrixBahan = () => {
+    if (materials.length === 0) return;
+    const wb = XLSX.utils.book_new();
+    const wsData = [
+      ['No', 'Nama Bahan', 'Jenis', 'Produsen', 'Negara', 'Supplier', 'Lembaga', 'No. Sertifikat', 'Tanggal Terbit', 'Status'],
+      ...materials.map((m, i) => [
+        i + 1, m.nama_bahan, m.jenis || '-', m.produsen || '-', m.negara || '-',
+        m.supplier || '-', m.lembaga || '-', m.nomor_sertifikat || m.sertifikat || '-', m.expired || '-', m.halal_status
+      ])
+    ];
+    const ws = XLSX.utils.aoa_to_sheet(wsData);
+    XLSX.utils.book_append_sheet(wb, ws, 'Matrix Bahan');
+    XLSX.writeFile(wb, `Matrix_Bahan_${company?.nama || 'Perusahaan'}.xlsx`);
+  };
+
+  const handleExportBOM = () => {
+    if (products.length === 0) return;
+    const wb = XLSX.utils.book_new();
+    const wsData = [['No', 'Nama Produk', 'Komposisi Bahan']];
+    products.forEach((p, i) => {
+      const bahanNames = Array.isArray(p.bahan) ? p.bahan.map(b => b.nama).join(', ') : '';
+      wsData.push([i + 1, p.nama, bahanNames]);
+    });
+    const ws = XLSX.utils.aoa_to_sheet(wsData);
+    XLSX.utils.book_append_sheet(wb, ws, 'BOM Produk');
+    XLSX.writeFile(wb, `BOM_Produk_${company?.nama || 'Perusahaan'}.xlsx`);
+  };
 
   const handleStatusUpdate = async (stage, newStatus) => {
     setStatusLoading(true);
@@ -1493,6 +1550,42 @@ function CompanyDetailPage({ companyId, onBack }) {
         </div>
       )}
 
+      {activeTab === 'overview' && (
+        <div className="bg-white border border-slate-200 rounded-2xl p-6 shadow-sm mt-6">
+          <div className="flex justify-between items-center mb-4">
+            <h3 className="font-bold text-slate-800 flex items-center gap-2">
+              <svg className="w-4 h-4 text-emerald-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"/></svg>
+              Jadwal Audit
+            </h3>
+            {!isEditingAudit && (
+              <button onClick={() => setIsEditingAudit(true)} className="text-[10px] font-bold text-emerald-600 bg-emerald-50 px-3 py-1.5 rounded-lg border border-emerald-200 hover:bg-emerald-100 transition-colors">Edit Jadwal</button>
+            )}
+          </div>
+          {isEditingAudit ? (
+            <div className="space-y-3 mt-4 max-w-md">
+              <div>
+                <label className="block text-[11px] font-bold text-slate-500 mb-1">Tanggal Audit (contoh: 15 November 2026)</label>
+                <input type="text" className="w-full px-3 py-2 border border-slate-200 rounded-lg text-sm bg-slate-50" value={jadwalAudit} onChange={e => setJadwalAudit(e.target.value)} placeholder="Masukkan tanggal audit" />
+              </div>
+              <div>
+                <label className="block text-[11px] font-bold text-slate-500 mb-1">Nama Pendamping / Auditor</label>
+                <input type="text" className="w-full px-3 py-2 border border-slate-200 rounded-lg text-sm bg-slate-50" value={auditorName} onChange={e => setAuditorName(e.target.value)} placeholder="Masukkan nama auditor" />
+              </div>
+              <div className="flex gap-2 pt-2">
+                <button onClick={updateAuditSchedule} disabled={statusLoading} className="flex-1 bg-emerald-600 hover:bg-emerald-700 disabled:opacity-50 text-white text-[11px] font-bold py-2 rounded-lg transition-colors">Simpan Jadwal</button>
+                <button onClick={() => { setIsEditingAudit(false); setJadwalAudit(company.jadwal_audit || ''); setAuditorName(company.auditor_name || ''); }} className="px-4 bg-slate-100 hover:bg-slate-200 text-slate-600 text-[11px] font-bold py-2 rounded-lg transition-colors">Batal</button>
+              </div>
+            </div>
+          ) : (
+            <div className="bg-slate-50 border border-slate-200 rounded-xl p-4 mt-2 max-w-sm">
+              <p className="text-slate-500 text-xs font-medium">Jadwal Audit</p>
+              <h3 className="text-lg font-bold text-slate-800 mt-1">{company.jadwal_audit || <span className="text-slate-400 italic font-normal text-sm">Belum ditentukan</span>}</h3>
+              <p className="text-xs text-emerald-600 mt-2 font-bold">Oleh {company.auditor_name || <span className="text-slate-400 italic font-normal">Belum ditentukan</span>}</p>
+            </div>
+          )}
+        </div>
+      )}
+
       {/* TAB: REGISTRASI */}
       {activeTab === 'registrasi' && (
         <div className="bg-white border border-slate-200 rounded-2xl p-6 shadow-sm">
@@ -1592,6 +1685,9 @@ function CompanyDetailPage({ companyId, onBack }) {
             <h3 className="font-bold text-slate-800">Matrix Bahan Halal <span className="text-slate-400 text-sm font-normal">({materials.length} bahan)</span></h3>
             <div className="flex items-center gap-2">
               <StatusBadge status={progress.find(s => s.stage === 3)?.status || 'Belum Dimulai'}/>
+              <button onClick={handleExportMatrixBahan} disabled={materials.length === 0} className="text-[10px] text-white font-bold px-3 py-1.5 bg-emerald-600 hover:bg-emerald-700 disabled:opacity-40 rounded-lg transition-colors flex items-center gap-1.5 border border-emerald-700">
+                <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"/></svg> Download Excel
+              </button>
               <button onClick={() => setActiveTab('progress')} className="text-[10px] text-emerald-600 hover:text-emerald-700 font-bold px-2 py-1 bg-emerald-50 rounded-lg transition-colors border border-emerald-200">Verifikasi</button>
             </div>
           </div>
@@ -1602,7 +1698,7 @@ function CompanyDetailPage({ companyId, onBack }) {
               <table className="w-full text-xs">
                 <thead>
                   <tr className="border-b border-slate-200 bg-slate-50">
-                    {['No', 'Nama Bahan', 'Jenis', 'Produsen', 'Negara', 'Supplier', 'Lembaga', 'No. Sertifikat', 'Expired', 'Status'].map(h => (
+                    {['No', 'Nama Bahan', 'Jenis', 'Produsen', 'Negara', 'Supplier', 'Lembaga', 'No. Sertifikat', 'Tanggal Terbit', 'Status'].map(h => (
                       <th key={h} className="text-left px-4 py-3 text-[10px] font-black text-slate-500 uppercase tracking-wider whitespace-nowrap">{h}</th>
                     ))}
                   </tr>
@@ -1617,7 +1713,7 @@ function CompanyDetailPage({ companyId, onBack }) {
                       <td className="px-4 py-3 text-slate-500">{m.negara || '—'}</td>
                       <td className="px-4 py-3 text-slate-500 whitespace-nowrap">{m.supplier || '—'}</td>
                       <td className="px-4 py-3 text-slate-500">{m.lembaga || '—'}</td>
-                      <td className="px-4 py-3 text-slate-600 font-mono">{m.nomor_sertifikat || '—'}</td>
+                      <td className="px-4 py-3 text-slate-600 font-mono">{m.nomor_sertifikat || m.sertifikat || '—'}</td>
                       <td className="px-4 py-3 text-slate-500 whitespace-nowrap">{m.expired || '—'}</td>
                       <td className="px-4 py-3">
                         <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold ${m.halal_status === 'hijau' ? 'bg-emerald-100 text-emerald-700' : m.halal_status === 'kuning' ? 'bg-amber-100 text-amber-700' : 'bg-red-100 text-red-700'}`}>
@@ -1638,7 +1734,12 @@ function CompanyDetailPage({ companyId, onBack }) {
         <div className="bg-white border border-slate-200 rounded-2xl overflow-hidden shadow-sm">
           <div className="p-5 border-b border-slate-200 flex items-center justify-between bg-slate-50">
             <h3 className="font-bold text-slate-800">Upload Produk & Komposisi (BOM) <span className="text-slate-400 text-sm font-normal">({products.length} produk)</span></h3>
-            <StatusBadge status={productStageStatus}/>
+            <div className="flex items-center gap-2">
+              <StatusBadge status={productStageStatus}/>
+              <button onClick={handleExportBOM} disabled={products.length === 0} className="text-[10px] text-white font-bold px-3 py-1.5 bg-emerald-600 hover:bg-emerald-700 disabled:opacity-40 rounded-lg transition-colors flex items-center gap-1.5 border border-emerald-700">
+                <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"/></svg> Download Excel
+              </button>
+            </div>
           </div>
           {products.length === 0 ? (
             <EmptyState text="Belum ada data produk" sub="Pengguna belum menambahkan produk dan BOM"/>

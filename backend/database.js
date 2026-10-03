@@ -66,6 +66,8 @@ function initializeDatabase() {
       jumlah_outlet TEXT,
       cabang TEXT,
       alamat TEXT,
+      jadwal_audit TEXT,
+      auditor_name TEXT,
       certification_status INTEGER DEFAULT 0,
       current_stage INTEGER DEFAULT 1,
       overall_status TEXT DEFAULT 'Belum Dimulai',
@@ -74,6 +76,19 @@ function initializeDatabase() {
       FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
     )
   `);
+
+  // Migration for companies table: Add jadwal_audit and auditor_name
+  try {
+    const columnsInfo = db.pragma('table_info(companies)');
+    const hasJadwalAudit = columnsInfo.some(c => c.name === 'jadwal_audit');
+    if (!hasJadwalAudit) {
+      db.exec('ALTER TABLE companies ADD COLUMN jadwal_audit TEXT;');
+      db.exec('ALTER TABLE companies ADD COLUMN auditor_name TEXT;');
+      console.log('Migrated companies table: added jadwal_audit and auditor_name columns.');
+    }
+  } catch (e) {
+    console.error('Error during companies migration:', e.message);
+  }
 
   // =============================================
   // TABLE: legal_documents
