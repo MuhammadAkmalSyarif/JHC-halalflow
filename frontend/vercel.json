@@ -1,4 +1,5 @@
 {
+  "outputDirectory": "dist",
   "rewrites": [
     {
       "source": "/api/send-email",
@@ -13,7 +14,7 @@
       "destination": "https://jhc-halalflow-backend.onrender.com/uploads/:path*"
     },
     {
-      "source": "/((?!assets/|favicon\\.ico).*)",
+      "source": "/((?!assets/|favicon\\.ico|logo\\.jpg).*)",
       "destination": "/index.html"
     }
   ]
