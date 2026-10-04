@@ -1457,6 +1457,7 @@ const StepMatrixBahanHalal = ({ materials, setMaterials, matrixSubmitted, setMat
           <table className="w-full text-left border-collapse min-w-max">
             <thead>
               <tr className="bg-slate-100 text-slate-700 text-xs font-bold uppercase tracking-wider">
+                <th className="p-3.5">No</th>
                 <th className="p-3.5">Nama Bahan (Merk)</th>
                 <th className="p-3.5">Jenis</th>
                 <th className="p-3.5">Produsen</th>
@@ -1476,8 +1477,9 @@ const StepMatrixBahanHalal = ({ materials, setMaterials, matrixSubmitted, setMat
                   </td>
                 </tr>
               ) : (
-                materials.map((m) => (
+                materials.map((m, index) => (
                   <tr key={m.id} className={`hover:bg-slate-50 transition-colors ${editingId === m.id ? 'bg-amber-50/40 font-medium' : ''}`}>
+                    <td className="p-3.5 font-semibold text-slate-800">{index + 1}</td>
                     <td className="p-3.5 font-semibold text-slate-800">{m.name}</td>
                     <td className="p-3.5 text-slate-500">{m.jenis || '-'}</td>
                     <td className="p-3.5 text-slate-500">{m.produsen || '-'}</td>
