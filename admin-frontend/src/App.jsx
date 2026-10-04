@@ -1437,8 +1437,8 @@ function CompanyDetailPage({ companyId, onBack }) {
     const wb = XLSX.utils.book_new();
     const wsData = [['No', 'Nama Produk', 'Komposisi Bahan']];
     products.forEach((p, i) => {
-      const bahanNames = Array.isArray(p.bahan) ? p.bahan.map(b => b.nama).join(', ') : '';
-      wsData.push([i + 1, p.nama, bahanNames]);
+      const bahanNames = Array.isArray(p.bahan) ? p.bahan.join(', ') : '';
+      wsData.push([i + 1, p.nama || p.name, bahanNames]);
     });
     const ws = XLSX.utils.aoa_to_sheet(wsData);
     XLSX.utils.book_append_sheet(wb, ws, 'BOM Produk');

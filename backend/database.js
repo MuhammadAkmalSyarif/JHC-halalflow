@@ -106,6 +106,8 @@ function initializeDatabase() {
       kebijakan TEXT,
       ttd_pemilik TEXT,
       ttd_penyelia TEXT,
+      ktp_pemilik TEXT,
+      ktp_penyelia TEXT,
       status TEXT DEFAULT 'Belum Dimulai',
       created_at TEXT DEFAULT (datetime('now')),
       updated_at TEXT DEFAULT (datetime('now')),
@@ -216,6 +218,15 @@ function initializeDatabase() {
   }
   if (!columns.includes('file_sertifikat')) {
     db.exec(`ALTER TABLE companies ADD COLUMN file_sertifikat TEXT DEFAULT ''`);
+  }
+
+  // Safe migrations for legal_documents table
+  const legalColumns = db.prepare(`PRAGMA table_info(legal_documents)`).all().map(c => c.name);
+  if (!legalColumns.includes('ktp_pemilik')) {
+    db.exec(`ALTER TABLE legal_documents ADD COLUMN ktp_pemilik TEXT`);
+  }
+  if (!legalColumns.includes('ktp_penyelia')) {
+    db.exec(`ALTER TABLE legal_documents ADD COLUMN ktp_penyelia TEXT`);
   }
 
   // =============================================

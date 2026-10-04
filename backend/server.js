@@ -468,7 +468,7 @@ app.post('/api/companies/:id/legal-documents', authMiddleware, (req, res) => {
   const company = db.prepare('SELECT * FROM companies WHERE id = ? AND user_id = ?').get(companyId, userId);
   if (!company) return res.status(403).json({ error: 'Akses ditolak' });
 
-  const { telp_pemilik, telp_penyelia, email_sihalal, permohonan, sk_penyelia, sk_manajemen, kebijakan, ttd_pemilik, ttd_penyelia } = req.body;
+  const { telp_pemilik, telp_penyelia, email_sihalal, permohonan, sk_penyelia, sk_manajemen, kebijakan, ttd_pemilik, ttd_penyelia, ktp_pemilik, ktp_penyelia } = req.body;
 
   const existing = db.prepare('SELECT id FROM legal_documents WHERE company_id = ?').get(companyId);
 
@@ -478,14 +478,15 @@ app.post('/api/companies/:id/legal-documents', authMiddleware, (req, res) => {
         telp_pemilik = ?, telp_penyelia = ?, email_sihalal = ?,
         permohonan = ?, sk_penyelia = ?, sk_manajemen = ?,
         kebijakan = ?, ttd_pemilik = ?, ttd_penyelia = ?,
+        ktp_pemilik = ?, ktp_penyelia = ?,
         status = 'Menunggu Verifikasi', updated_at = datetime('now')
       WHERE company_id = ?
-    `).run(telp_pemilik || '', telp_penyelia || '', email_sihalal || '', permohonan || '', sk_penyelia || '', sk_manajemen || '', kebijakan || '', ttd_pemilik || '', ttd_penyelia || '', companyId);
+    `).run(telp_pemilik || '', telp_penyelia || '', email_sihalal || '', permohonan || '', sk_penyelia || '', sk_manajemen || '', kebijakan || '', ttd_pemilik || '', ttd_penyelia || '', ktp_pemilik || '', ktp_penyelia || '', companyId);
   } else {
     db.prepare(`
-      INSERT INTO legal_documents (company_id, telp_pemilik, telp_penyelia, email_sihalal, permohonan, sk_penyelia, sk_manajemen, kebijakan, ttd_pemilik, ttd_penyelia, status)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'Menunggu Verifikasi')
-    `).run(companyId, telp_pemilik || '', telp_penyelia || '', email_sihalal || '', permohonan || '', sk_penyelia || '', sk_manajemen || '', kebijakan || '', ttd_pemilik || '', ttd_penyelia || '');
+      INSERT INTO legal_documents (company_id, telp_pemilik, telp_penyelia, email_sihalal, permohonan, sk_penyelia, sk_manajemen, kebijakan, ttd_pemilik, ttd_penyelia, ktp_pemilik, ktp_penyelia, status)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'Menunggu Verifikasi')
+    `).run(companyId, telp_pemilik || '', telp_penyelia || '', email_sihalal || '', permohonan || '', sk_penyelia || '', sk_manajemen || '', kebijakan || '', ttd_pemilik || '', ttd_penyelia || '', ktp_pemilik || '', ktp_penyelia || '');
   }
 
   // Update stage 2 progress
@@ -783,14 +784,14 @@ app.post('/api/legal', authMiddleware, (req, res) => {
   const company = db.prepare('SELECT id FROM companies WHERE user_id=?').get(userId);
   if (!company) return res.status(404).json({ error: 'Buat profil perusahaan dulu' });
 
-  const { telpPemilik, telpPenyelia, emailSihalal, permohonan, sk_penyelia, sk_manajemen, kebijakan, ttdPemilik, ttdPenyelia } = req.body;
+  const { telpPemilik, telpPenyelia, emailSihalal, permohonan, sk_penyelia, sk_manajemen, kebijakan, ttdPemilik, ttdPenyelia, ktpPemilik, ktpPenyelia } = req.body;
   const existing = db.prepare('SELECT id FROM legal_documents WHERE company_id=?').get(company.id);
   if (existing) {
-    db.prepare(`UPDATE legal_documents SET telp_pemilik=?,telp_penyelia=?,email_sihalal=?,permohonan=?,sk_penyelia=?,sk_manajemen=?,kebijakan=?,ttd_pemilik=?,ttd_penyelia=?,status='Menunggu Verifikasi',updated_at=datetime('now') WHERE company_id=?`
-    ).run(telpPemilik||'', telpPenyelia||'', emailSihalal||'', permohonan||'', sk_penyelia||'', sk_manajemen||'', kebijakan||'', ttdPemilik||'', ttdPenyelia||'', company.id);
+    db.prepare(`UPDATE legal_documents SET telp_pemilik=?,telp_penyelia=?,email_sihalal=?,permohonan=?,sk_penyelia=?,sk_manajemen=?,kebijakan=?,ttd_pemilik=?,ttd_penyelia=?,ktp_pemilik=?,ktp_penyelia=?,status='Menunggu Verifikasi',updated_at=datetime('now') WHERE company_id=?`
+    ).run(telpPemilik||'', telpPenyelia||'', emailSihalal||'', permohonan||'', sk_penyelia||'', sk_manajemen||'', kebijakan||'', ttdPemilik||'', ttdPenyelia||'', ktpPemilik||'', ktpPenyelia||'', company.id);
   } else {
-    db.prepare(`INSERT INTO legal_documents (company_id,telp_pemilik,telp_penyelia,email_sihalal,permohonan,sk_penyelia,sk_manajemen,kebijakan,ttd_pemilik,ttd_penyelia,status) VALUES (?,?,?,?,?,?,?,?,?,?,'Menunggu Verifikasi')`
-    ).run(company.id, telpPemilik||'', telpPenyelia||'', emailSihalal||'', permohonan||'', sk_penyelia||'', sk_manajemen||'', kebijakan||'', ttdPemilik||'', ttdPenyelia||'');
+    db.prepare(`INSERT INTO legal_documents (company_id,telp_pemilik,telp_penyelia,email_sihalal,permohonan,sk_penyelia,sk_manajemen,kebijakan,ttd_pemilik,ttd_penyelia,ktp_pemilik,ktp_penyelia,status) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,'Menunggu Verifikasi')`
+    ).run(company.id, telpPemilik||'', telpPenyelia||'', emailSihalal||'', permohonan||'', sk_penyelia||'', sk_manajemen||'', kebijakan||'', ttdPemilik||'', ttdPenyelia||'', ktpPemilik||'', ktpPenyelia||'');
   }
   db.prepare(`UPDATE certification_progress SET status='Menunggu Verifikasi' WHERE company_id=? AND stage=2`).run(company.id);
   logActivity(db, company.id, userId, 'legal_submit', 'Dokumen legal disubmit');
@@ -1739,7 +1740,7 @@ app.get('/api/admin/companies/:id/materials', adminAuthMiddleware, (req, res) =>
   const company = db.prepare('SELECT id FROM companies WHERE id=?').get(companyId);
   if (!company) return res.status(404).json({ error: 'Perusahaan tidak ditemukan' });
 
-  const { search, halal_status, page = 1, limit = 50 } = req.query;
+  const { search, halal_status, page = 1, limit = 10000 } = req.query;
   const offset = (parseInt(page) - 1) * parseInt(limit);
   let query = 'SELECT * FROM halal_materials WHERE company_id = ?';
   const params = [companyId];

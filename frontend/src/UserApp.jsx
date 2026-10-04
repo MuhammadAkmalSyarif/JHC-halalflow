@@ -1090,11 +1090,29 @@ const StepDokumen = ({ legalData, setLegalData, handleGenericFileUpload }) => {
           )}
         </div>
         <div className="p-4 bg-slate-50 rounded-xl border">
+          <h4 className="font-semibold text-sm text-slate-800 mb-2">Upload KTP Pemilik / Penanggung Jawab</h4>
+          <input type="file" name="ktpPemilik" accept="image/*,.pdf" onChange={(e) => handleGenericFileUpload(e, 'ktpPemilik', setLegalData)} className="w-full text-xs text-slate-500 file:py-2 file:px-3 file:rounded-lg file:border-0 file:bg-slate-200 file:font-semibold" />
+          {legalData.ktpPemilik && (
+            <a href={`/uploads/${legalData.ktpPemilik}`} target="_blank" rel="noreferrer" className="text-xs text-emerald-600 mt-2 block truncate w-full hover:underline font-medium" title={legalData.ktpPemilik}>
+              ✓ KTP Pemilik Terunggah (Klik untuk Lihat)
+            </a>
+          )}
+        </div>
+        <div className="p-4 bg-slate-50 rounded-xl border">
           <h4 className="font-semibold text-sm text-slate-800 mb-2">Upload Tanda Tangan Penyelia Halal</h4>
           <input type="file" name="ttdPenyelia" accept="image/*" onChange={(e) => handleGenericFileUpload(e, 'ttdPenyelia', setLegalData)} className="w-full text-xs text-slate-500 file:py-2 file:px-3 file:rounded-lg file:border-0 file:bg-slate-200 file:font-semibold" />
           {legalData.ttdPenyelia && (
             <a href={`/uploads/${legalData.ttdPenyelia}`} target="_blank" rel="noreferrer" className="text-xs text-emerald-600 mt-2 block truncate w-full hover:underline font-medium" title={legalData.ttdPenyelia}>
               ✓ TTD Penyelia Terunggah (Klik untuk Lihat)
+            </a>
+          )}
+        </div>
+        <div className="p-4 bg-slate-50 rounded-xl border">
+          <h4 className="font-semibold text-sm text-slate-800 mb-2">Upload KTP Penyelia Halal</h4>
+          <input type="file" name="ktpPenyelia" accept="image/*,.pdf" onChange={(e) => handleGenericFileUpload(e, 'ktpPenyelia', setLegalData)} className="w-full text-xs text-slate-500 file:py-2 file:px-3 file:rounded-lg file:border-0 file:bg-slate-200 file:font-semibold" />
+          {legalData.ktpPenyelia && (
+            <a href={`/uploads/${legalData.ktpPenyelia}`} target="_blank" rel="noreferrer" className="text-xs text-emerald-600 mt-2 block truncate w-full hover:underline font-medium" title={legalData.ktpPenyelia}>
+              ✓ KTP Penyelia Terunggah (Klik untuk Lihat)
             </a>
           )}
         </div>
