@@ -1152,6 +1152,8 @@ const StepMatrixBahanHalal = ({ materials, setMaterials, matrixSubmitted, setMat
           setNewMaterial({ name: '', jenis: '', produsen: '', negara: '', supplier: '', lembaga: '', sertifikat: '', expired: '' });
           setSuccessMsg('Bahan baku berhasil diperbarui!');
           setTimeout(() => setSuccessMsg(''), 3000);
+        } else {
+          alert('Gagal memperbarui bahan: ' + (data.error || 'Server error'));
         }
       } else {
         // Add new material
@@ -1166,10 +1168,13 @@ const StepMatrixBahanHalal = ({ materials, setMaterials, matrixSubmitted, setMat
           setNewMaterial({ name: '', jenis: '', produsen: '', negara: '', supplier: '', lembaga: '', sertifikat: '', expired: '' });
           setSuccessMsg('Bahan baku berhasil ditambahkan!');
           setTimeout(() => setSuccessMsg(''), 3000);
+        } else {
+          alert('Gagal menambah bahan: ' + (data.error || 'Server error'));
         }
       }
     } catch (err) {
       console.error(err);
+      alert('Terjadi kesalahan jaringan atau server: ' + err.message);
     }
   };
 
