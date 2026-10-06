@@ -7,13 +7,23 @@ let supabaseClient = null;
 function getConnectionString() {
   let conn = process.env.DATABASE_URL;
   if (!conn) return null;
+  conn = conn.trim().replace(/^["']|["']$/g, '');
 
-  // Jika connection string menggunakan direct host db.<ref>.supabase.co (IPv6 only),
-  // otomatis konversikan ke Supabase Connection Pooler IPv4 agar tidak timeout di serverless Vercel
-  const match = conn.match(/postgresql:\/\/postgres:([^@]+)@db\.([a-z0-9]+)\.supabase\.co(?::5432)?\/([a-zA-Z0-9_]+)/);
-  if (match) {
-    const [_, password, ref, dbname] = match;
-    conn = `postgresql://postgres.${ref}:${password}@aws-0-ap-southeast-1.pooler.supabase.com:6543/${dbname}`;
+  try {
+    const urlToParse = conn.startsWith('postgres://') ? conn.replace('postgres://', 'postgresql://') : conn;
+    const u = new URL(urlToParse);
+    if (u.hostname.startsWith('db.') && u.hostname.includes('.supabase.co')) {
+      const parts = u.hostname.split('.');
+      const ref = parts[1];
+      u.hostname = 'aws-0-ap-southeast-1.pooler.supabase.com';
+      u.port = '6543';
+      if (u.username === 'postgres') {
+        u.username = `postgres.${ref}`;
+      }
+      return u.toString();
+    }
+  } catch (err) {
+    console.error('⚠️ Failed to parse DATABASE_URL with new URL:', err.message);
   }
   return conn;
 }
@@ -156,5 +166,6 @@ const db = {
 module.exports = {
   db,
   getPool,
-  getSupabase
+  getSupabase,
+  getConnectionString
 };
