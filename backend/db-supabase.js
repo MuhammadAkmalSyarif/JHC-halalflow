@@ -166,5 +166,6 @@ const db = {
 module.exports = {
   db,
   getPool,
-  getSupabase
+  getSupabase,
+  getConnectionString
 };

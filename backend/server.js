@@ -10,7 +10,7 @@ const crypto = require('crypto');
 const nodemailer = require('nodemailer');
 const XLSX = require('xlsx');
 
-const { db, getSupabase } = require('./db-supabase');
+const { db, getSupabase, getConnectionString } = require('./db-supabase');
 
 async function initCompanyProgress(database, companyId) {
   const STAGES = [
@@ -104,6 +104,37 @@ function adminAuthMiddleware(req, res, next) {
 // =============================================
 // API: STATUS CHECK
 // =============================================
+
+app.get('/api/debug-env', async (req, res) => {
+  try {
+    const raw = process.env.DATABASE_URL || '';
+    const converted = getConnectionString ? getConnectionString() : null;
+    const maskedRaw = raw ? raw.replace(/:([^:@]+)@/, ':****@') : 'NOT_SET';
+    const maskedConverted = converted ? converted.replace(/:([^:@]+)@/, ':****@') : 'NOT_SET';
+
+    let dbStatus = 'untested';
+    let dbError = null;
+    try {
+      const testResult = await db.get('SELECT 1 as connected');
+      dbStatus = testResult && testResult.connected === 1 ? 'connected' : 'unexpected';
+    } catch (err) {
+      dbStatus = 'failed';
+      dbError = err.message;
+    }
+
+    res.json({
+      DATABASE_URL_RAW: maskedRaw,
+      DATABASE_URL_CONVERTED: maskedConverted,
+      has_SUPABASE_URL: !!process.env.SUPABASE_URL,
+      has_SUPABASE_KEY: !!(process.env.SUPABASE_KEY || process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.SUPABASE_ANON_KEY),
+      dbStatus,
+      dbError
+    });
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
 app.get('/api/status', async (req, res) => {
   res.json({
     status: 'ok',
