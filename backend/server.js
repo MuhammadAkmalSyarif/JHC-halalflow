@@ -57,8 +57,10 @@ app.use(express.urlencoded({ extended: true, limit: '10mb' }));
 
 
 // Uploads directory
-const uploadsDir = path.join(__dirname, 'uploads');
-if (!fs.existsSync(uploadsDir)) fs.mkdirSync(uploadsDir, { recursive: true });
+const uploadsDir = process.env.VERCEL ? path.join('/tmp', 'uploads') : path.join(__dirname, 'uploads');
+try {
+  if (!fs.existsSync(uploadsDir)) fs.mkdirSync(uploadsDir, { recursive: true });
+} catch(e) {}
 app.use('/uploads', express.static(uploadsDir));
 
 // Multer config
