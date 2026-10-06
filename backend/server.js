@@ -710,6 +710,54 @@ app.post('/api/upload', authMiddleware, upload.single('file'), (req, res) => {
   });
 });
 
+// DELETE /api/upload/:filename
+app.delete('/api/upload/:filename', authMiddleware, (req, res) => {
+  const safeFilename = path.basename(req.params.filename);
+  if (!safeFilename) {
+    return res.status(400).json({ error: 'Nama berkas tidak valid' });
+  }
+
+  // Hapus dari folder uploads
+  const filePath = path.join(uploadsDir, safeFilename);
+  if (fs.existsSync(filePath)) {
+    try {
+      fs.unlinkSync(filePath);
+    } catch (err) {
+      console.error('Gagal menghapus berkas fisik:', err);
+    }
+  }
+
+  // Hapus dari tabel uploaded_files jika ada
+  try {
+    db.prepare('DELETE FROM uploaded_files WHERE stored_name = ?').run(safeFilename);
+  } catch (err) {
+    console.error('Gagal menghapus log uploaded_files:', err);
+  }
+
+  // Bersihkan referensi di evidence_data jika ada
+  try {
+    const userId = req.user.id;
+    const company = db.prepare('SELECT id FROM companies WHERE user_id=?').get(userId);
+    if (company) {
+      const evRow = db.prepare('SELECT * FROM evidence_data WHERE company_id=?').get(company.id);
+      if (evRow) {
+        const cleanList = (val) => {
+          if (!val) return val;
+          return val.split(',').map(s => s.trim()).filter(s => s && s !== safeFilename).join(',');
+        };
+        const updatedSosialisasi = cleanList(evRow.sosialisasiFoto);
+        const updatedAudit = cleanList(evRow.auditInternalFoto);
+        db.prepare('UPDATE evidence_data SET sosialisasiFoto=?, auditInternalFoto=?, updated_at=datetime(\'now\') WHERE company_id=?')
+          .run(updatedSosialisasi, updatedAudit, company.id);
+      }
+    }
+  } catch (err) {
+    console.error('Gagal membersihkan evidence_data:', err);
+  }
+
+  res.json({ message: 'Berkas berhasil dihapus', filename: safeFilename });
+});
+
 // =============================================
 // BACKWARD COMPATIBILITY: Legacy API routes
 // These allow the existing frontend to work while migrating
@@ -1121,10 +1169,14 @@ app.post('/api/evidence', authMiddleware, (req, res) => {
         pembelianBahan=?, penyimpananBahan=?, hasilProduksi=?, distribusiProduk=?, updated_at=datetime('now')
       WHERE company_id=?
     `).run(
-      data.sosialisasiFoto||existing.sosialisasiFoto, data.auditInternalFoto||existing.auditInternalFoto,
-      data.sosialisasiAbsen||existing.sosialisasiAbsen, data.auditInternalAbsen||existing.auditInternalAbsen,
-      data.pembelianBahan||existing.pembelianBahan, data.penyimpananBahan||existing.penyimpananBahan,
-      data.hasilProduksi||existing.hasilProduksi, data.distribusiProduk||existing.distribusiProduk,
+      data.sosialisasiFoto !== undefined ? data.sosialisasiFoto : (existing.sosialisasiFoto || ''),
+      data.auditInternalFoto !== undefined ? data.auditInternalFoto : (existing.auditInternalFoto || ''),
+      data.sosialisasiAbsen !== undefined ? data.sosialisasiAbsen : (existing.sosialisasiAbsen || ''),
+      data.auditInternalAbsen !== undefined ? data.auditInternalAbsen : (existing.auditInternalAbsen || ''),
+      data.pembelianBahan !== undefined ? data.pembelianBahan : (existing.pembelianBahan || ''),
+      data.penyimpananBahan !== undefined ? data.penyimpananBahan : (existing.penyimpananBahan || ''),
+      data.hasilProduksi !== undefined ? data.hasilProduksi : (existing.hasilProduksi || ''),
+      data.distribusiProduk !== undefined ? data.distribusiProduk : (existing.distribusiProduk || ''),
       company.id
     );
   } else {

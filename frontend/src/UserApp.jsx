@@ -1033,48 +1033,48 @@ const StepDokumen = ({ legalData, setLegalData, handleGenericFileUpload }) => {
         <div className="space-y-4">
           <div className="p-4 border rounded-xl bg-white shadow-xs">
             <h4 className="font-semibold text-sm text-slate-800 mb-1">1. Permohonan Pendaftaran Sertifikasi Halal</h4>
-            <p className="text-xs text-slate-400 mb-3">Format: .doc, .docx, .pdf</p>
-            <input type="file" name="permohonan" accept=".pdf,.doc,.docx" onChange={(e) => handleGenericFileUpload(e, 'permohonan', setLegalData)} className="w-full text-xs text-slate-500 file:mr-4 file:py-2 file:px-4 file:rounded-lg file:border-0 file:text-xs file:font-semibold file:bg-emerald-50 file:text-emerald-700 hover:file:bg-emerald-100 cursor-pointer" />
-            {legalData.permohonan && (
-              <a href={`/uploads/${legalData.permohonan}`} target="_blank" rel="noreferrer" className="text-xs text-emerald-600 font-medium mt-2 block truncate w-full hover:underline" title={legalData.permohonan}>
-                ✓ Terunggah: {legalData.permohonan} (Klik untuk Lihat)
+            <p className="text-xs text-slate-400 mb-3">Format: .doc, .docx, .pdf — bisa pilih lebih dari 1 file</p>
+            <input type="file" name="permohonan" accept=".pdf,.doc,.docx" multiple onChange={(e) => handleMultiFileUpload(e, 'permohonan', setLegalData)} className="w-full text-xs text-slate-500 file:mr-4 file:py-2 file:px-4 file:rounded-lg file:border-0 file:text-xs file:font-semibold file:bg-emerald-50 file:text-emerald-700 hover:file:bg-emerald-100 cursor-pointer" />
+            {legalData.permohonan && legalData.permohonan.split(',').map((f, i) => (
+              <a key={i} href={`/uploads/${f.trim()}`} target="_blank" rel="noreferrer" className="text-xs text-emerald-600 font-medium mt-1 flex items-center gap-1 truncate w-full hover:underline" title={f.trim()}>
+                ✓ Terunggah: {f.trim()} (Klik untuk Lihat)
               </a>
-            )}
+            ))}
           </div>
 
           <div className="p-4 border rounded-xl bg-white shadow-xs">
             <h4 className="font-semibold text-sm text-slate-800 mb-1">2. SK Penyelia Halal</h4>
-            <p className="text-xs text-slate-400 mb-3">Format: .doc, .docx, .pdf</p>
-            <input type="file" name="sk_penyelia" accept=".pdf,.doc,.docx" onChange={(e) => handleGenericFileUpload(e, 'sk_penyelia', setLegalData)} className="w-full text-xs text-slate-500 file:mr-4 file:py-2 file:px-4 file:rounded-lg file:border-0 file:text-xs file:font-semibold file:bg-emerald-50 file:text-emerald-700 hover:file:bg-emerald-100 cursor-pointer" />
-            {legalData.sk_penyelia && (
-              <a href={`/uploads/${legalData.sk_penyelia}`} target="_blank" rel="noreferrer" className="text-xs text-emerald-600 font-medium mt-2 block truncate w-full hover:underline" title={legalData.sk_penyelia}>
-                ✓ Terunggah: {legalData.sk_penyelia} (Klik untuk Lihat)
+            <p className="text-xs text-slate-400 mb-3">Format: .doc, .docx, .pdf — bisa pilih lebih dari 1 file</p>
+            <input type="file" name="sk_penyelia" accept=".pdf,.doc,.docx" multiple onChange={(e) => handleMultiFileUpload(e, 'sk_penyelia', setLegalData)} className="w-full text-xs text-slate-500 file:mr-4 file:py-2 file:px-4 file:rounded-lg file:border-0 file:text-xs file:font-semibold file:bg-emerald-50 file:text-emerald-700 hover:file:bg-emerald-100 cursor-pointer" />
+            {legalData.sk_penyelia && legalData.sk_penyelia.split(',').map((f, i) => (
+              <a key={i} href={`/uploads/${f.trim()}`} target="_blank" rel="noreferrer" className="text-xs text-emerald-600 font-medium mt-1 flex items-center gap-1 truncate w-full hover:underline" title={f.trim()}>
+                ✓ Terunggah: {f.trim()} (Klik untuk Lihat)
               </a>
-            )}
+            ))}
           </div>
         </div>
 
         <div className="space-y-4">
           <div className="p-4 border rounded-xl bg-white shadow-xs">
             <h4 className="font-semibold text-sm text-slate-800 mb-1">3. SK Manajemen Halal</h4>
-            <p className="text-xs text-slate-400 mb-3">Format: .doc, .docx, .pdf</p>
-            <input type="file" name="sk_manajemen" accept=".pdf,.doc,.docx" onChange={(e) => handleGenericFileUpload(e, 'sk_manajemen', setLegalData)} className="w-full text-xs text-slate-500 file:mr-4 file:py-2 file:px-4 file:rounded-lg file:border-0 file:text-xs file:font-semibold file:bg-emerald-50 file:text-emerald-700 hover:file:bg-emerald-100 cursor-pointer" />
-            {legalData.sk_manajemen && (
-              <a href={`/uploads/${legalData.sk_manajemen}`} target="_blank" rel="noreferrer" className="text-xs text-emerald-600 font-medium mt-2 block truncate w-full hover:underline" title={legalData.sk_manajemen}>
-                ✓ Terunggah: {legalData.sk_manajemen} (Klik untuk Lihat)
+            <p className="text-xs text-slate-400 mb-3">Format: .doc, .docx, .pdf — bisa pilih lebih dari 1 file</p>
+            <input type="file" name="sk_manajemen" accept=".pdf,.doc,.docx" multiple onChange={(e) => handleMultiFileUpload(e, 'sk_manajemen', setLegalData)} className="w-full text-xs text-slate-500 file:mr-4 file:py-2 file:px-4 file:rounded-lg file:border-0 file:text-xs file:font-semibold file:bg-emerald-50 file:text-emerald-700 hover:file:bg-emerald-100 cursor-pointer" />
+            {legalData.sk_manajemen && legalData.sk_manajemen.split(',').map((f, i) => (
+              <a key={i} href={`/uploads/${f.trim()}`} target="_blank" rel="noreferrer" className="text-xs text-emerald-600 font-medium mt-1 flex items-center gap-1 truncate w-full hover:underline" title={f.trim()}>
+                ✓ Terunggah: {f.trim()} (Klik untuk Lihat)
               </a>
-            )}
+            ))}
           </div>
 
           <div className="p-4 border rounded-xl bg-white shadow-xs">
             <h4 className="font-semibold text-sm text-slate-800 mb-1">4. Kebijakan Halal</h4>
-            <p className="text-xs text-slate-400 mb-3">Format: .doc, .docx, .pdf</p>
-            <input type="file" name="kebijakan" accept=".pdf,.doc,.docx" onChange={(e) => handleGenericFileUpload(e, 'kebijakan', setLegalData)} className="w-full text-xs text-slate-500 file:mr-4 file:py-2 file:px-4 file:rounded-lg file:border-0 file:text-xs file:font-semibold file:bg-emerald-50 file:text-emerald-700 hover:file:bg-emerald-100 cursor-pointer" />
-            {legalData.kebijakan && (
-              <a href={`/uploads/${legalData.kebijakan}`} target="_blank" rel="noreferrer" className="text-xs text-emerald-600 font-medium mt-2 block truncate w-full hover:underline" title={legalData.kebijakan}>
-                ✓ Terunggah: {legalData.kebijakan} (Klik untuk Lihat)
+            <p className="text-xs text-slate-400 mb-3">Format: .doc, .docx, .pdf — bisa pilih lebih dari 1 file</p>
+            <input type="file" name="kebijakan" accept=".pdf,.doc,.docx" multiple onChange={(e) => handleMultiFileUpload(e, 'kebijakan', setLegalData)} className="w-full text-xs text-slate-500 file:mr-4 file:py-2 file:px-4 file:rounded-lg file:border-0 file:text-xs file:font-semibold file:bg-emerald-50 file:text-emerald-700 hover:file:bg-emerald-100 cursor-pointer" />
+            {legalData.kebijakan && legalData.kebijakan.split(',').map((f, i) => (
+              <a key={i} href={`/uploads/${f.trim()}`} target="_blank" rel="noreferrer" className="text-xs text-emerald-600 font-medium mt-1 flex items-center gap-1 truncate w-full hover:underline" title={f.trim()}>
+                ✓ Terunggah: {f.trim()} (Klik untuk Lihat)
               </a>
-            )}
+            ))}
           </div>
         </div>
       </div>
@@ -2169,6 +2169,54 @@ const StepImplementasiSJPH = ({ isKomitmenComplete, isBahanComplete, isPphComple
 
 const StepUploadEvidence = ({ evidenceData, setEvidenceData, handleGenericFileUpload, handleMultiFileUpload }) => {
   const [successMsg, setSuccessMsg] = useState('');
+  const [deletingFile, setDeletingFile] = useState('');
+
+  const handleDeleteFile = async (field, filename) => {
+    const confirmDelete = window.confirm(`Apakah Anda yakin ingin menghapus foto "${filename}"?`);
+    if (!confirmDelete) return;
+
+    setDeletingFile(filename);
+    try {
+      const token = localStorage.getItem('jhc_token');
+      const res = await apiFetch(`/api/upload/${encodeURIComponent(filename)}`, {
+        method: 'DELETE',
+        headers: token ? { 'Authorization': `Bearer ${token}` } : {}
+      });
+
+      if (res.ok) {
+        const currentList = (evidenceData[field] || '')
+          .split(',')
+          .map(f => f.trim())
+          .filter(f => f && f !== filename);
+        
+        const updatedList = currentList.join(',');
+        const updatedData = {
+          ...evidenceData,
+          [field]: updatedList
+        };
+
+        setEvidenceData(updatedData);
+
+        // Sinkronisasi pembaruan ke server
+        await apiFetch('/api/evidence', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(updatedData)
+        });
+
+        setSuccessMsg('Foto berhasil dihapus.');
+        setTimeout(() => setSuccessMsg(''), 3000);
+      } else {
+        const data = await res.json().catch(() => ({}));
+        alert('Gagal menghapus file: ' + (data.error || 'Terjadi kesalahan pada server'));
+      }
+    } catch (err) {
+      console.error('Delete error:', err);
+      alert('Terjadi kesalahan saat menghapus file.');
+    } finally {
+      setDeletingFile('');
+    }
+  };
 
   const handleSave = async () => {
     try {
@@ -2206,28 +2254,60 @@ const StepUploadEvidence = ({ evidenceData, setEvidenceData, handleGenericFileUp
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
         <div className="p-4 border rounded-xl bg-slate-50">
           <h4 className="font-semibold text-sm text-slate-800 mb-1">1. Bukti Foto Sosialisasi/Training Halal</h4>
-          <input type="file" multiple name="sosialisasiFoto" accept="image/*" onChange={(e) => handleMultiFileUpload(e, 'sosialisasiFoto', setEvidenceData)} className="w-full text-xs text-slate-500 mt-2" />
+          <p className="text-xs text-slate-400 mb-2">Format: Gambar (JPG, PNG) — bisa upload lebih dari 1 foto</p>
+          <input type="file" multiple name="sosialisasiFoto" accept="image/*" onChange={(e) => handleMultiFileUpload(e, 'sosialisasiFoto', setEvidenceData)} className="w-full text-xs text-slate-500 file:mr-3 file:py-1.5 file:px-3 file:rounded-lg file:border-0 file:text-xs file:font-semibold file:bg-emerald-50 file:text-emerald-700 hover:file:bg-emerald-100 cursor-pointer" />
           {evidenceData.sosialisasiFoto && (
-            <div className="mt-2 space-y-1">
-              {evidenceData.sosialisasiFoto.split(',').map((f, i) => (
-                <a key={i} href={`/uploads/${f.trim()}`} target="_blank" rel="noreferrer" className="text-xs text-emerald-600 font-semibold block truncate w-full hover:underline" title={f.trim()}>
-                  ✓ {f.trim()} (Klik untuk Lihat)
-                </a>
-              ))}
+            <div className="mt-3 space-y-1.5">
+              {evidenceData.sosialisasiFoto.split(',').map((f, i) => {
+                const fname = f.trim();
+                if (!fname) return null;
+                return (
+                  <div key={i} className="flex items-center justify-between gap-2 p-2 bg-white rounded-lg border border-slate-200 shadow-2xs hover:border-slate-300 transition-colors">
+                    <a href={`/uploads/${fname}`} target="_blank" rel="noreferrer" className="text-xs text-emerald-600 font-semibold truncate flex-1 hover:underline" title={fname}>
+                      ✓ {fname} (Klik untuk Lihat)
+                    </a>
+                    <button
+                      type="button"
+                      onClick={() => handleDeleteFile('sosialisasiFoto', fname)}
+                      disabled={deletingFile === fname}
+                      className="text-slate-400 hover:text-red-600 hover:bg-red-50 px-2 py-1 rounded transition-colors text-xs font-bold leading-none shrink-0"
+                      title="Hapus foto ini"
+                    >
+                      {deletingFile === fname ? '...' : '✕'}
+                    </button>
+                  </div>
+                );
+              })}
             </div>
           )}
         </div>
 
         <div className="p-4 border rounded-xl bg-slate-50">
           <h4 className="font-semibold text-sm text-slate-800 mb-1">2. Bukti Foto Audit Internal</h4>
-          <input type="file" multiple name="auditInternalFoto" accept="image/*" onChange={(e) => handleMultiFileUpload(e, 'auditInternalFoto', setEvidenceData)} className="w-full text-xs text-slate-500 mt-2" />
+          <p className="text-xs text-slate-400 mb-2">Format: Gambar (JPG, PNG) — bisa upload lebih dari 1 foto</p>
+          <input type="file" multiple name="auditInternalFoto" accept="image/*" onChange={(e) => handleMultiFileUpload(e, 'auditInternalFoto', setEvidenceData)} className="w-full text-xs text-slate-500 file:mr-3 file:py-1.5 file:px-3 file:rounded-lg file:border-0 file:text-xs file:font-semibold file:bg-emerald-50 file:text-emerald-700 hover:file:bg-emerald-100 cursor-pointer" />
           {evidenceData.auditInternalFoto && (
-            <div className="mt-2 space-y-1">
-              {evidenceData.auditInternalFoto.split(',').map((f, i) => (
-                <a key={i} href={`/uploads/${f.trim()}`} target="_blank" rel="noreferrer" className="text-xs text-emerald-600 font-semibold block truncate w-full hover:underline" title={f.trim()}>
-                  ✓ {f.trim()} (Klik untuk Lihat)
-                </a>
-              ))}
+            <div className="mt-3 space-y-1.5">
+              {evidenceData.auditInternalFoto.split(',').map((f, i) => {
+                const fname = f.trim();
+                if (!fname) return null;
+                return (
+                  <div key={i} className="flex items-center justify-between gap-2 p-2 bg-white rounded-lg border border-slate-200 shadow-2xs hover:border-slate-300 transition-colors">
+                    <a href={`/uploads/${fname}`} target="_blank" rel="noreferrer" className="text-xs text-emerald-600 font-semibold truncate flex-1 hover:underline" title={fname}>
+                      ✓ {fname} (Klik untuk Lihat)
+                    </a>
+                    <button
+                      type="button"
+                      onClick={() => handleDeleteFile('auditInternalFoto', fname)}
+                      disabled={deletingFile === fname}
+                      className="text-slate-400 hover:text-red-600 hover:bg-red-50 px-2 py-1 rounded transition-colors text-xs font-bold leading-none shrink-0"
+                      title="Hapus foto ini"
+                    >
+                      {deletingFile === fname ? '...' : '✕'}
+                    </button>
+                  </div>
+                );
+              })}
             </div>
           )}
         </div>
