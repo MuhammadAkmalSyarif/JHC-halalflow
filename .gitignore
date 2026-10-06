@@ -1,7 +1,14 @@
 node_modules/
 build/
 .env
+.env.*
 *.sqlite
 *.sqlite3
 *.db
+*.db-shm
+*.db-wal
+backend/uploads/*
+!backend/uploads/.gitkeep
+*.bak
 .DS_Store
+
