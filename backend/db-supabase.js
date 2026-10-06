@@ -8,14 +8,14 @@ function getPool() {
   if (!pool) {
     const connectionString = process.env.DATABASE_URL;
     if (!connectionString) {
-      console.warn('⚠️  DATABASE_URL belum diatur di environment!');
+      throw new Error('DATABASE_URL environment variable is missing! Silakan tambahkan DATABASE_URL di environment.');
     }
     pool = new Pool({
       connectionString,
       ssl: { rejectUnauthorized: false },
-      max: 10,
-      idleTimeoutMillis: 30000,
-      connectionTimeoutMillis: 5000,
+      max: 2,
+      idleTimeoutMillis: 10000,
+      connectionTimeoutMillis: 3500,
     });
 
     pool.on('error', (err) => {

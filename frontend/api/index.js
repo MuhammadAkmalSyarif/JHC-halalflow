@@ -1,4 +1,15 @@
 export default async function handler(req, res) {
+  if (req.url === '/api/debug-env' || req.url === '/debug-env') {
+    const dbUrl = process.env.DATABASE_URL || '';
+    const masked = dbUrl ? dbUrl.replace(/:([^:@]+)@/, ':****@') : 'NOT_SET';
+    return res.status(200).json({
+      DATABASE_URL: masked,
+      has_SUPABASE_URL: !!process.env.SUPABASE_URL,
+      has_SUPABASE_KEY: !!(process.env.SUPABASE_KEY || process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.SUPABASE_ANON_KEY),
+      VERCEL: !!process.env.VERCEL
+    });
+  }
+
   try {
     const mod = await import('../backend/server.cjs');
     const app = mod.default || mod;
