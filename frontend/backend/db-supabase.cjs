@@ -4,9 +4,23 @@ const { createClient } = require('@supabase/supabase-js');
 let pool = null;
 let supabaseClient = null;
 
+function getConnectionString() {
+  let conn = process.env.DATABASE_URL;
+  if (!conn) return null;
+
+  // Jika connection string menggunakan direct host db.<ref>.supabase.co (IPv6 only),
+  // otomatis konversikan ke Supabase Connection Pooler IPv4 agar tidak timeout di serverless Vercel
+  const match = conn.match(/postgresql:\/\/postgres:([^@]+)@db\.([a-z0-9]+)\.supabase\.co(?::5432)?\/([a-zA-Z0-9_]+)/);
+  if (match) {
+    const [_, password, ref, dbname] = match;
+    conn = `postgresql://postgres.${ref}:${password}@aws-0-ap-southeast-1.pooler.supabase.com:6543/${dbname}`;
+  }
+  return conn;
+}
+
 function getPool() {
   if (!pool) {
-    const connectionString = process.env.DATABASE_URL;
+    const connectionString = getConnectionString();
     if (!connectionString) {
       throw new Error('DATABASE_URL environment variable is missing on Vercel! Silakan tambahkan DATABASE_URL di Vercel Dashboard.');
     }
@@ -15,7 +29,7 @@ function getPool() {
       ssl: { rejectUnauthorized: false },
       max: 2,
       idleTimeoutMillis: 10000,
-      connectionTimeoutMillis: 3500,
+      connectionTimeoutMillis: 5000,
     });
 
     pool.on('error', (err) => {
