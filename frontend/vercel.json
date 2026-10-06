@@ -5,16 +5,12 @@
   "framework": null,
   "rewrites": [
     {
-      "source": "/api/send-email",
-      "destination": "/api/send-email"
+      "source": "/uploads/:path*",
+      "destination": "https://qptzbrbtzfnjuvurkbhr.supabase.co/storage/v1/object/public/halal-flow-uploads/:path*"
     },
     {
       "source": "/api/:path*",
-      "destination": "https://jhc-halalflow-backend.onrender.com/api/:path*"
-    },
-    {
-      "source": "/uploads/:path*",
-      "destination": "https://jhc-halalflow-backend.onrender.com/uploads/:path*"
+      "destination": "/api/index.js"
     },
     {
       "source": "/((?!assets/|favicon\\.ico|logo\\.jpg|logo \\(2\\)\\.jpg|nama-bahan\\.xlsx|nama_produk\\.xlsx).*)",
