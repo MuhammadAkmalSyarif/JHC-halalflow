@@ -1,10 +1,8 @@
-const app = require('../backend/server.js');
+import app from '../backend/server.cjs';
 
-// Vercel Serverless Function entry point
-module.exports = (req, res) => {
-  // Normalisasi URL agar selalu diawali dengan /api sesuai route definition di server.js
+export default function handler(req, res) {
   if (req.url && !req.url.startsWith('/api')) {
     req.url = '/api' + (req.url.startsWith('/') ? req.url : '/' + req.url);
   }
   return app(req, res);
-};
+}

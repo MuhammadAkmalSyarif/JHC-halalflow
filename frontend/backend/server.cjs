@@ -10,7 +10,7 @@ const crypto = require('crypto');
 const nodemailer = require('nodemailer');
 const XLSX = require('xlsx');
 
-const { db, getSupabase } = require('./db-supabase');
+const { db, getSupabase } = require('./db-supabase.cjs');
 
 async function initCompanyProgress(database, companyId) {
   const STAGES = [
@@ -40,6 +40,11 @@ async function logActivity(database, companyId, userId, activityType, descriptio
     );
   } catch(e) {}
 }
+
+const app = express();
+const PORT = process.env.PORT || 5000;
+const JWT_SECRET = process.env.JWT_SECRET || 'jhc_halalflow_jwt_secret_2026';
+const ADMIN_JWT_SECRET = process.env.ADMIN_JWT_SECRET || 'jhc_admin_jwt_secret_2026';
 
 app.use(cors({
   origin: true, // izinkan semua origin (aman karena auth pakai JWT)
@@ -1011,32 +1016,30 @@ app.get('/api/certification-status', authMiddleware, async (req, res) => {
 // =============================================
 
 // Ensure products table exists
-try {
-  await db.exec(`
-    CREATE TABLE IF NOT EXISTS products (
-      id INTEGER PRIMARY KEY AUTOINCREMENT,
-      company_id INTEGER NOT NULL,
-      name TEXT NOT NULL,
-      bahan TEXT DEFAULT '[]',
-      submitted INTEGER DEFAULT 0,
-      created_at TEXT DEFAULT (datetime('now')),
-      updated_at TEXT DEFAULT (datetime('now')),
-      FOREIGN KEY (company_id) REFERENCES companies(id) ON DELETE CASCADE
-    )
-  `);
-  await db.exec(`
-    CREATE TABLE IF NOT EXISTS production_data (
-      id INTEGER PRIMARY KEY AUTOINCREMENT,
-      company_id INTEGER NOT NULL UNIQUE,
-      alur_proses TEXT,
-      layout_ruang TEXT,
-      bebas_babi TEXT,
-      created_at TEXT DEFAULT (datetime('now')),
-      updated_at TEXT DEFAULT (datetime('now')),
-      FOREIGN KEY (company_id) REFERENCES companies(id) ON DELETE CASCADE
-    )
-  `);
-} catch(e) { console.log('Tables may already exist:', e.message); }
+(async () => {
+  try {
+    await db.exec(`
+      CREATE TABLE IF NOT EXISTS products (
+        id SERIAL PRIMARY KEY,
+        company_id INTEGER NOT NULL REFERENCES companies(id) ON DELETE CASCADE,
+        name TEXT NOT NULL,
+        bahan JSONB DEFAULT '[]'::jsonb,
+        submitted INTEGER DEFAULT 0,
+        created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+        updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+      );
+      CREATE TABLE IF NOT EXISTS production_data (
+        id SERIAL PRIMARY KEY,
+        company_id INTEGER NOT NULL UNIQUE REFERENCES companies(id) ON DELETE CASCADE,
+        alur_proses TEXT,
+        layout_ruang TEXT,
+        bebas_babi TEXT,
+        created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+        updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+      );
+    `);
+  } catch(e) { console.log('Tables may already exist:', e.message); }
+})()
 
 // GET /api/products — get all products for user's company
 app.get('/api/products', authMiddleware, async (req, res) => {
@@ -1127,25 +1130,26 @@ app.post('/api/production', authMiddleware, async (req, res) => {
 // =============================================
 
 // Ensure evidence_data table exists
-try {
-  await db.exec(`
-    CREATE TABLE IF NOT EXISTS evidence_data (
-      id INTEGER PRIMARY KEY AUTOINCREMENT,
-      company_id INTEGER NOT NULL UNIQUE,
-      sosialisasiFoto TEXT,
-      auditInternalFoto TEXT,
-      sosialisasiAbsen TEXT,
-      auditInternalAbsen TEXT,
-      pembelianBahan TEXT,
-      penyimpananBahan TEXT,
-      hasilProduksi TEXT,
-      distribusiProduk TEXT,
-      created_at TEXT DEFAULT (datetime('now')),
-      updated_at TEXT DEFAULT (datetime('now')),
-      FOREIGN KEY (company_id) REFERENCES companies(id) ON DELETE CASCADE
-    )
-  `);
-} catch(e) { console.log('Tables may already exist:', e.message); }
+(async () => {
+  try {
+    await db.exec(`
+      CREATE TABLE IF NOT EXISTS evidence_data (
+        id SERIAL PRIMARY KEY,
+        company_id INTEGER NOT NULL UNIQUE REFERENCES companies(id) ON DELETE CASCADE,
+        sosialisasiFoto TEXT,
+        auditInternalFoto TEXT,
+        sosialisasiAbsen TEXT,
+        auditInternalAbsen TEXT,
+        pembelianBahan TEXT,
+        penyimpananBahan TEXT,
+        hasilProduksi TEXT,
+        distribusiProduk TEXT,
+        created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+        updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+      );
+    `);
+  } catch(e) { console.log('Tables may already exist:', e.message); }
+})()
 
 app.get('/api/evidence', authMiddleware, async (req, res) => {
   const userId = req.user.id;
