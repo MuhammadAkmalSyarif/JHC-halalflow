@@ -11,7 +11,7 @@ export default async function handler(req, res) {
   }
 
   try {
-    const mod = await import('../backend/server.cjs');
+    const mod = await import('../../backend/server.js');
     const app = mod.default || mod;
     if (req.url && !req.url.startsWith('/api')) {
       req.url = '/api' + (req.url.startsWith('/') ? req.url : '/' + req.url);
