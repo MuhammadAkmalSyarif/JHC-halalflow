@@ -142,7 +142,8 @@ app.get('/api/debug-env', async (req, res) => {
       has_SUPABASE_KEY: !!(process.env.SUPABASE_KEY || process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.SUPABASE_ANON_KEY),
       has_SMTP_USER: !!process.env.SMTP_USER,
       smtp_user_val: process.env.SMTP_USER || null,
-      has_SMTP_PASS: !!process.env.SMTP_PASS,
+      has_SMTP_PASS: !!(process.env.SMTP_PASS || process.env.SMTP_PASSWORD || process.env.GMAIL_PASS || process.env.APP_PASSWORD),
+      smtp_pass_key_found: process.env.SMTP_PASS ? 'SMTP_PASS' : (process.env.SMTP_PASSWORD ? 'SMTP_PASSWORD' : (process.env.APP_PASSWORD ? 'APP_PASSWORD' : 'NONE')),
       smtp_pass_len: process.env.SMTP_PASS ? process.env.SMTP_PASS.trim().length : 0,
       dbStatus,
       dbError,
@@ -297,7 +298,7 @@ app.post('/api/auth/forgot-password', async (req, res) => {
   await db.prepare('INSERT INTO password_resets (email, token, expires_at) VALUES (?, ?, ?)').run(email, otp, expires);
   // Send email directly using nodemailer
   const smtpUser = process.env.SMTP_USER;
-  const smtpPass = (process.env.SMTP_PASS || '').replace(/\s+/g, '');
+  const smtpPass = (process.env.SMTP_PASS || process.env.SMTP_PASSWORD || process.env.GMAIL_PASS || process.env.APP_PASSWORD || '').replace(/\s+/g, '');
 
   if (!smtpUser || !smtpPass) {
     await db.prepare('DELETE FROM password_resets WHERE email = ?').run(email);
