@@ -142,9 +142,9 @@ app.get('/api/debug-env', async (req, res) => {
       has_SUPABASE_KEY: !!(process.env.SUPABASE_KEY || process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.SUPABASE_ANON_KEY),
       has_SMTP_USER: !!process.env.SMTP_USER,
       smtp_user_val: process.env.SMTP_USER || null,
-      has_SMTP_PASS: !!(process.env.SMTP_PASS || process.env.SMTP_PASSWORD || process.env.GMAIL_PASS || process.env.APP_PASSWORD || Object.keys(process.env).some(k => /smtp.*pass|app.*pass|gmail.*pass/i.test(k))),
+      has_SMTP_PASS: !!(process.env.SMTP_PASS || process.env.SMPT_PASS || process.env.SMTP_PASSWORD || process.env.GMAIL_PASS || process.env.APP_PASSWORD || Object.keys(process.env).some(k => /sm[tp]{2}.*pass|app.*pass|gmail.*pass/i.test(k))),
       matched_env_keys: Object.keys(process.env).filter(k => /smtp|pass|mail|gmail/i.test(k)),
-      smtp_pass_key_found: process.env.SMTP_PASS ? 'SMTP_PASS' : (process.env.SMTP_PASSWORD ? 'SMTP_PASSWORD' : (process.env.APP_PASSWORD ? 'APP_PASSWORD' : 'NONE')),
+      smtp_pass_key_found: process.env.SMTP_PASS ? 'SMTP_PASS' : (process.env.SMPT_PASS ? 'SMPT_PASS (typo auto-resolved)' : (process.env.SMTP_PASSWORD ? 'SMTP_PASSWORD' : 'NONE')),
       smtp_pass_len: process.env.SMTP_PASS ? process.env.SMTP_PASS.trim().length : 0,
       dbStatus,
       dbError,
@@ -299,11 +299,11 @@ app.post('/api/auth/forgot-password', async (req, res) => {
   await db.prepare('INSERT INTO password_resets (email, token, expires_at) VALUES (?, ?, ?)').run(email, otp, expires);
   // Send email directly using nodemailer
   const smtpUser = process.env.SMTP_USER;
-  let rawPass = process.env.SMTP_PASS || process.env.SMTP_PASSWORD || process.env.GMAIL_PASS || process.env.APP_PASSWORD || '';
+  let rawPass = process.env.SMTP_PASS || process.env.SMPT_PASS || process.env.SMTP_PASSWORD || process.env.SMPT_PASSWORD || process.env.GMAIL_PASS || process.env.APP_PASSWORD || '';
   if (!rawPass) {
     for (const k of Object.keys(process.env)) {
       const cleanKey = k.toLowerCase().replace(/[^a-z]/g, '');
-      if (cleanKey.includes('smtppass') || cleanKey.includes('apppass') || cleanKey.includes('gmailpass')) {
+      if (cleanKey.includes('smtppass') || cleanKey.includes('smptpass') || cleanKey.includes('apppass') || cleanKey.includes('gmailpass')) {
         rawPass = process.env[k] || '';
         break;
       }
