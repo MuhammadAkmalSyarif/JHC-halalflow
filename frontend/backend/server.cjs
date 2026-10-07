@@ -140,6 +140,10 @@ app.get('/api/debug-env', async (req, res) => {
       passInfo,
       has_SUPABASE_URL: !!process.env.SUPABASE_URL,
       has_SUPABASE_KEY: !!(process.env.SUPABASE_KEY || process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.SUPABASE_ANON_KEY),
+      has_SMTP_USER: !!process.env.SMTP_USER,
+      smtp_user_val: process.env.SMTP_USER || null,
+      has_SMTP_PASS: !!process.env.SMTP_PASS,
+      smtp_pass_len: process.env.SMTP_PASS ? process.env.SMTP_PASS.trim().length : 0,
       dbStatus,
       dbError,
       timestamp: new Date()
