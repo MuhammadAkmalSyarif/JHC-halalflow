@@ -1507,37 +1507,7 @@ function CompanyDetailPage({ companyId, onBack }) {
     XLSX.writeFile(wb, `BOM_Produk_${company?.nama || 'Perusahaan'}.xlsx`);
   };
 
-  const VerificationSelect = ({ stage }) => (
-    <select 
-      onChange={e => handleStatusUpdate(stage, e.target.value)} 
-      className="text-[10px] font-bold px-2 py-1 bg-emerald-50 hover:bg-emerald-100 border border-emerald-200 text-emerald-700 rounded-lg outline-none cursor-pointer transition-colors"
-      defaultValue=""
-    >
-      <option value="" disabled>Update Status...</option>
-      <option value="Belum Dimulai">Belum Dimulai</option>
-      <option value="Menunggu Verifikasi">Menunggu Verifikasi</option>
-      <option value="Proses Pengecekan">Proses Pengecekan</option>
-      <option value="Perlu Perbaikan">Perlu Perbaikan</option>
-      <option value="Disetujui">Disetujui</option>
-    </select>
-  );
 
-  const handleStatusUpdate = async (stage, newStatus) => {
-    setStatusLoading(true);
-    try {
-      const res = await adminFetch(`/api/admin/companies/${companyId}/stage-status`, {
-        method: 'PATCH',
-        body: JSON.stringify({ stage, status: newStatus })
-      });
-      const data = await res.json();
-      if (res.ok) {
-        setProgress(data.progress || []);
-        setStatusMsg('Status berhasil diperbarui!');
-        setTimeout(() => setStatusMsg(''), 3000);
-      }
-    } catch (e) { console.error(e); }
-    finally { setStatusLoading(false); }
-  };
 
   if (loading) return <LoadingState text="Memuat detail perusahaan..."/>;
   if (!company) return <EmptyState text="Perusahaan tidak ditemukan"/>;
@@ -1666,10 +1636,7 @@ function CompanyDetailPage({ companyId, onBack }) {
         <div className="bg-white border border-slate-200 rounded-2xl p-6 shadow-sm">
           <div className="flex items-center justify-between mb-5">
             <h3 className="font-bold text-slate-800">Data Registrasi Perusahaan</h3>
-            <div className="flex items-center gap-2">
-              <StatusBadge status={progress.find(s => s.stage === 1)?.status || 'Belum Dimulai'}/>
-              <VerificationSelect stage={1} />
-            </div>
+
           </div>
           <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
             {[
@@ -1701,10 +1668,7 @@ function CompanyDetailPage({ companyId, onBack }) {
           <div className="bg-white border border-slate-200 rounded-2xl p-6 shadow-sm">
             <div className="flex items-center justify-between mb-5">
               <h3 className="font-bold text-slate-800">Informasi Kontak & Legal</h3>
-              <div className="flex items-center gap-2">
-                <StatusBadge status={legal.status || 'Belum Dimulai'}/>
-                <VerificationSelect stage={2} />
-              </div>
+
             </div>
             {!legal.telp_pemilik && !legal.email_sihalal ? (
               <EmptyState text="Dokumen legal belum diisi" sub="Pengguna belum mengisi data dokumen legal"/>
@@ -1765,8 +1729,6 @@ function CompanyDetailPage({ companyId, onBack }) {
           <div className="p-5 border-b border-slate-200 flex items-center justify-between bg-slate-50">
             <h3 className="font-bold text-slate-800">Matrix Bahan Halal <span className="text-slate-400 text-sm font-normal">({materials.length} bahan)</span></h3>
             <div className="flex items-center gap-2">
-              <StatusBadge status={progress.find(s => s.stage === 3)?.status || 'Belum Dimulai'}/>
-              <VerificationSelect stage={3} />
               <button onClick={handleExportMatrixBahan} disabled={materials.length === 0} className="text-[10px] text-white font-bold px-3 py-1.5 bg-emerald-600 hover:bg-emerald-700 disabled:opacity-40 rounded-lg transition-colors flex items-center gap-1.5 border border-emerald-700">
                 <Icons.Download className="w-3 h-3"/> Download Excel
               </button>
@@ -1816,8 +1778,6 @@ function CompanyDetailPage({ companyId, onBack }) {
           <div className="p-5 border-b border-slate-200 flex items-center justify-between bg-slate-50">
             <h3 className="font-bold text-slate-800">Upload Produk & Komposisi (BOM) <span className="text-slate-400 text-sm font-normal">({products.length} produk)</span></h3>
             <div className="flex items-center gap-2">
-              <StatusBadge status={productStageStatus}/>
-              <VerificationSelect stage={4} />
               <button onClick={handleExportBOM} disabled={products.length === 0} className="text-[10px] text-white font-bold px-3 py-1.5 bg-emerald-600 hover:bg-emerald-700 disabled:opacity-40 rounded-lg transition-colors flex items-center gap-1.5 border border-emerald-700">
                 <Icons.Download className="w-3 h-3"/> Download Excel
               </button>
@@ -1873,10 +1833,7 @@ function CompanyDetailPage({ companyId, onBack }) {
         <div className="bg-white border border-slate-200 rounded-2xl p-6 shadow-sm">
           <div className="flex items-center justify-between mb-6">
             <h3 className="font-bold text-slate-800">Proses Produksi Halal</h3>
-            <div className="flex items-center gap-2">
-              <StatusBadge status={productionStageStatus}/>
-              <VerificationSelect stage={5} />
-            </div>
+
           </div>
           {!production ? (
             <EmptyState text="Belum ada dokumen proses produksi" sub="Pengguna belum mengupload dokumen proses produksi halal"/>
@@ -1920,10 +1877,7 @@ function CompanyDetailPage({ companyId, onBack }) {
         <div className="bg-white border border-slate-200 rounded-2xl p-6 shadow-sm">
           <div className="flex items-center justify-between mb-6">
             <h3 className="font-bold text-slate-800">Bukti Kegiatan (Evidence)</h3>
-            <div className="flex items-center gap-2">
-              <StatusBadge status={evidenceStageStatus}/>
-              <VerificationSelect stage={6} />
-            </div>
+
           </div>
           {!evidence ? (
             <EmptyState text="Belum ada dokumen evidence" sub="Pengguna belum mengupload dokumen evidence (bukti)"/>

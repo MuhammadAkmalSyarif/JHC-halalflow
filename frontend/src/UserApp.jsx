@@ -1145,6 +1145,41 @@ const StepMatrixBahanHalal = ({ materials, setMaterials, matrixSubmitted, setMat
   const [successMsg, setSuccessMsg] = useState('');
   const [editingId, setEditingId] = useState(null);
   const [newMaterial, setNewMaterial] = useState({ name: '', jenis: '', produsen: '', negara: '', supplier: '', lembaga: '', sertifikat: '', expired: '' });
+  const [selectedIds, setSelectedIds] = useState([]);
+
+  const handleSelectAll = (e) => {
+    if (e.target.checked) setSelectedIds(materials.map(m => m.id));
+    else setSelectedIds([]);
+  };
+
+  const handleSelect = (id) => {
+    if (selectedIds.includes(id)) setSelectedIds(selectedIds.filter(i => i !== id));
+    else setSelectedIds([...selectedIds, id]);
+  };
+
+  const handleBulkDelete = async () => {
+    if (selectedIds.length === 0) return;
+    if (!window.confirm(`Apakah Anda yakin ingin menghapus ${selectedIds.length} bahan baku terpilih?`)) return;
+    try {
+      const res = await apiFetch('/api/materials/bulk-delete', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ ids: selectedIds })
+      });
+      const data = await res.json();
+      if (res.ok) {
+        setMaterials(data.materials);
+        setSelectedIds([]);
+        setSuccessMsg(`${selectedIds.length} bahan baku berhasil dihapus!`);
+        setTimeout(() => setSuccessMsg(''), 3000);
+      } else {
+        alert('Gagal menghapus: ' + (data.error || 'Server error'));
+      }
+    } catch (err) {
+      console.error(err);
+      alert('Terjadi kesalahan jaringan atau server: ' + err.message);
+    }
+  };
 
   const handleAddOrUpdate = async (e) => {
     e.preventDefault();
@@ -1465,11 +1500,22 @@ const StepMatrixBahanHalal = ({ materials, setMaterials, matrixSubmitted, setMat
         </div>
       </form>
 
+      {selectedIds.length > 0 && (
+        <div className="flex justify-start">
+          <button onClick={handleBulkDelete} className="px-4 py-2 bg-red-50 hover:bg-red-100 text-red-600 border border-red-200 rounded-lg text-sm font-semibold flex items-center gap-2 transition-colors shadow-sm">
+            <Icons.Trash className="w-4 h-4" /> Hapus Terpilih ({selectedIds.length})
+          </button>
+        </div>
+      )}
+
       <div className="border rounded-xl overflow-hidden bg-white">
         <div className="overflow-x-auto">
           <table className="w-full text-left border-collapse min-w-max">
             <thead>
               <tr className="bg-slate-100 text-slate-700 text-xs font-bold uppercase tracking-wider">
+                <th className="p-3.5 w-12 text-center">
+                  <input type="checkbox" className="w-4 h-4 accent-emerald-600 rounded cursor-pointer" checked={materials.length > 0 && selectedIds.length === materials.length} onChange={handleSelectAll} />
+                </th>
                 <th className="p-3.5">No</th>
                 <th className="p-3.5">Nama Bahan (Merk)</th>
                 <th className="p-3.5">Jenis</th>
@@ -1485,13 +1531,16 @@ const StepMatrixBahanHalal = ({ materials, setMaterials, matrixSubmitted, setMat
             <tbody className="divide-y text-sm text-slate-700">
               {materials.length === 0 ? (
                 <tr>
-                  <td colSpan="9" className="p-6 text-center text-slate-400 text-sm">
+                  <td colSpan="10" className="p-6 text-center text-slate-400 text-sm">
                     Belum ada data bahan baku. Silakan unggah Excel atau tambah secara manual.
                   </td>
                 </tr>
               ) : (
                 materials.map((m, index) => (
                   <tr key={m.id} className={`hover:bg-slate-50 transition-colors ${editingId === m.id ? 'bg-amber-50/40 font-medium' : ''}`}>
+                    <td className="p-3.5 text-center">
+                      <input type="checkbox" className="w-4 h-4 accent-emerald-600 rounded cursor-pointer" checked={selectedIds.includes(m.id)} onChange={() => handleSelect(m.id)} />
+                    </td>
                     <td className="p-3.5 font-semibold text-slate-800">{index + 1}</td>
                     <td className="p-3.5 font-semibold text-slate-800">{m.name}</td>
                     <td className="p-3.5 text-slate-500">{m.jenis || '-'}</td>

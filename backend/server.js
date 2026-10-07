@@ -595,22 +595,27 @@ app.get('/api/companies/:id/materials', authMiddleware, async (req, res) => {
 
 // POST /api/companies/:id/materials
 app.post('/api/companies/:id/materials', authMiddleware, async (req, res) => {
-  const companyId = parseInt(req.params.id);
-  const userId = req.user.id;
-  const company = await db.prepare('SELECT * FROM companies WHERE id = ? AND user_id = ?').get(companyId, userId);
-  if (!company) return res.status(403).json({ error: 'Akses ditolak' });
+  try {
+    const companyId = parseInt(req.params.id);
+    const userId = req.user.id;
+    const company = await db.prepare('SELECT * FROM companies WHERE id = ? AND user_id = ?').get(companyId, userId);
+    if (!company) return res.status(403).json({ error: 'Akses ditolak' });
 
-  const { nama_bahan, jenis, produsen, negara, supplier, lembaga, nomor_sertifikat, expired, halal_status } = req.body;
-  if (!nama_bahan) return res.status(400).json({ error: 'Nama bahan wajib diisi' });
+    const { nama_bahan, jenis, produsen, negara, supplier, lembaga, nomor_sertifikat, expired, halal_status } = req.body;
+    if (!nama_bahan) return res.status(400).json({ error: 'Nama bahan wajib diisi' });
 
-  await db.prepare(`
-    INSERT INTO halal_materials (company_id, nama_bahan, jenis, produsen, negara, supplier, lembaga, nomor_sertifikat, expired, halal_status)
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-  `).run(companyId, nama_bahan, jenis || '', produsen || '', negara || '', supplier || '', lembaga || '', nomor_sertifikat || '', expired || '', halal_status || 'hijau');
+    await db.prepare(`
+      INSERT INTO halal_materials (company_id, nama_bahan, jenis, produsen, negara, supplier, lembaga, nomor_sertifikat, expired, halal_status)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    `).run(companyId, nama_bahan, jenis || '', produsen || '', negara || '', supplier || '', lembaga || '', nomor_sertifikat || '', expired || '', halal_status || 'hijau');
 
-  const materials = await db.prepare('SELECT * FROM halal_materials WHERE company_id = ? ORDER BY id').all(companyId);
-  await logActivity(db, companyId, userId, 'material_add', `Bahan halal ditambahkan: ${nama_bahan}`);
-  res.json({ message: 'Bahan berhasil ditambahkan', materials });
+    const materials = await db.prepare('SELECT * FROM halal_materials WHERE company_id = ? ORDER BY id').all(companyId);
+    await logActivity(db, companyId, userId, 'material_add', `Bahan halal ditambahkan: ${nama_bahan}`);
+    res.json({ message: 'Bahan berhasil ditambahkan', materials });
+  } catch (err) {
+    console.error('Error in POST /api/companies/:id/materials:', err);
+    res.status(500).json({ error: err.message, stack: err.stack });
+  }
 });
 
 // PUT /api/companies/:id/materials/:matId
@@ -672,40 +677,36 @@ app.post('/api/companies/:id/materials/import', authMiddleware, upload.single('f
       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     `);
 
-    const insertAll = db.transaction((rows) => {
-      let count = 0;
-      rows.forEach((row, idx) => {
-        const nama = (row['nama_bahan'] || row['Nama Bahan'] || row['name'] || '').toString().trim();
-        const expired = (row['masa_berlaku'] || row['Expired'] || row['expired'] || row['Tanggal Terbit'] || row['tanggal_terbit'] || '').toString().trim();
-        const sertifikat = (
-          row['nomor_sertifikat/registr'] || row['nomor_sertifikat'] || row['Nomor Sertifikat'] ||
-          row['No. Sertifikat'] || row['No Sertifikat'] || row['sertifikat'] ||
-          row['ID Halal'] || row['id_halal'] || row['No. Registrasi'] || ''
-        ).toString().trim();
+    let count = 0;
+    for (let idx = 0; idx < rows.length; idx++) {
+      const row = rows[idx];
+      const nama = (row['nama_bahan'] || row['Nama Bahan'] || row['name'] || '').toString().trim();
+      const expired = (row['masa_berlaku'] || row['Expired'] || row['expired'] || row['Tanggal Terbit'] || row['tanggal_terbit'] || '').toString().trim();
+      const sertifikat = (
+        row['nomor_sertifikat/registr'] || row['nomor_sertifikat'] || row['Nomor Sertifikat'] ||
+        row['No. Sertifikat'] || row['No Sertifikat'] || row['sertifikat'] ||
+        row['ID Halal'] || row['id_halal'] || row['No. Registrasi'] || ''
+      ).toString().trim();
 
-        if (!nama) {
-          errors.push(`Baris ${idx + 2}: Nama bahan wajib diisi`);
-          return;
-        }
+      if (!nama) {
+        errors.push(`Baris ${idx + 2}: Nama bahan wajib diisi`);
+        continue;
+      }
 
-        let status = (row['Status Halal'] || row['status'] || 'hijau').toString().toLowerCase().trim();
-        if (!['hijau', 'kuning', 'merah'].includes(status)) status = 'hijau';
+      let status = (row['Status Halal'] || row['status'] || 'hijau').toString().toLowerCase().trim();
+      if (!['hijau', 'kuning', 'merah'].includes(status)) status = 'hijau';
 
-        insertMat.run(
-          companyId, nama,
-          (row['jenis_bahan'] || '').toString().trim(),
-          (row['produsen'] || '').toString().trim(),
-          (row['negara'] || '').toString().trim(),
-          (row['supplier'] || row['Supplier'] || '').toString().trim(),
-          (row['lembaga_penerbit'] || row['Lembaga Penerbit'] || row['lembaga'] || '').toString().trim(),
-          sertifikat, expired, status
-        );
-        count++;
-      });
-      return count;
-    });
-
-    const count = insertAll(rows);
+      await insertMat.run(
+        companyId, nama,
+        (row['jenis_bahan'] || '').toString().trim(),
+        (row['produsen'] || '').toString().trim(),
+        (row['negara'] || '').toString().trim(),
+        (row['supplier'] || row['Supplier'] || '').toString().trim(),
+        (row['lembaga_penerbit'] || row['Lembaga Penerbit'] || row['lembaga'] || '').toString().trim(),
+        sertifikat, expired, status
+      );
+      count++;
+    }
     const materials = await db.prepare('SELECT * FROM halal_materials WHERE company_id = ? ORDER BY id').all(companyId);
     await logActivity(db, companyId, userId, 'materials_import', `${count} bahan diimpor dari Excel`);
 
@@ -979,43 +980,79 @@ app.get('/api/materials', authMiddleware, async (req, res) => {
 
 // Legacy: POST /api/materials
 app.post('/api/materials', authMiddleware, async (req, res) => {
-  const userId = req.user.id;
-  const company = await db.prepare('SELECT id FROM companies WHERE user_id=?').get(userId);
-  if (!company) return res.status(404).json({ error: 'Buat profil perusahaan dulu' });
-  const { name, jenis, produsen, negara, supplier, lembaga, sertifikat, expired, status } = req.body;
-  await db.prepare(`INSERT INTO halal_materials (company_id,nama_bahan,jenis,produsen,negara,supplier,lembaga,nomor_sertifikat,expired,halal_status) VALUES (?,?,?,?,?,?,?,?,?,?)`
-  ).run(company.id, name||'', jenis||'', produsen||'', negara||'', supplier||'', lembaga||'', sertifikat||'', expired||'', status||'hijau');
-  const all = await db.prepare('SELECT * FROM halal_materials WHERE company_id=? ORDER BY id').all(company.id);
-  const mapped = all.map(m => ({ id: m.id, name: m.nama_bahan, jenis: m.jenis, produsen: m.produsen, negara: m.negara, supplier: m.supplier, lembaga: m.lembaga, sertifikat: m.nomor_sertifikat, expired: m.expired, status: m.halal_status }));
-  await logActivity(db, company.id, userId, 'material_add', `Bahan ditambahkan: ${name}`);
-  res.json({ message: 'Material added successfully', materials: mapped });
+  try {
+    const userId = req.user.id;
+    const company = await db.prepare('SELECT id FROM companies WHERE user_id=?').get(userId);
+    if (!company) return res.status(404).json({ error: 'Buat profil perusahaan dulu' });
+    const { name, jenis, produsen, negara, supplier, lembaga, sertifikat, expired, status } = req.body;
+    await db.prepare(`INSERT INTO halal_materials (company_id,nama_bahan,jenis,produsen,negara,supplier,lembaga,nomor_sertifikat,expired,halal_status) VALUES (?,?,?,?,?,?,?,?,?,?)`
+    ).run(company.id, name||'', jenis||'', produsen||'', negara||'', supplier||'', lembaga||'', sertifikat||'', expired||'', status||'hijau');
+    const all = await db.prepare('SELECT * FROM halal_materials WHERE company_id=? ORDER BY id').all(company.id);
+    const mapped = all.map(m => ({ id: m.id, name: m.nama_bahan, jenis: m.jenis, produsen: m.produsen, negara: m.negara, supplier: m.supplier, lembaga: m.lembaga, sertifikat: m.nomor_sertifikat, expired: m.expired, status: m.halal_status }));
+    await logActivity(db, company.id, userId, 'material_add', `Bahan ditambahkan: ${name}`);
+    res.json({ message: 'Material added successfully', materials: mapped });
+  } catch (err) {
+    console.error('Error in POST /api/materials:', err);
+    res.status(500).json({ error: err.message, stack: err.stack });
+  }
 });
 
 // Legacy: PUT /api/materials/:id
 app.put('/api/materials/:id', authMiddleware, async (req, res) => {
-  const userId = req.user.id;
-  const company = await db.prepare('SELECT id FROM companies WHERE user_id=?').get(userId);
-  if (!company) return res.status(404).json({ error: 'Perusahaan tidak ditemukan' });
-  const matId = parseInt(req.params.id);
-  const mat = await db.prepare('SELECT * FROM halal_materials WHERE id=? AND company_id=?').get(matId, company.id);
-  if (!mat) return res.status(404).json({ error: 'Bahan tidak ditemukan' });
-  const { name, jenis, produsen, negara, supplier, lembaga, sertifikat, expired, status } = req.body;
-  await db.prepare(`UPDATE halal_materials SET nama_bahan=?,jenis=?,produsen=?,negara=?,supplier=?,lembaga=?,nomor_sertifikat=?,expired=?,halal_status=?,updated_at=datetime('now') WHERE id=? AND company_id=?`
-  ).run(name||mat.nama_bahan, jenis??mat.jenis, produsen??mat.produsen, negara??mat.negara, supplier??mat.supplier, lembaga??mat.lembaga, sertifikat??mat.nomor_sertifikat, expired??mat.expired, status??mat.halal_status, matId, company.id);
-  const all = await db.prepare('SELECT * FROM halal_materials WHERE company_id=? ORDER BY id').all(company.id);
-  const mapped = all.map(m => ({ id: m.id, name: m.nama_bahan, jenis: m.jenis, produsen: m.produsen, negara: m.negara, supplier: m.supplier, lembaga: m.lembaga, sertifikat: m.nomor_sertifikat, expired: m.expired, status: m.halal_status }));
-  res.json({ message: 'Material updated', materials: mapped });
+  try {
+    const userId = req.user.id;
+    const company = await db.prepare('SELECT id FROM companies WHERE user_id=?').get(userId);
+    if (!company) return res.status(404).json({ error: 'Perusahaan tidak ditemukan' });
+    const matId = parseInt(req.params.id);
+    const mat = await db.prepare('SELECT * FROM halal_materials WHERE id=? AND company_id=?').get(matId, company.id);
+    if (!mat) return res.status(404).json({ error: 'Bahan tidak ditemukan' });
+    const { name, jenis, produsen, negara, supplier, lembaga, sertifikat, expired, status } = req.body;
+    await db.prepare(`UPDATE halal_materials SET nama_bahan=?,jenis=?,produsen=?,negara=?,supplier=?,lembaga=?,nomor_sertifikat=?,expired=?,halal_status=?,updated_at=datetime('now') WHERE id=? AND company_id=?`
+    ).run(name||mat.nama_bahan, jenis??mat.jenis, produsen??mat.produsen, negara??mat.negara, supplier??mat.supplier, lembaga??mat.lembaga, sertifikat??mat.nomor_sertifikat, expired??mat.expired, status??mat.halal_status, matId, company.id);
+    const all = await db.prepare('SELECT * FROM halal_materials WHERE company_id=? ORDER BY id').all(company.id);
+    const mapped = all.map(m => ({ id: m.id, name: m.nama_bahan, jenis: m.jenis, produsen: m.produsen, negara: m.negara, supplier: m.supplier, lembaga: m.lembaga, sertifikat: m.nomor_sertifikat, expired: m.expired, status: m.halal_status }));
+    res.json({ message: 'Material updated', materials: mapped });
+  } catch (err) {
+    console.error('Error in PUT /api/materials/:id:', err);
+    res.status(500).json({ error: err.message, stack: err.stack });
+  }
 });
 
 // Legacy: DELETE /api/materials/:id
 app.delete('/api/materials/:id', authMiddleware, async (req, res) => {
-  const userId = req.user.id;
-  const company = await db.prepare('SELECT id FROM companies WHERE user_id=?').get(userId);
-  if (!company) return res.status(404).json({ error: 'Perusahaan tidak ditemukan' });
-  await db.prepare('DELETE FROM halal_materials WHERE id=? AND company_id=?').run(parseInt(req.params.id), company.id);
-  const all = await db.prepare('SELECT * FROM halal_materials WHERE company_id=? ORDER BY id').all(company.id);
-  const mapped = all.map(m => ({ id: m.id, name: m.nama_bahan, jenis: m.jenis, produsen: m.produsen, negara: m.negara, supplier: m.supplier, lembaga: m.lembaga, sertifikat: m.nomor_sertifikat, expired: m.expired, status: m.halal_status }));
-  res.json({ message: 'Material deleted', materials: mapped });
+  try {
+    const userId = req.user.id;
+    const company = await db.prepare('SELECT id FROM companies WHERE user_id=?').get(userId);
+    if (!company) return res.status(404).json({ error: 'Perusahaan tidak ditemukan' });
+    await db.prepare('DELETE FROM halal_materials WHERE id=? AND company_id=?').run(parseInt(req.params.id), company.id);
+    const all = await db.prepare('SELECT * FROM halal_materials WHERE company_id=? ORDER BY id').all(company.id);
+    const mapped = all.map(m => ({ id: m.id, name: m.nama_bahan, jenis: m.jenis, produsen: m.produsen, negara: m.negara, supplier: m.supplier, lembaga: m.lembaga, sertifikat: m.nomor_sertifikat, expired: m.expired, status: m.halal_status }));
+    res.json({ message: 'Material deleted', materials: mapped });
+  } catch (err) {
+    console.error('Error in DELETE /api/materials/:id:', err);
+    res.status(500).json({ error: err.message, stack: err.stack });
+  }
+});
+
+// Legacy: POST /api/materials/bulk-delete
+app.post('/api/materials/bulk-delete', authMiddleware, async (req, res) => {
+  try {
+    const userId = req.user.id;
+    const company = await db.prepare('SELECT id FROM companies WHERE user_id=?').get(userId);
+    if (!company) return res.status(404).json({ error: 'Perusahaan tidak ditemukan' });
+    const { ids } = req.body;
+    if (!Array.isArray(ids) || ids.length === 0) return res.status(400).json({ error: 'Tidak ada ID yang diberikan' });
+    
+    for (const id of ids) {
+      await db.prepare('DELETE FROM halal_materials WHERE id=? AND company_id=?').run(parseInt(id), company.id);
+    }
+    const all = await db.prepare('SELECT * FROM halal_materials WHERE company_id=? ORDER BY id').all(company.id);
+    const mapped = all.map(m => ({ id: m.id, name: m.nama_bahan, jenis: m.jenis, produsen: m.produsen, negara: m.negara, supplier: m.supplier, lembaga: m.lembaga, sertifikat: m.nomor_sertifikat, expired: m.expired, status: m.halal_status }));
+    res.json({ message: `${ids.length} material deleted`, materials: mapped });
+  } catch (err) {
+    console.error('Error in POST /api/materials/bulk-delete:', err);
+    res.status(500).json({ error: err.message, stack: err.stack });
+  }
 });
 
 // Legacy: POST /api/materials/import
@@ -1030,26 +1067,23 @@ app.post('/api/materials/import', authMiddleware, upload.single('file'), async (
     const rows = XLSX.utils.sheet_to_json(sheet, { raw: false });
     const insertMat = await db.prepare(`INSERT INTO halal_materials (company_id,nama_bahan,jenis,produsen,negara,supplier,lembaga,nomor_sertifikat,expired,halal_status) VALUES (?,?,?,?,?,?,?,?,?,?)`);
     let count = 0;
-    const insertAll = db.transaction((rows) => {
-      for (const row of rows) {
-        const name = (row['nama_bahan']||row['Nama Bahan']||row['name']||'').toString().trim();
-        if (!name) continue;
-        let status = (row['Status Halal']||row['status']||'hijau').toString().toLowerCase().trim();
-        if (!['hijau','kuning','merah'].includes(status)) status = 'hijau';
-        const sertifikat = (
-          row['nomor_sertifikat/registr'] || row['nomor_sertifikat'] || row['Nomor Sertifikat'] ||
-          row['No. Sertifikat'] || row['No Sertifikat'] || row['sertifikat'] ||
-          row['ID Halal'] || row['id_halal'] || row['No. Registrasi'] || ''
-        ).toString().trim();
-        const expired = (
-          row['masa_berlaku'] || row['Masa Berlaku'] || row['Expired'] || row['expired'] ||
-          row['Tanggal Terbit'] || row['tanggal_terbit'] || ''
-        ).toString().trim();
-        insertMat.run(company.id, name, (row['jenis_bahan']||'').toString().trim(), (row['produsen']||'').toString().trim(), (row['negara']||'').toString().trim(), (row['supplier']||row['Supplier']||'').toString().trim(), (row['lembaga_penerbit']||row['Lembaga Penerbit']||row['lembaga']||'').toString().trim(), sertifikat, expired, status);
-        count++;
-      }
-    });
-    insertAll(rows);
+    for (const row of rows) {
+      const name = (row['nama_bahan']||row['Nama Bahan']||row['name']||'').toString().trim();
+      if (!name) continue;
+      let status = (row['Status Halal']||row['status']||'hijau').toString().toLowerCase().trim();
+      if (!['hijau','kuning','merah'].includes(status)) status = 'hijau';
+      const sertifikat = (
+        row['nomor_sertifikat/registr'] || row['nomor_sertifikat'] || row['Nomor Sertifikat'] ||
+        row['No. Sertifikat'] || row['No Sertifikat'] || row['sertifikat'] ||
+        row['ID Halal'] || row['id_halal'] || row['No. Registrasi'] || ''
+      ).toString().trim();
+      const expired = (
+        row['masa_berlaku'] || row['Masa Berlaku'] || row['Expired'] || row['expired'] ||
+        row['Tanggal Terbit'] || row['tanggal_terbit'] || ''
+      ).toString().trim();
+      await insertMat.run(company.id, name, (row['jenis_bahan']||'').toString().trim(), (row['produsen']||'').toString().trim(), (row['negara']||'').toString().trim(), (row['supplier']||row['Supplier']||'').toString().trim(), (row['lembaga_penerbit']||row['Lembaga Penerbit']||row['lembaga']||'').toString().trim(), sertifikat, expired, status);
+      count++;
+    }
     const all = await db.prepare('SELECT * FROM halal_materials WHERE company_id=? ORDER BY id').all(company.id);
     const mapped = all.map(m => ({ id: m.id, name: m.nama_bahan, jenis: m.jenis, produsen: m.produsen, negara: m.negara, supplier: m.supplier, lembaga: m.lembaga, sertifikat: m.nomor_sertifikat, expired: m.expired, status: m.halal_status }));
     await logActivity(db, company.id, userId, 'materials_import', `${count} bahan diimpor dari Excel`);
