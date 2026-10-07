@@ -1906,8 +1906,11 @@ app.put('/api/admin/companies/:id/audit-schedule', adminAuthMiddleware, async (r
       newStatus = 5;
     }
 
-    await db.prepare('UPDATE companies SET jadwal_audit=?, auditor_name=?, certification_status=?, updated_at=datetime(\'now\') WHERE id=?')
-      .run(jadwal_audit || null, auditor_name || null, newStatus, companyId);
+    await db.prepare('UPDATE companies SET jadwal_audit=?, auditor_name=?, certification_status=?, updated_at=datetime(\'now\') WHERE user_id=?')
+      .run(jadwal_audit || null, auditor_name || null, newStatus, comp.user_id);
+    
+    // Ensure this company is set as the active company for the user
+    await db.prepare('UPDATE users SET company_id=? WHERE id=?').run(companyId, comp.user_id);
 
     // Ambil info user untuk notifikasi email dan log
     const user = await db.prepare('SELECT email, name FROM users WHERE id=?').get(comp.user_id);
@@ -2044,10 +2047,14 @@ app.patch('/api/admin/companies/:id/certification-status', adminAuthMiddleware, 
     updateSql += ', auditor_name=?';
     params.push(auditor_name);
   }
-  updateSql += ' WHERE id=?';
-  params.push(companyId);
+  const comp = await db.prepare('SELECT user_id FROM companies WHERE id=?').get(companyId);
+  if (!comp) return res.status(404).json({ error: 'Perusahaan tidak ditemukan' });
+
+  updateSql += ' WHERE user_id=?';
+  params.push(comp.user_id);
 
   await db.prepare(updateSql).run(...params);
+  await db.prepare('UPDATE users SET company_id=? WHERE id=?').run(companyId, comp.user_id);
   await logActivity(db, companyId, null, 'admin_cert_update', `Admin mengubah status sertifikasi BPJPH ke tahap ${status}`);
 
   // --- Kirim notifikasi email ke user perusahaan ---
