@@ -597,26 +597,18 @@ function ApplicationsPage({ onSelectCompany }) {
                       </div>
 
                       <div className="flex items-center gap-3 text-xs text-slate-500 flex-wrap">
-                        <span>Penanggung Jawab: <strong className="text-slate-700">{app.penanggung_jawab || '—'}</strong></span>
-                        <span>•</span>
-                        <span>Email: <strong className="text-slate-700">{app.user_email || '—'}</strong></span>
+                        <span>Penanggung Jawab: <strong className="text-slate-700">{app.penanggung_jawab || '-'}</strong></span>
+                        <span>Email: <strong className="text-slate-700">{app.user_email || '-'}</strong></span>
                         {app.user_phone && (
-                          <>
-                            <span>•</span>
-                            <span>Telp: <strong className="text-slate-700">{app.user_phone}</strong></span>
-                          </>
+                          <span>Telp: <strong className="text-slate-700">{app.user_phone}</strong></span>
                         )}
                         {app.nib && (
-                          <>
-                            <span>•</span>
-                            <span className="font-mono bg-slate-100 px-1.5 py-0.5 rounded text-slate-700">NIB: {app.nib}</span>
-                          </>
+                          <span className="font-mono bg-slate-100 px-1.5 py-0.5 rounded text-slate-700">NIB: {app.nib}</span>
                         )}
                       </div>
 
                       <div className="flex items-center gap-4 text-xs text-slate-400 pt-1">
-                        <span>Diajukan: <strong className="text-slate-600">{formatDate(app.permohonan_tanggal)}</strong> ({timeAgo(app.permohonan_tanggal)})</span>
-                        <span>•</span>
+                        <span>Diajukan: <strong className="text-slate-600">{app.permohonan_tanggal ? formatDate(app.permohonan_tanggal) : '-'}</strong>{app.permohonan_tanggal && timeAgo(app.permohonan_tanggal) ? ` (${timeAgo(app.permohonan_tanggal)})` : ''}</span>
                         <span>Status Progres: <strong className="text-emerald-700">Tahap {app.certification_status || 0} dari 8</strong></span>
                       </div>
                     </div>

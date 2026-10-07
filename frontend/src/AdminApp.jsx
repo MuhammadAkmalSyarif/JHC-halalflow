@@ -88,7 +88,7 @@ function StatusBadge({ status }) {
 // FORMAT DATE
 // =============================================
 function formatDate(dateStr) {
-  if (!dateStr) return 'â€”';
+  if (!dateStr) return '-';
   const d = new Date(dateStr);
   return d.toLocaleDateString('id-ID', { day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' });
 }
@@ -175,7 +175,7 @@ const AdminLogin = ({ onLogin }) => {
                 value={form.password}
                 onChange={e => setForm({...form, password: e.target.value})}
                 className="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-3 pr-12 text-sm text-slate-800 placeholder:text-slate-400 focus:outline-none focus:border-emerald-500 focus:ring-2 focus:ring-emerald-500/20 transition-all font-medium"
-                placeholder="â€¢â€¢â€¢â€¢â€¢â€¢â€¢â€¢"
+                placeholder=""
                 required
               />
               <button type="button" onClick={() => setShowPwd(!showPwd)} className="absolute right-4 top-1/2 -translate-y-1/2 text-slate-400 hover:text-emerald-600 transition-colors p-1">
@@ -520,7 +520,7 @@ function ApplicationsPage({ onSelectCompany }) {
           notification.type === 'error' ? 'bg-red-50 text-red-700 border-red-200' : 'bg-emerald-50 text-emerald-800 border-emerald-200'
         }`}>
           <span>{notification.text}</span>
-          <button onClick={() => setNotification({ text: '', type: '' })} className="text-xs opacity-70 hover:opacity-100">âœ•</button>
+          <button onClick={() => setNotification({ text: '', type: '' })} className="text-xs opacity-70 hover:opacity-100">✕</button>
         </div>
       )}
 
@@ -612,32 +612,24 @@ function ApplicationsPage({ onSelectCompany }) {
                         )}
                         {isCertified && (
                           <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[11px] font-bold bg-teal-50 text-teal-800 border border-teal-200">
-                            ðŸŽ“ Sertifikat Terbit
+                            🎓 Sertifikat Terbit
                           </span>
                         )}
                       </div>
 
                       <div className="flex items-center gap-3 text-xs text-slate-500 flex-wrap">
-                        <span>Penanggung Jawab: <strong className="text-slate-700">{app.penanggung_jawab || 'â€”'}</strong></span>
-                        <span>â€¢</span>
-                        <span>Email: <strong className="text-slate-700">{app.user_email || 'â€”'}</strong></span>
+                        <span>Penanggung Jawab: <strong className="text-slate-700">{app.penanggung_jawab || '-'}</strong></span>
+                        <span>Email: <strong className="text-slate-700">{app.user_email || '-'}</strong></span>
                         {app.user_phone && (
-                          <>
-                            <span>â€¢</span>
-                            <span>Telp: <strong className="text-slate-700">{app.user_phone}</strong></span>
-                          </>
+                          <span>Telp: <strong className="text-slate-700">{app.user_phone}</strong></span>
                         )}
                         {app.nib && (
-                          <>
-                            <span>â€¢</span>
-                            <span className="font-mono bg-slate-100 px-1.5 py-0.5 rounded text-slate-700">NIB: {app.nib}</span>
-                          </>
+                          <span className="font-mono bg-slate-100 px-1.5 py-0.5 rounded text-slate-700">NIB: {app.nib}</span>
                         )}
                       </div>
 
                       <div className="flex items-center gap-4 text-xs text-slate-400 pt-1">
-                        <span>Diajukan: <strong className="text-slate-600">{formatDate(app.permohonan_tanggal)}</strong> ({timeAgo(app.permohonan_tanggal)})</span>
-                        <span>â€¢</span>
+                        <span>Diajukan: <strong className="text-slate-600">{app.permohonan_tanggal ? formatDate(app.permohonan_tanggal) : '-'}</strong>{app.permohonan_tanggal && timeAgo(app.permohonan_tanggal) ? ` (${timeAgo(app.permohonan_tanggal)})` : ''}</span>
                         <span>Status Progres: <strong className="text-emerald-700">Tahap {app.certification_status || 0} dari 8</strong></span>
                       </div>
                     </div>
@@ -711,7 +703,7 @@ function ApplicationsPage({ onSelectCompany }) {
                       <div className="flex items-center gap-2">
                         <Icons.Award className="w-4 h-4 text-emerald-600 shrink-0"/>
                         <span>Nomor Sertifikat: <strong className="font-mono font-bold text-emerald-950">{app.nomor_sertifikat_bpjph}</strong></span>
-                        {app.tgl_terbit_sertifikat && <span>â€¢ Terbit: <strong>{app.tgl_terbit_sertifikat}</strong></span>}
+                        {app.tgl_terbit_sertifikat && <span> Terbit: <strong>{app.tgl_terbit_sertifikat}</strong></span>}
                       </div>
                       <span className="text-[11px] text-emerald-700 font-semibold">Tersinkronisasi ke User Dashboard</span>
                     </div>
@@ -784,7 +776,7 @@ function ApplicationsPage({ onSelectCompany }) {
                   <p className="text-xs text-slate-500">{activeApp.nama}</p>
                 </div>
               </div>
-              <button onClick={() => setModalType(null)} className="text-slate-400 hover:text-slate-600 p-1">âœ•</button>
+              <button onClick={() => setModalType(null)} className="text-slate-400 hover:text-slate-600 p-1">✕</button>
             </div>
 
             <form onSubmit={handleReject} className="space-y-4">
@@ -843,7 +835,7 @@ function ApplicationsPage({ onSelectCompany }) {
                   <p className="text-xs text-slate-500">{activeApp.nama}</p>
                 </div>
               </div>
-              <button onClick={() => setModalType(null)} className="text-slate-400 hover:text-slate-600 p-1">âœ•</button>
+              <button onClick={() => setModalType(null)} className="text-slate-400 hover:text-slate-600 p-1">✕</button>
             </div>
 
             <form onSubmit={handleCertSubmit} className="space-y-4">
@@ -890,7 +882,7 @@ function ApplicationsPage({ onSelectCompany }) {
               </div>
 
               <div className="p-3 bg-emerald-50 rounded-xl border border-emerald-200 text-[11px] text-emerald-800">
-                âœ“ Menyimpan akan otomatis memajukan progres sertifikasi ke <strong>Tahap 8 (Terbit Sertifikat Halal BPJPH)</strong> dan memunculkan tombol Download Sertifikat di dashboard user.
+                ✓ Menyimpan akan otomatis memajukan progres sertifikasi ke <strong>Tahap 8 (Terbit Sertifikat Halal BPJPH)</strong> dan memunculkan tombol Download Sertifikat di dashboard user.
               </div>
 
               <div className="flex gap-3 pt-2">
@@ -925,9 +917,9 @@ function ApplicationsPage({ onSelectCompany }) {
             <div className="p-6 border-b border-slate-100 flex items-center justify-between">
               <div>
                 <h3 className="text-xl font-black text-slate-900">{activeApp.nama || 'Detail Permohonan'}</h3>
-                <p className="text-xs text-slate-500 mt-0.5">Penanggung Jawab: {activeApp.penanggung_jawab || 'â€”'} â€¢ {activeApp.user_email}</p>
+                <p className="text-xs text-slate-500 mt-0.5">Penanggung Jawab: {activeApp.penanggung_jawab || '-'}  {activeApp.user_email}</p>
               </div>
-              <button onClick={() => setModalType(null)} className="text-slate-400 hover:text-slate-600 p-1">âœ•</button>
+              <button onClick={() => setModalType(null)} className="text-slate-400 hover:text-slate-600 p-1">✕</button>
             </div>
 
             {/* Tabs */}
@@ -962,12 +954,12 @@ function ApplicationsPage({ onSelectCompany }) {
                   {detailTab === 'profil' && (
                     <div className="space-y-4">
                       <div className="grid grid-cols-2 gap-3 bg-slate-50 p-4 rounded-2xl border">
-                        <div><span className="text-slate-400">NIB:</span> <p className="font-bold text-slate-800 font-mono">{activeApp.nib || 'â€”'}</p></div>
-                        <div><span className="text-slate-400">NPWP:</span> <p className="font-bold text-slate-800 font-mono">{activeApp.npwp || 'â€”'}</p></div>
-                        <div><span className="text-slate-400">Jenis Usaha:</span> <p className="font-bold text-slate-800">{activeApp.jenis_usaha || 'â€”'}</p></div>
-                        <div><span className="text-slate-400">Skala Usaha:</span> <p className="font-bold text-slate-800">{activeApp.skala_usaha || 'â€”'}</p></div>
-                        <div><span className="text-slate-400">Jumlah Outlet:</span> <p className="font-bold text-slate-800">{activeApp.jumlah_outlet || 'â€”'}</p></div>
-                        <div><span className="text-slate-400">Alamat Pabrik/Outlet:</span> <p className="font-bold text-slate-800">{activeApp.alamat || 'â€”'}</p></div>
+                        <div><span className="text-slate-400">NIB:</span> <p className="font-bold text-slate-800 font-mono">{activeApp.nib || '-'}</p></div>
+                        <div><span className="text-slate-400">NPWP:</span> <p className="font-bold text-slate-800 font-mono">{activeApp.npwp || '-'}</p></div>
+                        <div><span className="text-slate-400">Jenis Usaha:</span> <p className="font-bold text-slate-800">{activeApp.jenis_usaha || '-'}</p></div>
+                        <div><span className="text-slate-400">Skala Usaha:</span> <p className="font-bold text-slate-800">{activeApp.skala_usaha || '-'}</p></div>
+                        <div><span className="text-slate-400">Jumlah Outlet:</span> <p className="font-bold text-slate-800">{activeApp.jumlah_outlet || '-'}</p></div>
+                        <div><span className="text-slate-400">Alamat Pabrik/Outlet:</span> <p className="font-bold text-slate-800">{activeApp.alamat || '-'}</p></div>
                       </div>
 
                       <div>
@@ -983,7 +975,7 @@ function ApplicationsPage({ onSelectCompany }) {
                               <span className="font-semibold text-slate-700">{doc.label}</span>
                               {doc.file ? (
                                 <a href={`/uploads/${doc.file}`} target="_blank" rel="noreferrer" className="text-emerald-600 font-bold hover:underline flex items-center gap-1">
-                                  Lihat File â†—
+                                  Lihat File ↗
                                 </a>
                               ) : (
                                 <span className="text-slate-400 italic">Belum diupload</span>
@@ -1014,8 +1006,8 @@ function ApplicationsPage({ onSelectCompany }) {
                               {detailData.materials.map((m, i) => (
                                 <tr key={i} className="hover:bg-slate-50">
                                   <td className="p-3 text-slate-500 text-sm">{i + 1}</td>`n                                    <td className="p-3 font-semibold text-slate-800">{m.nama_bahan || m.name}</td>
-                                  <td className="p-3 text-slate-600">{m.produsen || 'â€”'}</td>
-                                  <td className="p-3 font-mono text-slate-600">{m.nomor_sertifikat || m.sertifikat || 'â€”'}</td>
+                                  <td className="p-3 text-slate-600">{m.produsen || '-'}</td>
+                                  <td className="p-3 font-mono text-slate-600">{m.nomor_sertifikat || m.sertifikat || '-'}</td>
                                   <td className="p-3">
                                     <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-50 text-emerald-700 border border-emerald-200 uppercase">
                                       {m.halal_status || m.status || 'hijau'}
@@ -1064,7 +1056,7 @@ function ApplicationsPage({ onSelectCompany }) {
                           <span className="font-semibold text-slate-800">{item.label}</span>
                           {item.file ? (
                             <a href={`/uploads/${item.file}`} target="_blank" rel="noreferrer" className="text-emerald-600 font-bold hover:underline flex items-center gap-1">
-                              Lihat Berkas â†—
+                              Lihat Berkas ↗
                             </a>
                           ) : (
                             <span className="text-slate-400 italic">Belum diupload</span>
@@ -1090,7 +1082,7 @@ function ApplicationsPage({ onSelectCompany }) {
                           <span className="font-semibold text-slate-700 text-[11px] truncate pr-2">{ev.label}</span>
                           {ev.file ? (
                             <a href={`/uploads/${ev.file}`} target="_blank" rel="noreferrer" className="text-emerald-600 font-bold hover:underline shrink-0">
-                              Buka â†—
+                              Buka ↗
                             </a>
                           ) : (
                             <span className="text-slate-400 italic shrink-0">Tidak ada</span>
@@ -1112,7 +1104,7 @@ function ApplicationsPage({ onSelectCompany }) {
                 }}
                 className="text-xs font-bold text-emerald-700 hover:underline"
               >
-                Buka Halaman Lengkap Perusahaan â†’
+                Buka Halaman Lengkap Perusahaan →
               </button>
               <button
                 onClick={() => setModalType(null)}
@@ -1264,7 +1256,7 @@ function CompaniesPage({ onSelectCompany }) {
       {notification.text && (
         <div className={`fixed top-5 right-5 z-50 px-5 py-3 rounded-xl shadow-lg text-sm font-semibold flex items-center gap-3 animate-fade-in ${notification.type === 'success' ? 'bg-emerald-600 text-white' : 'bg-red-600 text-white'}`}>
           <span>{notification.text}</span>
-          <button onClick={() => setNotification({ text: '', type: '' })} className="opacity-70 hover:opacity-100 text-lg leading-none">Ã—</button>
+          <button onClick={() => setNotification({ text: '', type: '' })} className="opacity-70 hover:opacity-100 text-lg leading-none">✕</button>
         </div>
       )}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
@@ -1317,9 +1309,9 @@ function CompaniesPage({ onSelectCompany }) {
                           <p className="text-[11px] text-slate-500 mt-0.5">{c.user_email}</p>
                         </div>
                       </td>
-                      <td className="px-5 py-4 text-slate-600 text-xs font-mono">{c.nib || 'â€”'}</td>
-                      <td className="px-5 py-4 text-slate-600 text-xs">{c.penanggung_jawab || 'â€”'}</td>
-                      <td className="px-5 py-4 text-slate-500 text-xs">{c.jenis_usaha || 'â€”'}</td>
+                      <td className="px-5 py-4 text-slate-600 text-xs font-mono">{c.nib || '-'}</td>
+                      <td className="px-5 py-4 text-slate-600 text-xs">{c.penanggung_jawab || '-'}</td>
+                      <td className="px-5 py-4 text-slate-500 text-xs">{c.jenis_usaha || '-'}</td>
                       <td className="px-5 py-4">
                         <div className="flex items-center gap-2">
                           <div className="flex-1 bg-slate-200 rounded-full h-1.5 min-w-[60px]">
@@ -1356,9 +1348,9 @@ function CompaniesPage({ onSelectCompany }) {
               <div className="flex items-center justify-between px-5 py-4 border-t border-slate-200">
                 <p className="text-xs text-slate-500">Menampilkan {companies.length} dari {pagination.total} perusahaan</p>
                 <div className="flex gap-2">
-                  <button onClick={() => fetchCompanies(pagination.page - 1)} disabled={pagination.page <= 1} className="px-3 py-1.5 rounded-lg bg-slate-100 text-slate-600 text-xs font-bold disabled:opacity-30 hover:bg-slate-200 transition-colors">â† Sebelum</button>
+                  <button onClick={() => fetchCompanies(pagination.page - 1)} disabled={pagination.page <= 1} className="px-3 py-1.5 rounded-lg bg-slate-100 text-slate-600 text-xs font-bold disabled:opacity-30 hover:bg-slate-200 transition-colors">← Sebelum</button>
                   <span className="px-3 py-1.5 text-xs text-slate-800 font-bold">{pagination.page} / {pagination.totalPages}</span>
-                  <button onClick={() => fetchCompanies(pagination.page + 1)} disabled={pagination.page >= pagination.totalPages} className="px-3 py-1.5 rounded-lg bg-slate-100 text-slate-600 text-xs font-bold disabled:opacity-30 hover:bg-slate-200 transition-colors">Berikut â†’</button>
+                  <button onClick={() => fetchCompanies(pagination.page + 1)} disabled={pagination.page >= pagination.totalPages} className="px-3 py-1.5 rounded-lg bg-slate-100 text-slate-600 text-xs font-bold disabled:opacity-30 hover:bg-slate-200 transition-colors">Berikut →</button>
                 </div>
               </div>
             )}
@@ -1604,7 +1596,7 @@ function CompanyDetailPage({ companyId, onBack }) {
               ].map(([label, value]) => (
                 <div key={label} className="flex gap-3">
                   <dt className="text-[11px] font-bold text-slate-500 w-28 shrink-0 pt-0.5">{label}</dt>
-                  <dd className="text-sm text-slate-800 flex-1">{value || 'â€”'}</dd>
+                  <dd className="text-sm text-slate-800 flex-1">{value || '-'}</dd>
                 </div>
               ))}
             </dl>
@@ -1702,7 +1694,7 @@ function CompanyDetailPage({ companyId, onBack }) {
                 ].map(([label, value]) => (
                   <div key={label} className="bg-slate-50 border border-slate-200 rounded-xl p-4">
                     <p className="text-[10px] font-black text-emerald-600 uppercase tracking-widest mb-2">{label}</p>
-                    <p className="text-sm font-semibold text-slate-800">{value || 'â€”'}</p>
+                    <p className="text-sm font-semibold text-slate-800">{value || '-'}</p>
                   </div>
                 ))}
               </div>
@@ -1774,13 +1766,13 @@ function CompanyDetailPage({ companyId, onBack }) {
                     <tr key={m.id} className="border-b border-slate-100 hover:bg-slate-50">
                       <td className="px-4 py-3 text-slate-400">{i + 1}</td>
                       <td className="px-4 py-3 font-semibold text-slate-800 whitespace-nowrap">{m.nama_bahan}</td>
-                      <td className="px-4 py-3 text-slate-500">{m.jenis || 'â€”'}</td>
-                      <td className="px-4 py-3 text-slate-500 whitespace-nowrap">{m.produsen || 'â€”'}</td>
-                      <td className="px-4 py-3 text-slate-500">{m.negara || 'â€”'}</td>
-                      <td className="px-4 py-3 text-slate-500 whitespace-nowrap">{m.supplier || 'â€”'}</td>
-                      <td className="px-4 py-3 text-slate-500">{m.lembaga || 'â€”'}</td>
-                      <td className="px-4 py-3 text-slate-600 font-mono">{m.nomor_sertifikat || m.sertifikat || 'â€”'}</td>
-                      <td className="px-4 py-3 text-slate-500 whitespace-nowrap">{m.expired || 'â€”'}</td>
+                      <td className="px-4 py-3 text-slate-500">{m.jenis || '-'}</td>
+                      <td className="px-4 py-3 text-slate-500 whitespace-nowrap">{m.produsen || '-'}</td>
+                      <td className="px-4 py-3 text-slate-500">{m.negara || '-'}</td>
+                      <td className="px-4 py-3 text-slate-500 whitespace-nowrap">{m.supplier || '-'}</td>
+                      <td className="px-4 py-3 text-slate-500">{m.lembaga || '-'}</td>
+                      <td className="px-4 py-3 text-slate-600 font-mono">{m.nomor_sertifikat || m.sertifikat || '-'}</td>
+                      <td className="px-4 py-3 text-slate-500 whitespace-nowrap">{m.expired || '-'}</td>
                       <td className="px-4 py-3">
                         <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold ${m.halal_status === 'hijau' ? 'bg-emerald-100 text-emerald-700' : m.halal_status === 'kuning' ? 'bg-amber-100 text-amber-700' : 'bg-red-100 text-red-700'}`}>
                           {m.halal_status}
@@ -1839,7 +1831,7 @@ function CompanyDetailPage({ companyId, onBack }) {
                       </td>
                       <td className="px-5 py-4">
                         {p.bahan && p.bahan.length > 0 ? (
-                          <span className="px-2 py-1 bg-emerald-100 text-emerald-700 text-[11px] font-bold rounded-full border border-emerald-200">âœ“ BOM Lengkap</span>
+                          <span className="px-2 py-1 bg-emerald-100 text-emerald-700 text-[11px] font-bold rounded-full border border-emerald-200">✓ BOM Lengkap</span>
                         ) : (
                           <span className="px-2 py-1 bg-amber-100 text-amber-700 text-[11px] font-bold rounded-full border border-amber-200">Menunggu BOM</span>
                         )}
@@ -2104,7 +2096,7 @@ function SimplePage({ title, onSelectCompany }) {
                 className="w-full flex items-center justify-between p-4 bg-slate-50 hover:bg-emerald-50 hover:border-emerald-200 rounded-xl border border-slate-200 transition-all group text-left">
                 <div>
                   <p className="font-bold text-slate-800 text-sm">{c.nama || 'Belum diisi'}</p>
-                  <p className="text-[11px] text-slate-500">{c.user_email} â€¢ NIB: {c.nib || 'â€”'}</p>
+                  <p className="text-[11px] text-slate-500">{c.user_email}  NIB: {c.nib || '-'}</p>
                 </div>
                 <Icons.ChevronRight className="w-4 h-4 text-slate-400 group-hover:text-emerald-600 group-hover:translate-x-1 transition-all"/>
               </button>
