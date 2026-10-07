@@ -1600,7 +1600,7 @@ function CompanyDetailPage({ companyId, onBack }) {
                 <input type="text" className="w-full px-3 py-2 border border-slate-200 rounded-lg text-sm bg-slate-50" value={auditorName} onChange={e => setAuditorName(e.target.value)} placeholder="Masukkan nama auditor" />
               </div>
               <div className="flex gap-2 pt-2">
-                <button onClick={updateAuditSchedule} disabled={statusLoading} className="flex-1 bg-emerald-600 hover:bg-emerald-700 disabled:opacity-50 text-white text-[11px] font-bold py-2 rounded-lg transition-colors">Simpan Jadwal</button>
+                <button onClick={() => updateAuditSchedule()} disabled={statusLoading} className="flex-1 bg-emerald-600 hover:bg-emerald-700 disabled:opacity-50 text-white text-[11px] font-bold py-2 rounded-lg transition-colors">Simpan Jadwal</button>
                 <button onClick={() => { setIsEditingAudit(false); setJadwalAudit(company.jadwal_audit || ''); setAuditorName(company.auditor_name || ''); }} className="px-4 bg-slate-100 hover:bg-slate-200 text-slate-600 text-[11px] font-bold py-2 rounded-lg transition-colors">Batal</button>
               </div>
             </div>
