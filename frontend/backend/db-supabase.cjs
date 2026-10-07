@@ -12,6 +12,13 @@ function getConnectionString() {
   try {
     const urlToParse = conn.startsWith('postgres://') ? conn.replace('postgres://', 'postgresql://') : conn;
     const u = new URL(urlToParse);
+
+    let pass = decodeURIComponent(u.password || '');
+    if (pass.startsWith('[') && pass.endsWith(']')) {
+      pass = pass.slice(1, -1);
+      u.password = encodeURIComponent(pass);
+    }
+
     if (u.hostname.startsWith('db.') && u.hostname.includes('.supabase.co')) {
       const parts = u.hostname.split('.');
       const ref = parts[1];

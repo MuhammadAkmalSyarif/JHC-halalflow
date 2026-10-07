@@ -112,6 +112,18 @@ app.get('/api/debug-env', async (req, res) => {
     const maskedRaw = raw ? raw.replace(/:([^:@]+)@/, ':****@') : 'NOT_SET';
     const maskedConverted = converted ? converted.replace(/:([^:@]+)@/, ':****@') : 'NOT_SET';
 
+    let passInfo = { length: 0, hasBrackets: false, isPlaceholder: false, sample: '' };
+    try {
+      const u = new URL(raw.startsWith('postgres://') ? raw.replace('postgres://', 'postgresql://') : raw);
+      const decoded = decodeURIComponent(u.password || '');
+      passInfo = {
+        length: decoded.length,
+        hasBrackets: decoded.startsWith('[') && decoded.endsWith(']'),
+        isPlaceholder: decoded.toUpperCase().includes('YOUR-PASSWORD'),
+        sample: decoded.length > 2 ? (decoded[0] + '...' + decoded[decoded.length - 1]) : ''
+      };
+    } catch(e) {}
+
     let dbStatus = 'untested';
     let dbError = null;
     try {
@@ -125,10 +137,12 @@ app.get('/api/debug-env', async (req, res) => {
     res.json({
       DATABASE_URL_RAW: maskedRaw,
       DATABASE_URL_CONVERTED: maskedConverted,
+      passInfo,
       has_SUPABASE_URL: !!process.env.SUPABASE_URL,
       has_SUPABASE_KEY: !!(process.env.SUPABASE_KEY || process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.SUPABASE_ANON_KEY),
       dbStatus,
-      dbError
+      dbError,
+      timestamp: new Date()
     });
   } catch (e) {
     res.status(500).json({ error: e.message });
