@@ -4,6 +4,14 @@ import * as XLSX from 'xlsx';
 // =============================================
 // ADMIN AUTH HELPER
 // =============================================
+const API_BASE = (import.meta.env.VITE_API_URL || '').replace(/\/$/, '');
+
+function getFullUrl(url) {
+  if (!url) return '';
+  if (url.startsWith('http://') || url.startsWith('https://')) return url;
+  return `${API_BASE}${url.startsWith('/') ? url : `/${url}`}`;
+}
+
 function getAdminHeaders() {
   const token = localStorage.getItem('jhc_admin_token');
   return token
@@ -12,7 +20,12 @@ function getAdminHeaders() {
 }
 
 async function adminFetch(url, options = {}) {
-  const res = await fetch(url, { ...options, headers: { ...getAdminHeaders(), ...(options.headers || {}) } });
+  if (!options.method || options.method.toUpperCase() === 'GET') {
+    const separator = url.includes('?') ? '&' : '?';
+    url = `${url}${separator}t=${Date.now()}`;
+  }
+  const finalUrl = getFullUrl(url);
+  const res = await fetch(finalUrl, { ...options, headers: { ...getAdminHeaders(), ...(options.headers || {}) } });
   if (res.status === 401) {
     localStorage.removeItem('jhc_admin_token');
     window.location.reload();
@@ -1258,6 +1271,7 @@ function CompaniesPage({ onSelectCompany }) {
                     <th className="text-left px-5 py-4 text-[10px] font-black text-slate-500 uppercase tracking-widest">Penanggung Jawab</th>
                     <th className="text-left px-5 py-4 text-[10px] font-black text-slate-500 uppercase tracking-widest">Jenis Usaha</th>
                     <th className="text-left px-5 py-4 text-[10px] font-black text-slate-500 uppercase tracking-widest">Progress</th>
+                    <th className="text-left px-5 py-4 text-[10px] font-black text-slate-500 uppercase tracking-widest">Jadwal Audit</th>
                     <th className="text-left px-5 py-4 text-[10px] font-black text-slate-500 uppercase tracking-widest">Update</th>
                     <th className="text-left px-5 py-4 text-[10px] font-black text-slate-500 uppercase tracking-widest">Aksi</th>
                   </tr>
@@ -1282,6 +1296,18 @@ function CompaniesPage({ onSelectCompany }) {
                           </div>
                           <span className="text-[11px] font-bold text-emerald-600 shrink-0">{c.progress_percent || 0}%</span>
                         </div>
+                      </td>
+                      <td className="px-5 py-4">
+                        {c.jadwal_audit ? (
+                          <div>
+                            <span className="inline-flex items-center gap-1 text-xs font-bold text-emerald-800 bg-emerald-50 border border-emerald-200 px-2 py-0.5 rounded-md">
+                              📅 {c.jadwal_audit}
+                            </span>
+                            {c.auditor_name && <p className="text-[10px] text-slate-500 mt-0.5">{c.auditor_name}</p>}
+                          </div>
+                        ) : (
+                          <span className="text-xs text-slate-400 italic">Belum diatur</span>
+                        )}
                       </td>
                       <td className="px-5 py-4 text-slate-500 text-[11px]">{formatDate(c.updated_at).split(',')[0]}</td>
                       <td className="px-5 py-4">
@@ -1386,26 +1412,36 @@ function CompanyDetailPage({ companyId, onBack }) {
 
   useEffect(() => { fetchAll(); }, [fetchAll]);
 
-  const updateAuditSchedule = async () => {
+  const updateAuditSchedule = async (customJadwal, customAuditor) => {
     setStatusLoading(true);
+    const jVal = customJadwal !== undefined ? customJadwal : jadwalAudit;
+    const aVal = customAuditor !== undefined ? customAuditor : auditorName;
     try {
       const res = await adminFetch(`/api/admin/companies/${companyId}/audit-schedule`, {
         method: 'PUT',
-        body: JSON.stringify({ jadwal_audit: jadwalAudit, auditor_name: auditorName })
+        body: JSON.stringify({ jadwal_audit: jVal, auditor_name: aVal })
       });
+      const data = await res.json();
       if (res.ok) {
-        setStatusMsg('Jadwal audit diperbarui');
-        setCompany(prev => ({...prev, jadwal_audit: jadwalAudit, auditor_name: auditorName}));
+        setStatusMsg('Jadwal audit berhasil diperbarui & disimpan!');
+        setCompany(prev => ({
+          ...prev,
+          jadwal_audit: jVal,
+          auditor_name: aVal,
+          certification_status: data.certification_status !== undefined ? data.certification_status : prev.certification_status
+        }));
+        setJadwalAudit(jVal || '');
+        setAuditorName(aVal || '');
         setIsEditingAudit(false);
       } else {
-        setStatusMsg('Gagal memperbarui jadwal audit');
+        setStatusMsg(data.error || 'Gagal memperbarui jadwal audit');
       }
     } catch (e) {
       console.error(e);
-      setStatusMsg('Terjadi kesalahan');
+      setStatusMsg('Terjadi kesalahan koneksi');
     } finally {
       setStatusLoading(false);
-      setTimeout(() => setStatusMsg(''), 3000);
+      setTimeout(() => setStatusMsg(''), 4000);
     }
   };
 
@@ -1944,6 +1980,57 @@ function CompanyDetailPage({ companyId, onBack }) {
                     <div className={`text-xs mt-0.5 leading-snug ${isCurrent ? 'text-white/80' : 'text-slate-400'}`}>{stage.desc}</div>
                     {isCurrent && (
                       <span className="inline-block mt-1.5 text-[10px] bg-white/20 text-white font-bold px-2 py-0.5 rounded-full tracking-wide">STATUS AKTIF</span>
+                    )}
+
+                    {stage.no === 5 && (
+                      <div className={`mt-3 pt-3 border-t ${isCurrent ? 'border-white/20' : 'border-slate-100'} w-full text-left`} onClick={e => e.stopPropagation()}>
+                        <div className={`${isCurrent ? 'bg-white/10 text-white' : 'bg-slate-50 text-slate-800'} rounded-xl p-3 space-y-2.5`}>
+                          <div className="flex items-center justify-between">
+                            <span className="text-[11px] font-bold flex items-center gap-1.5">
+                              📅 Pengaturan Jadwal Audit:
+                            </span>
+                            {company.jadwal_audit ? (
+                              <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${isCurrent ? 'bg-white/20 text-white' : 'bg-emerald-100 text-emerald-800'}`}>
+                                Terjadwal: {company.jadwal_audit}
+                              </span>
+                            ) : (
+                              <span className={`text-[10px] italic ${isCurrent ? 'text-white/70' : 'text-slate-400'}`}>
+                                Belum dijadwalkan
+                              </span>
+                            )}
+                          </div>
+                          <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                            <div>
+                              <label className={`block text-[10px] font-bold ${isCurrent ? 'text-white/80' : 'text-slate-500'} mb-1`}>Tanggal Audit</label>
+                              <input
+                                type="text"
+                                className="w-full px-2.5 py-1.5 border border-slate-300 rounded-lg text-xs bg-white text-slate-800 placeholder:text-slate-400"
+                                value={jadwalAudit}
+                                onChange={e => setJadwalAudit(e.target.value)}
+                                placeholder="Contoh: 15 November 2026"
+                              />
+                            </div>
+                            <div>
+                              <label className={`block text-[10px] font-bold ${isCurrent ? 'text-white/80' : 'text-slate-500'} mb-1`}>Auditor / Pendamping LPH</label>
+                              <input
+                                type="text"
+                                className="w-full px-2.5 py-1.5 border border-slate-300 rounded-lg text-xs bg-white text-slate-800 placeholder:text-slate-400"
+                                value={auditorName}
+                                onChange={e => setAuditorName(e.target.value)}
+                                placeholder="Contoh: Muhammad Akmal / LPH JHC"
+                              />
+                            </div>
+                          </div>
+                          <button
+                            type="button"
+                            onClick={() => updateAuditSchedule(jadwalAudit, auditorName)}
+                            disabled={statusLoading}
+                            className="px-3.5 py-1.5 bg-emerald-700 hover:bg-emerald-800 text-white text-xs font-bold rounded-lg transition-colors shadow-sm disabled:opacity-50"
+                          >
+                            Simpan Jadwal Audit
+                          </button>
+                        </div>
+                      </div>
                     )}
                   </div>
                   {!isCurrent && (

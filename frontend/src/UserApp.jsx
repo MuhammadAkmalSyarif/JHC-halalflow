@@ -598,6 +598,8 @@ export default function UserApp() {
               permohonanCatatan={permohonanCatatan}
               nomorSertifikat={nomorSertifikat}
               fileSertifikat={fileSertifikat}
+              jadwalAudit={jadwalAudit}
+              auditorName={auditorName}
               onRefreshStatus={refreshCertStatus}
             />
           )}
@@ -708,7 +710,7 @@ const Dashboard = ({
     { no: 2, label: 'Diproses', desc: 'Data dan dokumen usaha sedang diperiksa serta dipersiapkan untuk proses sertifikasi halal.', color: 'indigo' },
     { no: 3, label: 'Disubmit di SIHALAL', desc: 'Pengajuan sertifikasi halal telah diajukan melalui sistem SIHALAL BPJPH.', color: 'violet' },
     { no: 4, label: 'Feedback BPJPH / Dikirim ke LPH', desc: 'Pengajuan sedang menunggu atau menindaklanjuti feedback BPJPH. Jika persyaratan terpenuhi, pengajuan diteruskan kepada LPH.', color: 'amber' },
-    { no: 5, label: 'Penjadwalan Audit', desc: 'Pengajuan telah diterima LPH dan sedang dalam proses penjadwalan audit/pemeriksaan kehalalan.', color: 'orange' },
+    { no: 5, label: 'Penjadwalan Audit', desc: jadwalAudit ? `Audit dijadwalkan pada: ${jadwalAudit}${auditorName ? ` (Auditor: ${auditorName})` : ''}` : 'Pengajuan telah diterima LPH dan sedang dalam proses penjadwalan audit/pemeriksaan kehalalan.', color: 'orange' },
     { no: 6, label: 'Perbaikan Hasil Audit', desc: 'Hasil pemeriksaan/audit memerlukan perbaikan atau pemenuhan dokumen/data oleh pelaku usaha.', color: 'red' },
     { no: 7, label: 'Sidang Fatwa MUI', desc: 'Hasil pemeriksaan telah diproses untuk penetapan kehalalan melalui sidang fatwa sesuai ketentuan yang berlaku.', color: 'purple' },
     { no: 8, label: 'Terbit Sertifikat Halal BPJPH', desc: 'Selamat! Sertifikat Halal resmi BPJPH telah terbit dan dapat diakses melalui sistem.', color: 'emerald' },
@@ -786,12 +788,23 @@ const Dashboard = ({
           <p className="text-xs text-slate-400 mt-2">Vault cloud aktif</p>
         </Card>
 
-        <Card className="p-6">
-          <p className="text-slate-500 text-sm font-medium">Jadwal Audit</p>
+        <Card className={`p-6 transition-all ${jadwalAudit ? 'border-emerald-200 bg-gradient-to-br from-white via-white to-emerald-50/50 shadow-sm ring-1 ring-emerald-100' : ''}`}>
+          <div className="flex items-center justify-between">
+            <p className="text-slate-500 text-sm font-medium">Jadwal Audit</p>
+            {jadwalAudit ? (
+              <span className="text-[10px] font-bold bg-emerald-100 text-emerald-800 px-2 py-0.5 rounded-full border border-emerald-200">Terjadwal</span>
+            ) : (
+              <span className="text-[10px] font-medium bg-slate-100 text-slate-500 px-2 py-0.5 rounded-full">Menunggu</span>
+            )}
+          </div>
           {jadwalAudit ? (
             <>
-              <h3 className="text-lg font-bold text-slate-800 mt-2">{jadwalAudit}</h3>
-              <p className="text-xs text-emerald-600 mt-2 font-medium">Oleh {auditorName || 'Pendamping JHC'}</p>
+              <h3 className="text-lg font-extrabold text-emerald-950 mt-2 flex items-center gap-1.5">
+                <span>📅</span> {jadwalAudit}
+              </h3>
+              <p className="text-xs text-emerald-700 mt-1.5 font-semibold flex items-center gap-1">
+                <span>👤</span> Oleh {auditorName || 'Pendamping LPH JHC'}
+              </p>
             </>
           ) : (
             <>
@@ -2392,6 +2405,8 @@ const StepPengajuanBPJPH = ({
   permohonanCatatan, 
   nomorSertifikat, 
   fileSertifikat,
+  jadwalAudit,
+  auditorName,
   onRefreshStatus 
 }) => {
   const [loading, setLoading] = useState(false);
@@ -2481,6 +2496,18 @@ const StepPengajuanBPJPH = ({
             {certificationStatus > 0 ? `Tahap ${certificationStatus} dari 8` : 'Tahap Persiapan Berkas'}
           </span>
         </div>
+        {jadwalAudit && (
+          <div className="flex justify-between pt-1 border-t border-slate-200">
+            <span className="text-slate-500">Jadwal Audit:</span>
+            <span className="font-bold text-emerald-800">📅 {jadwalAudit}</span>
+          </div>
+        )}
+        {jadwalAudit && auditorName && (
+          <div className="flex justify-between pt-0.5">
+            <span className="text-slate-500">Auditor / Pendamping:</span>
+            <span className="font-medium text-slate-700">{auditorName}</span>
+          </div>
+        )}
         {nomorSertifikat && (
           <div className="flex justify-between pt-1 border-t border-slate-200">
             <span className="text-slate-500">Nomor Sertifikat BPJPH:</span>
@@ -2488,6 +2515,17 @@ const StepPengajuanBPJPH = ({
           </div>
         )}
       </div>
+
+      {jadwalAudit && (
+        <div className="p-4 bg-emerald-50 border border-emerald-200 rounded-2xl text-left max-w-md mx-auto flex items-start gap-3 shadow-2xs">
+          <span className="text-2xl mt-0.5">📅</span>
+          <div>
+            <p className="text-xs font-bold text-emerald-900">Jadwal Audit Halal Telah Ditetapkan</p>
+            <p className="text-sm font-bold text-slate-800 mt-1">{jadwalAudit}</p>
+            <p className="text-xs text-emerald-700 mt-0.5 font-medium">Auditor / Pendamping LPH: {auditorName || 'Tim LPH JHC'}</p>
+          </div>
+        </div>
+      )}
 
       {/* Rejection Alert Box */}
       {isRejected && permohonanCatatan && (

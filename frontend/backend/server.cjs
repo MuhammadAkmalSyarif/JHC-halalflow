@@ -509,7 +509,17 @@ app.post('/api/companies', authMiddleware, async (req, res) => {
 // GET /api/companies/mine — Get user's own company
 app.get('/api/companies/mine', authMiddleware, async (req, res) => {
   const userId = req.user.id;
-  const company = await db.prepare('SELECT * FROM companies WHERE user_id = ?').get(userId);
+  const user = await db.prepare('SELECT id, company_id FROM users WHERE id=?').get(userId);
+  let company = null;
+  if (user && user.company_id) {
+    company = await db.prepare('SELECT * FROM companies WHERE id=?').get(user.company_id);
+  }
+  if (!company) {
+    company = await db.prepare('SELECT * FROM companies WHERE user_id=? ORDER BY id DESC LIMIT 1').get(userId);
+    if (company && user && !user.company_id) {
+      await db.prepare('UPDATE users SET company_id=? WHERE id=?').run(company.id, userId);
+    }
+  }
   if (!company) return res.json({ company: null });
   res.json({ company });
 });
@@ -866,7 +876,14 @@ app.delete('/api/upload/:filename', authMiddleware, async (req, res) => {
 // Legacy: GET /api/company-profile
 app.get('/api/company-profile', authMiddleware, async (req, res) => {
   const userId = req.user.id;
-  const company = await db.prepare('SELECT * FROM companies WHERE user_id = ?').get(userId);
+  const user = await db.prepare('SELECT id, company_id FROM users WHERE id=?').get(userId);
+  let company = null;
+  if (user && user.company_id) {
+    company = await db.prepare('SELECT * FROM companies WHERE id=?').get(user.company_id);
+  }
+  if (!company) {
+    company = await db.prepare('SELECT * FROM companies WHERE user_id=? ORDER BY id DESC LIMIT 1').get(userId);
+  }
   if (!company) return res.json({});
   // Map to old format
   res.json({
@@ -879,6 +896,8 @@ app.get('/api/company-profile', authMiddleware, async (req, res) => {
     jumlahOutlet: company.jumlah_outlet,
     cabang: company.cabang,
     alamat: company.alamat,
+    jadwalAudit: company.jadwal_audit || '',
+    auditorName: company.auditor_name || '',
     _company_id: company.id
   });
 });
@@ -1084,7 +1103,17 @@ app.get('/api/progress', authMiddleware, async (req, res) => {
 // GET /api/certification-status
 app.get('/api/certification-status', authMiddleware, async (req, res) => {
   const userId = req.user.id;
-  const company = await db.prepare('SELECT certification_status, permohonan_status, permohonan_catatan, nomor_sertifikat, tgl_terbit_sertifikat, file_sertifikat, jadwal_audit, auditor_name FROM companies WHERE user_id=?').get(userId);
+  const user = await db.prepare('SELECT id, company_id FROM users WHERE id=?').get(userId);
+  let company = null;
+  if (user && user.company_id) {
+    company = await db.prepare('SELECT certification_status, permohonan_status, permohonan_catatan, nomor_sertifikat, tgl_terbit_sertifikat, file_sertifikat, jadwal_audit, auditor_name FROM companies WHERE id=?').get(user.company_id);
+  }
+  if (!company) {
+    company = await db.prepare('SELECT id, certification_status, permohonan_status, permohonan_catatan, nomor_sertifikat, tgl_terbit_sertifikat, file_sertifikat, jadwal_audit, auditor_name FROM companies WHERE user_id=? ORDER BY id DESC LIMIT 1').get(userId);
+    if (company && user && !user.company_id) {
+      await db.prepare('UPDATE users SET company_id=? WHERE id=?').run(company.id, userId);
+    }
+  }
   res.json({
     certificationStatus: company?.certification_status || 0,
     permohonanStatus: company?.permohonan_status || 'belum',
@@ -1866,10 +1895,58 @@ app.get('/api/admin/companies/:id', adminAuthMiddleware, async (req, res) => {
 // Admin: Update Jadwal Audit
 app.put('/api/admin/companies/:id/audit-schedule', adminAuthMiddleware, async (req, res) => {
   const companyId = parseInt(req.params.id);
-  const { jadwal_audit, auditor_name } = req.body;
+  const { jadwal_audit, auditor_name, auto_update_stage } = req.body;
   try {
-    await db.prepare('UPDATE companies SET jadwal_audit=?, auditor_name=? WHERE id=?').run(jadwal_audit, auditor_name, companyId);
-    res.json({ success: true, message: 'Jadwal audit berhasil diperbarui' });
+    const comp = await db.prepare('SELECT id, user_id, certification_status FROM companies WHERE id=?').get(companyId);
+    if (!comp) return res.status(404).json({ error: 'Perusahaan tidak ditemukan' });
+
+    let newStatus = comp.certification_status || 0;
+    // Jika jadwal audit diisi dan status saat ini masih di bawah 5, naikkan otomatis ke tahap 5 (Penjadwalan Audit)
+    if (auto_update_stage !== false && jadwal_audit && jadwal_audit.trim() !== '' && newStatus < 5) {
+      newStatus = 5;
+    }
+
+    await db.prepare('UPDATE companies SET jadwal_audit=?, auditor_name=?, certification_status=?, updated_at=datetime(\'now\') WHERE id=?')
+      .run(jadwal_audit || null, auditor_name || null, newStatus, companyId);
+
+    // Ambil info user untuk notifikasi email dan log
+    const user = await db.prepare('SELECT email, name FROM users WHERE id=?').get(comp.user_id);
+    await logActivity(db, companyId, comp.user_id, 'admin_audit_schedule', `Jadwal audit ditetapkan: ${jadwal_audit || '-'} (${auditor_name || '-'})`);
+
+    // Kirim email notifikasi jika jadwal diisi
+    if (user && user.email && jadwal_audit && jadwal_audit.trim() !== '') {
+      try {
+        await transporter.sendMail({
+          from: process.env.EMAIL_FROM || `"JHC HalalFlow" <${process.env.SMTP_USER}>`,
+          to: user.email,
+          subject: '📅 Penetapan Jadwal Audit Sertifikasi Halal - JHC HalalFlow',
+          html: `
+            <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 24px; border: 1px solid #e2e8f0; border-radius: 12px; background-color: #ffffff;">
+              <h2 style="color: #065f46; margin-top: 0;">Jadwal Audit Halal Telah Ditetapkan</h2>
+              <p>Halo <strong>${user.name || 'Pelaku Usaha'}</strong>,</p>
+              <p>Tim Admin JHC telah menetapkan jadwal audit pemeriksaan kehalalan untuk perusahaan Anda:</p>
+              <div style="background-color: #ecfdf5; border: 1px solid #a7f3d0; border-radius: 12px; padding: 16px; margin: 20px 0;">
+                <p style="margin: 4px 0; font-size: 15px;"><strong>📅 Tanggal Audit:</strong> ${jadwal_audit}</p>
+                <p style="margin: 4px 0; font-size: 15px;"><strong>👤 Auditor / Pendamping LPH:</strong> ${auditor_name || 'Tim LPH JHC'}</p>
+              </div>
+              <p>Silakan login ke portal <a href="https://www.halalflow.or.id" style="color: #059669; font-weight: bold;">halalflow.or.id</a> untuk memantau status terkini dan mempersiapkan dokumen yang diperlukan saat pemeriksaan audit.</p>
+              <hr style="border: none; border-top: 1px solid #e2e8f0; margin: 24px 0;" />
+              <p style="font-size: 12px; color: #94a3b8; margin-bottom: 0;">Email ini dikirim secara otomatis oleh JHC HalalFlow System.</p>
+            </div>
+          `
+        });
+      } catch (mailErr) {
+        console.warn('Gagal mengirim email notifikasi jadwal audit:', mailErr.message);
+      }
+    }
+
+    res.json({
+      success: true,
+      message: 'Jadwal audit berhasil diperbarui',
+      jadwal_audit: jadwal_audit || null,
+      auditor_name: auditor_name || null,
+      certification_status: newStatus
+    });
   } catch (e) {
     res.status(500).json({ error: e.message });
   }
@@ -1954,10 +2031,23 @@ app.patch('/api/admin/companies/:id/stage-status', adminAuthMiddleware, async (r
 // PATCH /api/admin/companies/:id/certification-status
 app.patch('/api/admin/companies/:id/certification-status', adminAuthMiddleware, async (req, res) => {
   const companyId = parseInt(req.params.id);
-  const { status } = req.body;
+  const { status, jadwal_audit, auditor_name } = req.body;
   if (typeof status !== 'number') return res.status(400).json({ error: 'Status tidak valid' });
 
-  await db.prepare('UPDATE companies SET certification_status=?, updated_at=datetime(\'now\') WHERE id=?').run(status, companyId);
+  let updateSql = "UPDATE companies SET certification_status=?, updated_at=datetime('now')";
+  const params = [status];
+  if (jadwal_audit !== undefined) {
+    updateSql += ', jadwal_audit=?';
+    params.push(jadwal_audit);
+  }
+  if (auditor_name !== undefined) {
+    updateSql += ', auditor_name=?';
+    params.push(auditor_name);
+  }
+  updateSql += ' WHERE id=?';
+  params.push(companyId);
+
+  await db.prepare(updateSql).run(...params);
   await logActivity(db, companyId, null, 'admin_cert_update', `Admin mengubah status sertifikasi BPJPH ke tahap ${status}`);
 
   // --- Kirim notifikasi email ke user perusahaan ---
