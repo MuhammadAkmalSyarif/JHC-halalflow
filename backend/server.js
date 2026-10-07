@@ -291,41 +291,64 @@ app.post('/api/auth/forgot-password', async (req, res) => {
   // Clean old tokens for this email
   await db.prepare('DELETE FROM password_resets WHERE email = ?').run(email);
   await db.prepare('INSERT INTO password_resets (email, token, expires_at) VALUES (?, ?, ?)').run(email, otp, expires);
+  // Send email directly using nodemailer
+  const smtpUser = process.env.SMTP_USER;
+  const smtpPass = (process.env.SMTP_PASS || '').replace(/\s+/g, '');
 
-  // Call Vercel API to send email (Render Free Tier blocks SMTP)
+  if (!smtpUser || !smtpPass) {
+    await db.prepare('DELETE FROM password_resets WHERE email = ?').run(email);
+    return res.status(500).json({
+      error: 'Layanan email belum aktif di server. Pastikan SMTP_USER dan SMTP_PASS Gmail telah diisi di Environment Variables Vercel.'
+    });
+  }
+
+  const transporter = nodemailer.createTransport({
+    host: process.env.SMTP_HOST || 'smtp.gmail.com',
+    port: parseInt(process.env.SMTP_PORT || '465'),
+    secure: (process.env.SMTP_SECURE === 'true' || process.env.SMTP_PORT === '465' || !process.env.SMTP_PORT),
+    auth: {
+      user: smtpUser,
+      pass: smtpPass
+    }
+  });
+
+  const mailOptions = {
+    from: process.env.EMAIL_FROM || `"JHC HalalFlow" <${smtpUser}>`,
+    to: email,
+    subject: 'Kode Verifikasi Reset Password - JHC HalalFlow',
+    html: `
+      <div style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; max-width: 500px; margin: 0 auto; padding: 32px 24px; background: #ffffff; border: 1px solid #e2e8f0; border-radius: 16px;">
+        <div style="text-align: center; margin-bottom: 24px;">
+          <h2 style="color: #059669; margin: 0; font-size: 24px; font-weight: 800; letter-spacing: -0.5px;">JHC HalalFlow</h2>
+          <p style="color: #64748b; margin: 4px 0 0 0; font-size: 13px;">Sistem Manajemen Sertifikasi Halal</p>
+        </div>
+        <div style="border-top: 1px solid #f1f5f9; padding-top: 20px;">
+          <p style="color: #1e293b; font-size: 15px; line-height: 1.6; margin: 0 0 12px 0;">Halo,</p>
+          <p style="color: #475569; font-size: 14px; line-height: 1.6; margin: 0 0 20px 0;">
+            Anda telah meminta untuk mereset kata sandi akun JHC HalalFlow Anda. Masukkan kode verifikasi berikut untuk melanjutkan proses reset password:
+          </p>
+          <div style="background: linear-gradient(135deg, #ecfdf5 0%, #f0fdf4 100%); border: 1.5px dashed #059669; padding: 20px; text-align: center; border-radius: 12px; margin: 24px 0;">
+            <span style="font-size: 12px; font-weight: 700; color: #065f46; letter-spacing: 1px; text-transform: uppercase;">Kode Verifikasi</span>
+            <div style="font-size: 34px; font-weight: 800; color: #047857; letter-spacing: 8px; margin-top: 8px; font-family: monospace;">${otp}</div>
+          </div>
+          <p style="color: #64748b; font-size: 13px; line-height: 1.6; margin: 0 0 8px 0;">
+            ⏳ Kode verifikasi ini berlaku selama <strong>1 jam</strong>. Demi keamanan, jangan bagikan kode ini kepada siapa pun.
+          </p>
+        </div>
+      </div>
+    `
+  };
+
   try {
-    const https = require('https');
-    const data = JSON.stringify({ email, otp, internalSecret: process.env.JWT_SECRET });
-    const vercelUrl = new URL((process.env.FRONTEND_URL || 'https://jhc-halalflow.vercel.app') + '/api/send-email');
-    
-    const req = https.request(vercelUrl, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'Content-Length': Buffer.byteLength(data)
-      }
-    }, (resp) => {
-      let body = '';
-      resp.on('data', chunk => body += chunk);
-      resp.on('end', async () => {
-        if (resp.statusCode === 200) {
-          console.log(`[OTP] Email berhasil dikirim via Vercel ke: ${email}`);
-          return res.json({ message: 'Kode verifikasi telah dikirim ke email Anda. Periksa inbox/spam.' });
-        } else {
-          console.warn('[OTP] Email SMTP failed, fallback with OTP:', otp);
-          return res.json({ message: 'Kode verifikasi reset password Anda: ' + otp + '. Masukkan kode ini pada langkah berikutnya.' });
-        }
-      });
-    });
-    req.on('error', async (error) => {
-      console.warn('[OTP] Connection error, fallback with OTP:', otp);
-      res.json({ message: 'Kode verifikasi reset password Anda: ' + otp + '. Masukkan kode ini pada langkah berikutnya.' });
-    });
-    req.write(data);
-    req.end();
+    await transporter.sendMail(mailOptions);
+    console.log(`[OTP] Email reset password berhasil dikirim ke: ${email}`);
+    return res.json({ message: `Kode 6 digit telah dikirim ke email ${email}. Periksa inbox/spam.` });
   } catch (error) {
-    console.warn('[OTP] Catch error, fallback with OTP:', otp);
-    res.json({ message: 'Kode verifikasi reset password Anda: ' + otp + '. Masukkan kode ini pada langkah berikutnya.' });
+    console.error(`[OTP] Gagal mengirim email ke ${email}:`, error.message);
+    await db.prepare('DELETE FROM password_resets WHERE email = ?').run(email);
+    return res.status(500).json({
+      error: `Gagal mengirim email verifikasi (${error.message}). Pastikan SMTP_USER dan App Password Gmail valid di Vercel.`
+    });
   }
 });
 
