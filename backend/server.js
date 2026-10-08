@@ -861,7 +861,14 @@ app.get('/api/companies/:id/progress', authMiddleware, async (req, res) => {
 // =============================================
 
 // POST /api/upload
-app.post('/api/upload', authMiddleware, upload.single('file'), async (req, res) => {
+app.post('/api/upload', authMiddleware, (req, res, next) => {
+  upload.single('file')(req, res, (err) => {
+    if (err) {
+      return res.status(400).json({ error: err.message });
+    }
+    next();
+  });
+}, async (req, res) => {
   if (!req.file) return res.status(400).json({ error: 'File tidak ada' });
 
   const companyId = req.body.company_id ? parseInt(req.body.company_id) : null;
@@ -1464,7 +1471,6 @@ app.post('/api/evidence', authMiddleware, async (req, res) => {
       INSERT INTO evidence_data (
         company_id, sosialisasiFoto, auditInternalFoto, sosialisasiAbsen, auditInternalAbsen,
         pembelianBahan, penyimpananBahan, hasilProduksi, distribusiProduk
-      ) VALUES (?,?,?,?,?,?,?,?,?)
     `).run(
       company.id, data.sosialisasiFoto||'', data.auditInternalFoto||'', data.sosialisasiAbsen||'', data.auditInternalAbsen||'',
       data.pembelianBahan||'', data.penyimpananBahan||'', data.hasilProduksi||'', data.distribusiProduk||''
