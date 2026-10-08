@@ -1415,14 +1415,14 @@ app.get('/api/evidence', authMiddleware, async (req, res) => {
   const row = await db.prepare('SELECT * FROM evidence_data WHERE company_id=?').get(company.id);
   if (!row) return res.json({});
   res.json({
-    sosialisasiFoto: row.sosialisasiFoto,
-    auditInternalFoto: row.auditInternalFoto,
-    sosialisasiAbsen: row.sosialisasiAbsen,
-    auditInternalAbsen: row.auditInternalAbsen,
-    pembelianBahan: row.pembelianBahan,
-    penyimpananBahan: row.penyimpananBahan,
-    hasilProduksi: row.hasilProduksi,
-    distribusiProduk: row.distribusiProduk
+    sosialisasiFoto: row.sosialisasiFoto || row.sosialisasifoto,
+    auditInternalFoto: row.auditInternalFoto || row.auditinternalfoto,
+    sosialisasiAbsen: row.sosialisasiAbsen || row.sosialisasiabsen,
+    auditInternalAbsen: row.auditInternalAbsen || row.auditinternalabsen,
+    pembelianBahan: row.pembelianBahan || row.pembelianbahan,
+    penyimpananBahan: row.penyimpananBahan || row.penyimpananbahan,
+    hasilProduksi: row.hasilProduksi || row.hasilproduksi,
+    distribusiProduk: row.distribusiProduk || row.distribusiproduk
   });
 });
 
@@ -1439,14 +1439,14 @@ app.post('/api/evidence', authMiddleware, async (req, res) => {
         pembelianBahan=?, penyimpananBahan=?, hasilProduksi=?, distribusiProduk=?, updated_at=datetime('now')
       WHERE company_id=?
     `).run(
-      data.sosialisasiFoto !== undefined ? data.sosialisasiFoto : (existing.sosialisasiFoto || ''),
-      data.auditInternalFoto !== undefined ? data.auditInternalFoto : (existing.auditInternalFoto || ''),
-      data.sosialisasiAbsen !== undefined ? data.sosialisasiAbsen : (existing.sosialisasiAbsen || ''),
-      data.auditInternalAbsen !== undefined ? data.auditInternalAbsen : (existing.auditInternalAbsen || ''),
-      data.pembelianBahan !== undefined ? data.pembelianBahan : (existing.pembelianBahan || ''),
-      data.penyimpananBahan !== undefined ? data.penyimpananBahan : (existing.penyimpananBahan || ''),
-      data.hasilProduksi !== undefined ? data.hasilProduksi : (existing.hasilProduksi || ''),
-      data.distribusiProduk !== undefined ? data.distribusiProduk : (existing.distribusiProduk || ''),
+      data.sosialisasiFoto !== undefined ? data.sosialisasiFoto : (existing.sosialisasiFoto || existing.sosialisasifoto || ''),
+      data.auditInternalFoto !== undefined ? data.auditInternalFoto : (existing.auditInternalFoto || existing.auditinternalfoto || ''),
+      data.sosialisasiAbsen !== undefined ? data.sosialisasiAbsen : (existing.sosialisasiAbsen || existing.sosialisasiabsen || ''),
+      data.auditInternalAbsen !== undefined ? data.auditInternalAbsen : (existing.auditInternalAbsen || existing.auditinternalabsen || ''),
+      data.pembelianBahan !== undefined ? data.pembelianBahan : (existing.pembelianBahan || existing.pembelianbahan || ''),
+      data.penyimpananBahan !== undefined ? data.penyimpananBahan : (existing.penyimpananBahan || existing.penyimpananbahan || ''),
+      data.hasilProduksi !== undefined ? data.hasilProduksi : (existing.hasilProduksi || existing.hasilproduksi || ''),
+      data.distribusiProduk !== undefined ? data.distribusiProduk : (existing.distribusiProduk || existing.distribusiproduk || ''),
       company.id
     );
   } else {
@@ -2750,14 +2750,14 @@ app.get('/api/admin/companies/:id/evidence', adminAuthMiddleware, async (req, re
     const stage = await db.prepare('SELECT status FROM certification_progress WHERE company_id=? AND stage=6').get(companyId);
     res.json({
       evidence: row ? {
-        sosialisasiFoto: row.sosialisasiFoto,
-        auditInternalFoto: row.auditInternalFoto,
-        sosialisasiAbsen: row.sosialisasiAbsen,
-        auditInternalAbsen: row.auditInternalAbsen,
-        pembelianBahan: row.pembelianBahan,
-        penyimpananBahan: row.penyimpananBahan,
-        hasilProduksi: row.hasilProduksi,
-        distribusiProduk: row.distribusiProduk
+        sosialisasiFoto: row.sosialisasiFoto || row.sosialisasifoto,
+        auditInternalFoto: row.auditInternalFoto || row.auditinternalfoto,
+        sosialisasiAbsen: row.sosialisasiAbsen || row.sosialisasiabsen,
+        auditInternalAbsen: row.auditInternalAbsen || row.auditinternalabsen,
+        pembelianBahan: row.pembelianBahan || row.pembelianbahan,
+        penyimpananBahan: row.penyimpananBahan || row.penyimpananbahan,
+        hasilProduksi: row.hasilProduksi || row.hasilproduksi,
+        distribusiProduk: row.distribusiProduk || row.distribusiproduk
       } : null,
       stageStatus: stage?.status || 'Belum Dimulai'
     });
