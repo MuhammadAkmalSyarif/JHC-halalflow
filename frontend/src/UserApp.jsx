@@ -1161,24 +1161,28 @@ const StepMatrixBahanHalal = ({ materials, setMaterials, matrixSubmitted, setMat
   const handleBulkDelete = async () => {
     if (selectedIds.length === 0) return;
     if (!(await showConfirm(`Apakah Anda yakin ingin menghapus ${selectedIds.length} bahan baku terpilih?`))) return;
+    
+    // Optimistic UI Update
+    const idsToDelete = [...selectedIds];
+    setMaterials(prev => prev.filter(m => !idsToDelete.includes(m.id)));
+    setSelectedIds([]);
+    showToast(`Berhasil menghapus ${idsToDelete.length} bahan baku.`);
+
     try {
       const res = await apiFetch('/api/materials/bulk-delete', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ ids: selectedIds })
+        body: JSON.stringify({ ids: idsToDelete })
       });
       const data = await res.json();
       if (res.ok) {
         setMaterials(data.materials);
-        setSelectedIds([]);
-        setSuccessMsg(`${selectedIds.length} bahan baku berhasil dihapus!`);
-        setTimeout(() => setSuccessMsg(''), 3000);
       } else {
-        alert('Gagal menghapus: ' + (data.error || 'Server error'));
+        showAlert('Gagal menghapus: ' + (data.error || 'Server error'));
       }
     } catch (err) {
       console.error(err);
-      alert('Terjadi kesalahan jaringan atau server: ' + err.message);
+      showAlert('Terjadi kesalahan jaringan atau server: ' + err.message);
     }
   };
 
@@ -1246,6 +1250,12 @@ const StepMatrixBahanHalal = ({ materials, setMaterials, matrixSubmitted, setMat
 
   const handleDelete = async (id) => {
     if (!(await showConfirm('Apakah Anda yakin ingin menghapus bahan baku ini?'))) return;
+    
+    // Optimistic UI Update
+    setMaterials(prev => prev.filter(m => m.id !== id));
+    if (editingId === id) handleCancelEdit();
+    showToast('Bahan baku berhasil dihapus!');
+
     try {
       const res = await apiFetch(`/api/materials/${id}`, {
         method: 'DELETE'
@@ -1253,10 +1263,6 @@ const StepMatrixBahanHalal = ({ materials, setMaterials, matrixSubmitted, setMat
       const data = await res.json();
       if (res.ok) {
         setMaterials(data.materials);
-        if (editingId === id) {
-          handleCancelEdit();
-        }
-        showToast('Bahan baku berhasil dihapus!');
       }
     } catch (err) {
       console.error(err);
@@ -1652,11 +1658,14 @@ const StepUploadProduk = ({ products, setProducts, materials, productsSubmitted,
 
   const handleDeleteBOM = async (bomProduct) => {
     if (!(await showConfirm(`Hapus produk "${bomProduct.name}" dari BOM Final?`))) return;
+    
+    // Optimistic UI Update for instant feedback
+    setBomProducts(prev => prev.filter(p => p.id !== bomProduct.id));
+    showToast(`Produk "${bomProduct.name}" berhasil dihapus dari BOM!`);
+
     try {
       await apiFetch(`/api/products/${bomProduct.id}`, { method: 'DELETE' });
     } catch (e) { /* ignore if no backend endpoint */ }
-    setBomProducts(prev => prev.filter(p => p.id !== bomProduct.id));
-    showToast(`Produk "${bomProduct.name}" berhasil dihapus dari BOM!`);
   };
 
   const handleEditBOM = (bomProduct) => {
@@ -2236,6 +2245,21 @@ const StepUploadEvidence = ({ evidenceData, setEvidenceData, handleGenericFileUp
     const confirmDelete = await showConfirm(`Apakah Anda yakin ingin menghapus foto "${filename}"?`);
     if (!confirmDelete) return;
 
+    // Optimistic UI Update
+    const currentList = (evidenceData[field] || '')
+      .split(',')
+      .map(f => f.trim())
+      .filter(f => f && f !== filename);
+    
+    const updatedList = currentList.join(',');
+    const updatedData = {
+      ...evidenceData,
+      [field]: updatedList
+    };
+
+    setEvidenceData(updatedData);
+    showToast('Foto berhasil dihapus.');
+
     setDeletingFile(filename);
     try {
       const token = localStorage.getItem('jhc_token');
@@ -2245,27 +2269,12 @@ const StepUploadEvidence = ({ evidenceData, setEvidenceData, handleGenericFileUp
       });
 
       if (res.ok) {
-        const currentList = (evidenceData[field] || '')
-          .split(',')
-          .map(f => f.trim())
-          .filter(f => f && f !== filename);
-        
-        const updatedList = currentList.join(',');
-        const updatedData = {
-          ...evidenceData,
-          [field]: updatedList
-        };
-
-        setEvidenceData(updatedData);
-
         // Sinkronisasi pembaruan ke server
         await apiFetch('/api/evidence', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify(updatedData)
         });
-
-        showToast('Foto berhasil dihapus.');
       } else {
         const data = await res.json().catch(() => ({}));
         showAlert('Gagal menghapus file: ' + (data.error || 'Terjadi kesalahan pada server'));
