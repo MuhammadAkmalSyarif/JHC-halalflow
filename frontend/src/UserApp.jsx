@@ -345,11 +345,11 @@ export default function UserApp() {
           },
           body: JSON.stringify(payload)
         });
-        const data = await res.json();
+        const data = await res.json().catch(() => ({}));
         if (res.ok) {
           uploadedNames.push(data.filename);
         } else {
-          showToast('Gagal mengunggah berkas: ' + (data.error || 'Server error'));
+          showAlert('Gagal mengunggah berkas: ' + (data.error || 'Server error'), 'error');
         }
       }
       
