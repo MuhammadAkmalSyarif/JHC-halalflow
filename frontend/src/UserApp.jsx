@@ -1719,9 +1719,12 @@ const StepUploadProduk = ({ products, setProducts, materials, productsSubmitted,
         setSelectedIngredients([]);
         setSuccessMsg(`Bahan penyusun "${prod.name}" berhasil disimpan ke BOM!`);
         setTimeout(() => setSuccessMsg(''), 3000);
+      } else {
+        showToast(data.error || 'Gagal menyimpan BOM produk');
       }
     } catch (err) {
       console.error(err);
+      showToast('Terjadi kesalahan jaringan.');
     }
   };
 

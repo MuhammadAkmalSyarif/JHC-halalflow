@@ -1273,7 +1273,7 @@ app.get('/api/products', authMiddleware, async (req, res) => {
   const company = await db.prepare('SELECT id FROM companies WHERE user_id=?').get(userId);
   if (!company) return res.json({ products: [], productsSubmitted: false });
   const rows = await db.prepare('SELECT * FROM products WHERE company_id=? ORDER BY id').all(company.id);
-  const products = rows.map(r => ({ ...r, bahan: JSON.parse(r.bahan || '[]') }));
+  const products = rows.map(r => ({ ...r, bahan: typeof r.bahan === 'string' ? JSON.parse(r.bahan || '[]') : (r.bahan || []) }));
   const submitted = products.length > 0 && products.every(p => p.submitted === 1);
   res.json({ products, productsSubmitted: submitted });
 });
@@ -1288,7 +1288,7 @@ app.post('/api/products', authMiddleware, async (req, res) => {
   const bahanJson = JSON.stringify(bahan || []);
   await db.prepare(`INSERT INTO products (company_id, name, bahan, submitted) VALUES (?, ?, ?, 0)`).run(company.id, name, bahanJson);
   const rows = await db.prepare('SELECT * FROM products WHERE company_id=? ORDER BY id').all(company.id);
-  const products = rows.map(r => ({ ...r, bahan: JSON.parse(r.bahan || '[]') }));
+  const products = rows.map(r => ({ ...r, bahan: typeof r.bahan === 'string' ? JSON.parse(r.bahan || '[]') : (r.bahan || []) }));
   await logActivity(db, company.id, userId, 'product_add', `Produk ditambahkan: ${name}`);
   res.json({ message: 'OK', products });
 });
