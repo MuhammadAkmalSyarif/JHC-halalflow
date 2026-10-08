@@ -627,7 +627,7 @@ app.post('/api/companies/:id/legal-documents', authMiddleware, async (req, res) 
 
   const { telp_pemilik, telp_penyelia, email_sihalal, permohonan, sk_penyelia, sk_manajemen, kebijakan, ttd_pemilik, ttd_penyelia, ktp_pemilik, ktp_penyelia } = req.body;
 
-  const existing = await db.prepare('SELECT id FROM legal_documents WHERE company_id = ?').get(companyId);
+  const existing = await db.prepare('SELECT * FROM legal_documents WHERE company_id = ?').get(companyId);
 
   if (existing) {
     await db.prepare(`
@@ -638,7 +638,20 @@ app.post('/api/companies/:id/legal-documents', authMiddleware, async (req, res) 
         ktp_pemilik = ?, ktp_penyelia = ?,
         status = 'Menunggu Verifikasi', updated_at = datetime('now')
       WHERE company_id = ?
-    `).run(telp_pemilik || '', telp_penyelia || '', email_sihalal || '', permohonan || '', sk_penyelia || '', sk_manajemen || '', kebijakan || '', ttd_pemilik || '', ttd_penyelia || '', ktp_pemilik || '', ktp_penyelia || '', companyId);
+    `).run(
+      telp_pemilik !== undefined ? telp_pemilik : (existing.telp_pemilik || ''),
+      telp_penyelia !== undefined ? telp_penyelia : (existing.telp_penyelia || ''),
+      email_sihalal !== undefined ? email_sihalal : (existing.email_sihalal || ''),
+      permohonan !== undefined ? permohonan : (existing.permohonan || ''),
+      sk_penyelia !== undefined ? sk_penyelia : (existing.sk_penyelia || ''),
+      sk_manajemen !== undefined ? sk_manajemen : (existing.sk_manajemen || ''),
+      kebijakan !== undefined ? kebijakan : (existing.kebijakan || ''),
+      ttd_pemilik !== undefined ? ttd_pemilik : (existing.ttd_pemilik || ''),
+      ttd_penyelia !== undefined ? ttd_penyelia : (existing.ttd_penyelia || ''),
+      ktp_pemilik !== undefined ? ktp_pemilik : (existing.ktp_pemilik || ''),
+      ktp_penyelia !== undefined ? ktp_penyelia : (existing.ktp_penyelia || ''),
+      companyId
+    );
   } else {
     await db.prepare(`
       INSERT INTO legal_documents (company_id, telp_pemilik, telp_penyelia, email_sihalal, permohonan, sk_penyelia, sk_manajemen, kebijakan, ttd_pemilik, ttd_penyelia, ktp_pemilik, ktp_penyelia, status)
@@ -1030,10 +1043,23 @@ app.post('/api/legal', authMiddleware, async (req, res) => {
   if (!company) return res.status(404).json({ error: 'Buat profil perusahaan dulu' });
 
   const { telpPemilik, telpPenyelia, emailSihalal, permohonan, sk_penyelia, sk_manajemen, kebijakan, ttdPemilik, ttdPenyelia, ktpPemilik, ktpPenyelia } = req.body;
-  const existing = await db.prepare('SELECT id FROM legal_documents WHERE company_id=?').get(company.id);
+  const existing = await db.prepare('SELECT * FROM legal_documents WHERE company_id=?').get(company.id);
   if (existing) {
     await db.prepare(`UPDATE legal_documents SET telp_pemilik=?,telp_penyelia=?,email_sihalal=?,permohonan=?,sk_penyelia=?,sk_manajemen=?,kebijakan=?,ttd_pemilik=?,ttd_penyelia=?,ktp_pemilik=?,ktp_penyelia=?,status='Menunggu Verifikasi',updated_at=datetime('now') WHERE company_id=?`
-    ).run(telpPemilik||'', telpPenyelia||'', emailSihalal||'', permohonan||'', sk_penyelia||'', sk_manajemen||'', kebijakan||'', ttdPemilik||'', ttdPenyelia||'', ktpPemilik||'', ktpPenyelia||'', company.id);
+    ).run(
+      telpPemilik !== undefined ? telpPemilik : (existing.telp_pemilik || ''),
+      telpPenyelia !== undefined ? telpPenyelia : (existing.telp_penyelia || ''),
+      emailSihalal !== undefined ? emailSihalal : (existing.email_sihalal || ''),
+      permohonan !== undefined ? permohonan : (existing.permohonan || ''),
+      sk_penyelia !== undefined ? sk_penyelia : (existing.sk_penyelia || ''),
+      sk_manajemen !== undefined ? sk_manajemen : (existing.sk_manajemen || ''),
+      kebijakan !== undefined ? kebijakan : (existing.kebijakan || ''),
+      ttdPemilik !== undefined ? ttdPemilik : (existing.ttd_pemilik || ''),
+      ttdPenyelia !== undefined ? ttdPenyelia : (existing.ttd_penyelia || ''),
+      ktpPemilik !== undefined ? ktpPemilik : (existing.ktp_pemilik || ''),
+      ktpPenyelia !== undefined ? ktpPenyelia : (existing.ktp_penyelia || ''),
+      company.id
+    );
   } else {
     await db.prepare(`INSERT INTO legal_documents (company_id,telp_pemilik,telp_penyelia,email_sihalal,permohonan,sk_penyelia,sk_manajemen,kebijakan,ttd_pemilik,ttd_penyelia,ktp_pemilik,ktp_penyelia,status) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,'Menunggu Verifikasi')`
     ).run(company.id, telpPemilik||'', telpPenyelia||'', emailSihalal||'', permohonan||'', sk_penyelia||'', sk_manajemen||'', kebijakan||'', ttdPemilik||'', ttdPenyelia||'', ktpPemilik||'', ktpPenyelia||'');
@@ -1300,7 +1326,7 @@ app.delete('/api/products/:id', authMiddleware, async (req, res) => {
   if (!company) return res.status(404).json({ error: 'Perusahaan tidak ditemukan' });
   await db.prepare('DELETE FROM products WHERE id=? AND company_id=?').run(parseInt(req.params.id), company.id);
   const rows = await db.prepare('SELECT * FROM products WHERE company_id=? ORDER BY id').all(company.id);
-  const products = rows.map(r => ({ ...r, bahan: JSON.parse(r.bahan || '[]') }));
+  const products = rows.map(r => ({ ...r, bahan: typeof r.bahan === 'string' ? JSON.parse(r.bahan || '[]') : (r.bahan || []) }));
   res.json({ message: 'OK', products });
 });
 
@@ -1338,10 +1364,15 @@ app.post('/api/production', authMiddleware, async (req, res) => {
   const company = await db.prepare('SELECT id FROM companies WHERE user_id=?').get(userId);
   if (!company) return res.status(404).json({ error: 'Perusahaan tidak ditemukan' });
   const { alurProses, layoutRuang, bebasBabi } = req.body;
-  const existing = await db.prepare('SELECT id FROM production_data WHERE company_id=?').get(company.id);
+  const existing = await db.prepare('SELECT * FROM production_data WHERE company_id=?').get(company.id);
   if (existing) {
     await db.prepare(`UPDATE production_data SET alur_proses=?, layout_ruang=?, bebas_babi=?, updated_at=datetime('now') WHERE company_id=?`)
-      .run(alurProses||existing.alur_proses, layoutRuang||existing.layout_ruang, bebasBabi||existing.bebas_babi, company.id);
+      .run(
+        alurProses !== undefined ? alurProses : (existing.alur_proses || ''),
+        layoutRuang !== undefined ? layoutRuang : (existing.layout_ruang || ''),
+        bebasBabi !== undefined ? bebasBabi : (existing.bebas_babi || ''),
+        company.id
+      );
   } else {
     await db.prepare(`INSERT INTO production_data (company_id, alur_proses, layout_ruang, bebas_babi) VALUES (?,?,?,?)`)
       .run(company.id, alurProses||'', layoutRuang||'', bebasBabi||'');
@@ -1400,7 +1431,7 @@ app.post('/api/evidence', authMiddleware, async (req, res) => {
   const company = await db.prepare('SELECT id FROM companies WHERE user_id=?').get(userId);
   if (!company) return res.status(404).json({ error: 'Perusahaan tidak ditemukan' });
   const data = req.body;
-  const existing = await db.prepare('SELECT id FROM evidence_data WHERE company_id=?').get(company.id);
+  const existing = await db.prepare('SELECT * FROM evidence_data WHERE company_id=?').get(company.id);
   if (existing) {
     await db.prepare(`
       UPDATE evidence_data SET 
@@ -2684,7 +2715,7 @@ app.get('/api/admin/companies/:id/products', adminAuthMiddleware, async (req, re
   if (!company) return res.status(404).json({ error: 'Perusahaan tidak ditemukan' });
   try {
     const rows = await db.prepare('SELECT * FROM products WHERE company_id=? ORDER BY id').all(companyId);
-    const products = rows.map(r => ({ ...r, bahan: JSON.parse(r.bahan || '[]') }));
+    const products = rows.map(r => ({ ...r, bahan: typeof r.bahan === 'string' ? JSON.parse(r.bahan || '[]') : (r.bahan || []) }));
     const stage = await db.prepare('SELECT status FROM certification_progress WHERE company_id=? AND stage=4').get(companyId);
     res.json({ products, stageStatus: stage?.status || 'Belum Dimulai' });
   } catch(e) {
