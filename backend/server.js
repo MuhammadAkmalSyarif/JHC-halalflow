@@ -880,7 +880,7 @@ app.post('/api/upload', authMiddleware, (req, res, next) => {
 
   // Upload ke Supabase Storage
   const supabase = getSupabase();
-  const bucketName = process.env.SUPABASE_STORAGE_BUCKET || 'halalflow-uploads';
+  const bucketName = process.env.SUPABASE_STORAGE_BUCKET || 'halal-flow-uploads';
   let fileUrl = `/uploads/${storedName}`;
 
   if (supabase) {
