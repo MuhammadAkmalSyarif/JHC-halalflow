@@ -322,14 +322,28 @@ export default function UserApp() {
     try {
       const uploadedNames = [];
       for (const file of files) {
-        const formData = new FormData();
-        formData.append('file', file);
-        if (token) formData.append('_token', token);
+        // Read file as Base64 to avoid Vercel multipart stream issues
+        const base64Data = await new Promise((resolve, reject) => {
+          const reader = new FileReader();
+          reader.readAsDataURL(file);
+          reader.onload = () => resolve(reader.result);
+          reader.onerror = error => reject(error);
+        });
 
-        const res = await apiFetch('/api/upload?debug=true', {
+        const payload = {
+          filename: file.name,
+          mimetype: file.type,
+          base64: base64Data
+        };
+        if (token) payload._token = token;
+
+        const res = await apiFetch('/api/upload', {
           method: 'POST',
-          headers: token ? { 'Authorization': `Bearer ${token}` } : {},
-          body: formData
+          headers: {
+            'Content-Type': 'application/json',
+            ...(token ? { 'Authorization': `Bearer ${token}` } : {})
+          },
+          body: JSON.stringify(payload)
         });
         const data = await res.json();
         if (res.ok) {

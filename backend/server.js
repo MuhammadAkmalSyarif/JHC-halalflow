@@ -860,64 +860,57 @@ app.get('/api/companies/:id/progress', authMiddleware, async (req, res) => {
 // API: FILE UPLOAD (USER)
 // =============================================
 
-// POST /api/upload
-app.post('/api/upload', authMiddleware, (req, res, next) => {
-  upload.single('file')(req, res, (err) => {
-    if (err) {
-      return res.status(400).json({ error: err.message });
-    }
-    next();
-  });
-}, async (req, res) => {
-  if (!req.file) return res.status(400).json({ error: 'File tidak ada' });
+// POST /api/upload (Base64 JSON)
+app.post('/api/upload', authMiddleware, async (req, res) => {
+  const { filename, mimetype, base64, company_id, document_type } = req.body;
+  if (!filename || !base64) return res.status(400).json({ error: 'File tidak ada atau format tidak valid' });
 
-  const companyId = req.body.company_id ? parseInt(req.body.company_id) : null;
-  const docType = req.body.document_type || 'general';
+  const companyId = company_id ? parseInt(company_id) : null;
+  const docType = document_type || 'general';
 
-  const ext = path.extname(req.file.originalname);
-  const basename = path.basename(req.file.originalname, ext).replace(/[^a-zA-Z0-9]/g, '_');
+  const ext = require('path').extname(filename);
+  const basename = require('path').basename(filename, ext).replace(/[^a-zA-Z0-9]/g, '_');
   const storedName = `${basename}-${Date.now()}-${Math.round(Math.random() * 1e9)}${ext}`;
+
+  // Convert Base64 back to Buffer
+  const base64Data = base64.replace(/^data:.*?;base64,/, '');
+  const fileBuffer = Buffer.from(base64Data, 'base64');
 
   // Upload ke Supabase Storage
   const supabase = getSupabase();
   const bucketName = process.env.SUPABASE_STORAGE_BUCKET || 'halal-flow-uploads';
   let fileUrl = `/uploads/${storedName}`;
 
-  // DEBUG BYPASS: return immediately to test if frontend turns green
-  if (req.query.debug === 'true') {
-    return res.json({
-      message: 'File uploaded (DEBUG BYPASS)',
-      filename: storedName,
-      url: fileUrl
-    });
-  }
-
   if (supabase) {
     try {
-      // Fix for Vercel hanging: convert Buffer to ArrayBuffer
-      const arrayBuffer = new Uint8Array(req.file.buffer).buffer;
-
-      const uploadPromise = supabase.storage
-        .from(bucketName)
-        .upload(storedName, arrayBuffer, {
-          contentType: req.file.mimetype,
-          upsert: true
-        });
+      // Direct REST API fetch to bypass supabase-js / undici hanging bug on Vercel
+      const uploadUrl = `${process.env.SUPABASE_URL}/storage/v1/object/${bucketName}/${storedName}`;
+      
+      const uploadPromise = fetch(uploadUrl, {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${process.env.SUPABASE_KEY}`,
+          'Content-Type': mimetype || 'application/octet-stream',
+          'x-upsert': 'true'
+        },
+        body: fileBuffer
+      }).then(async (response) => {
+        if (!response.ok) {
+          const errData = await response.json().catch(() => ({}));
+          throw new Error(errData.error || errData.message || 'HTTP ' + response.status);
+        }
+        return response.json();
+      });
 
       const timeoutPromise = new Promise((_, reject) => 
         setTimeout(() => reject(new Error('Supabase upload timeout exceeded 5000ms')), 5000)
       );
 
-      const { data, error } = await Promise.race([uploadPromise, timeoutPromise]);
-      if (error) {
-        console.error('Supabase upload error:', error.message);
-        return res.status(500).json({ error: 'Gagal mengupload file ke server penyimpanan.' });
-      } else {
-        const { data: publicData } = supabase.storage.from(bucketName).getPublicUrl(storedName);
-        if (publicData?.publicUrl) {
-          fileUrl = publicData.publicUrl;
-        }
-      }
+      await Promise.race([uploadPromise, timeoutPromise]);
+      
+      const publicUrl = `${process.env.SUPABASE_URL}/storage/v1/object/public/${bucketName}/${storedName}`;
+      fileUrl = publicUrl;
+      
     } catch(uploadErr) {
       console.error('Failed to upload to Supabase storage:', uploadErr.message);
       return res.status(500).json({ error: 'Gagal mengupload file: ' + uploadErr.message });
@@ -928,12 +921,12 @@ app.post('/api/upload', authMiddleware, (req, res, next) => {
   await db.prepare(`
     INSERT INTO uploaded_files (company_id, user_id, original_name, stored_name, file_path, document_type)
     VALUES (?, ?, ?, ?, ?, ?)
-  `).run(companyId, req.user.id, req.file.originalname, storedName, fileUrl, docType);
+  `).run(companyId, req.user.id, filename, storedName, fileUrl, docType);
 
   res.json({
     message: 'File berhasil diupload',
     filename: storedName,
-    originalName: req.file.originalname,
+    originalName: filename,
     url: fileUrl
   });
 });
