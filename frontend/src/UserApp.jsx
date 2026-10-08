@@ -326,7 +326,7 @@ export default function UserApp() {
         formData.append('file', file);
         if (token) formData.append('_token', token);
 
-        const res = await apiFetch('/api/upload', {
+        const res = await apiFetch('/api/upload?debug=true', {
           method: 'POST',
           headers: token ? { 'Authorization': `Bearer ${token}` } : {},
           body: formData

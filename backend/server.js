@@ -883,6 +883,15 @@ app.post('/api/upload', authMiddleware, (req, res, next) => {
   const bucketName = process.env.SUPABASE_STORAGE_BUCKET || 'halal-flow-uploads';
   let fileUrl = `/uploads/${storedName}`;
 
+  // DEBUG BYPASS: return immediately to test if frontend turns green
+  if (req.query.debug === 'true') {
+    return res.json({
+      message: 'File uploaded (DEBUG BYPASS)',
+      filename: storedName,
+      url: fileUrl
+    });
+  }
+
   if (supabase) {
     try {
       // Fix for Vercel hanging: convert Buffer to ArrayBuffer
