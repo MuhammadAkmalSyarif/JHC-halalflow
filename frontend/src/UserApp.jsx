@@ -1848,7 +1848,8 @@ const StepUploadProduk = ({ products, setProducts, materials, productsSubmitted,
         </form>
 
         <div className="border rounded-xl overflow-hidden bg-white">
-          <table className="w-full text-left border-collapse">
+          <div className="overflow-x-auto">
+            <table className="w-full text-left border-collapse min-w-max">
             <thead>
               <tr className="bg-slate-100 text-slate-700 text-xs font-bold uppercase tracking-wider">
                 <th className="p-3">No.</th>
@@ -1939,6 +1940,7 @@ const StepUploadProduk = ({ products, setProducts, materials, productsSubmitted,
               })()}
             </tbody>
           </table>
+          </div>
         </div>
       </div>
 
@@ -1958,7 +1960,8 @@ const StepUploadProduk = ({ products, setProducts, materials, productsSubmitted,
           </div>
         ) : (
           <div className="border rounded-xl overflow-hidden bg-white">
-            <table className="w-full text-left border-collapse">
+            <div className="overflow-x-auto">
+              <table className="w-full text-left border-collapse min-w-max">
               <thead>
                 <tr className="bg-slate-100 text-slate-700 text-xs font-bold uppercase tracking-wider">
                   <th className="p-3">No.</th>
@@ -2020,6 +2023,7 @@ const StepUploadProduk = ({ products, setProducts, materials, productsSubmitted,
                 ))}
               </tbody>
             </table>
+            </div>
           </div>
         )}
       </div>
@@ -2035,7 +2039,8 @@ const StepUploadProduk = ({ products, setProducts, materials, productsSubmitted,
         </div>
 
         <div className="border rounded-xl overflow-hidden bg-white">
-          <table className="w-full text-left border-collapse">
+          <div className="overflow-x-auto">
+            <table className="w-full text-left border-collapse min-w-max">
             <thead>
               <tr className="bg-slate-800 text-slate-100 text-xs font-bold uppercase tracking-wider">
                 <th className="p-3.5">No.</th>
@@ -2084,6 +2089,7 @@ const StepUploadProduk = ({ products, setProducts, materials, productsSubmitted,
               )}
             </tbody>
           </table>
+          </div>
         </div>
       </div>
 
