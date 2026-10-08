@@ -1410,7 +1410,7 @@ app.post('/api/production', authMiddleware, async (req, res) => {
 app.get('/api/debug-evidence', async (req, res) => {
   try {
     const row = await db.prepare('SELECT * FROM evidence_data LIMIT 1').get();
-    res.json({ keys: row ? Object.keys(row) : 'no rows found' });
+    res.json({ keys: row ? Object.keys(row) : 'no', data: row });
   } catch (err) {
     res.json({ error: err.message });
   }
