@@ -1407,6 +1407,14 @@ app.post('/api/production', authMiddleware, async (req, res) => {
     `);
   } catch(e) { console.log('Tables may already exist:', e.message); }
 })()
+app.get('/api/debug-evidence', async (req, res) => {
+  try {
+    const row = await db.prepare('SELECT * FROM evidence_data LIMIT 1').get();
+    res.json({ keys: row ? Object.keys(row) : 'no rows found' });
+  } catch (err) {
+    res.json({ error: err.message });
+  }
+});
 
 app.get('/api/evidence', authMiddleware, async (req, res) => {
   const userId = req.user.id;
