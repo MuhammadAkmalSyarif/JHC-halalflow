@@ -90,7 +90,8 @@ const STEPS = [
   { id: 4, title: 'Tahap 4: Upload Produk', icon: Icons.Box },
   { id: 5, title: 'Tahap 5: Proses Produksi Halal', icon: Icons.Cog },
   { id: 6, title: 'Tahap 6: Upload Evidence (Bukti)', icon: Icons.Upload },
-  { id: 7, title: 'Tahap 7: Pengajuan BPJPH', icon: Icons.ShieldCheck }
+  { id: 7, title: 'Tahap 7: Pengajuan BPJPH', icon: Icons.ShieldCheck },
+  { id: 8, title: 'Tahap 8: Progres Sertifikasi', icon: Icons.Bell }
 ];
 
 // =============================================
@@ -604,6 +605,7 @@ export default function UserApp() {
               onRefreshStatus={refreshCertStatus}
             />
           )}
+          {currentStep === 8 && <StepProgresSertifikasi certificationStatus={certificationStatus} />}
 
         </main>
       </div>
@@ -2665,6 +2667,84 @@ const StepPengajuanBPJPH = ({
           {errorMsg}
         </div>
       )}
+    </Card>
+  );
+};
+
+const StepProgresSertifikasi = ({ certificationStatus }) => {
+  const STAGES = [
+    { no: 0, label: 'Menunggu Pengajuan', desc: 'Pengguna belum atau sedang mempersiapkan pengajuan sertifikasi halal.' },
+    { no: 1, label: 'Diterima oleh Admin', desc: 'Pengajuan telah diterima dan sedang dilakukan pemeriksaan awal oleh Admin JHC.' },
+    { no: 2, label: 'Diproses', desc: 'Data dan dokumen usaha sedang diperiksa serta dipersiapkan untuk proses sertifikasi halal.' },
+    { no: 3, label: 'Disubmit di SIHALAL', desc: 'Pengajuan sertifikasi halal telah diajukan melalui sistem SIHALAL BPJPH.' },
+    { no: 4, label: 'Feedback BPJPH / Dikirim ke LPH', desc: 'Menunggu/menindaklanjuti feedback dari BPJPH.' },
+    { no: 5, label: 'Penjadwalan Audit', desc: 'LPH menjadwalkan audit pemeriksaan kehalalan.' },
+    { no: 6, label: 'Perbaikan Hasil Audit', desc: 'Perbaikan dokumen/data berdasarkan hasil audit.' },
+    { no: 7, label: 'Sidang Fatwa MUI', desc: 'Penetapan kehalalan melalui sidang fatwa MUI.' },
+    { no: 8, label: 'Terbit Sertifikat Halal BPJPH', desc: 'Sertifikat Halal resmi BPJPH telah terbit!' }
+  ];
+
+  return (
+    <Card className="p-8 max-w-3xl mx-auto space-y-8 animate-fade-in shadow-md">
+      <div>
+        <h2 className="text-2xl font-black text-slate-800">Progres Sertifikasi Halal</h2>
+        <p className="text-sm text-slate-500 mt-1">Pantau tahapan proses sertifikasi halal Anda secara real-time yang diupdate oleh Admin JHC.</p>
+      </div>
+
+      <div className="relative border-l-2 border-emerald-100 ml-4 space-y-6">
+        {STAGES.map((s) => {
+          const isCurrent = certificationStatus === s.no;
+          const isDone = certificationStatus > s.no;
+
+          return (
+            <div key={s.no} className="relative pl-6">
+              {/* Dot */}
+              <div className={`absolute -left-[11px] top-1 w-5 h-5 rounded-full flex items-center justify-center border-2 ${
+                isCurrent 
+                  ? 'bg-emerald-600 border-emerald-200 ring-4 ring-emerald-50' 
+                  : isDone 
+                    ? 'bg-emerald-500 border-emerald-500' 
+                    : 'bg-slate-100 border-slate-200'
+              }`}>
+                {isDone ? (
+                  <svg className="w-3 h-3 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M5 13l4 4L19 7"/></svg>
+                ) : (
+                  <div className={`w-1.5 h-1.5 rounded-full ${isCurrent ? 'bg-white' : 'bg-transparent'}`} />
+                )}
+              </div>
+
+              {/* Content */}
+              <div className={`p-4 rounded-xl border transition-all ${
+                isCurrent 
+                  ? 'bg-emerald-50 border-emerald-200 shadow-sm scale-[1.01]' 
+                  : isDone 
+                    ? 'bg-white border-emerald-100 opacity-90 hover:border-emerald-200' 
+                    : 'bg-white border-slate-100 opacity-60'
+              }`}>
+                <div className="flex justify-between items-start md:items-center flex-col md:flex-row gap-2 mb-1.5">
+                  <h4 className={`font-bold text-sm ${isCurrent ? 'text-emerald-800' : isDone ? 'text-slate-700' : 'text-slate-500'}`}>
+                    {s.no === 0 ? s.label : `Tahap ${s.no}: ${s.label}`}
+                  </h4>
+                  {isCurrent && (
+                    <span className="text-[10px] font-bold text-emerald-700 bg-emerald-100 border border-emerald-200 px-2 py-0.5 rounded-full uppercase tracking-wider flex items-center gap-1.5 shrink-0">
+                      <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse"></span>
+                      Sedang Berlangsung
+                    </span>
+                  )}
+                  {isDone && (
+                    <span className="text-[10px] font-bold text-emerald-600 bg-emerald-50 px-2 py-0.5 rounded-full uppercase tracking-wider flex items-center gap-1 shrink-0">
+                      <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M5 13l4 4L19 7"/></svg> Selesai
+                    </span>
+                  )}
+                </div>
+                <p className={`text-xs ${isCurrent ? 'text-emerald-700 font-medium' : 'text-slate-500'}`}>
+                  {s.desc}
+                </p>
+              </div>
+            </div>
+          );
+        })}
+      </div>
     </Card>
   );
 };
