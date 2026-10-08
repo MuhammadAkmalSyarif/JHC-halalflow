@@ -885,14 +885,24 @@ app.post('/api/upload', authMiddleware, (req, res, next) => {
 
   if (supabase) {
     try {
-      const { data, error } = await supabase.storage
+      // Fix for Vercel hanging: convert Buffer to ArrayBuffer
+      const arrayBuffer = new Uint8Array(req.file.buffer).buffer;
+
+      const uploadPromise = supabase.storage
         .from(bucketName)
-        .upload(storedName, req.file.buffer, {
+        .upload(storedName, arrayBuffer, {
           contentType: req.file.mimetype,
           upsert: true
         });
+
+      const timeoutPromise = new Promise((_, reject) => 
+        setTimeout(() => reject(new Error('Supabase upload timeout exceeded 5000ms')), 5000)
+      );
+
+      const { data, error } = await Promise.race([uploadPromise, timeoutPromise]);
       if (error) {
         console.error('Supabase upload error:', error.message);
+        return res.status(500).json({ error: 'Gagal mengupload file ke server penyimpanan.' });
       } else {
         const { data: publicData } = supabase.storage.from(bucketName).getPublicUrl(storedName);
         if (publicData?.publicUrl) {
@@ -901,6 +911,7 @@ app.post('/api/upload', authMiddleware, (req, res, next) => {
       }
     } catch(uploadErr) {
       console.error('Failed to upload to Supabase storage:', uploadErr.message);
+      return res.status(500).json({ error: 'Gagal mengupload file: ' + uploadErr.message });
     }
   }
 
