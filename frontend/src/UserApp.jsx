@@ -1050,7 +1050,7 @@ const StepDokumen = ({ legalData, setLegalData, handleGenericFileUpload }) => {
           <div className="p-4 border rounded-xl bg-white shadow-xs">
             <h4 className="font-semibold text-sm text-slate-800 mb-1">1. Permohonan Pendaftaran Sertifikasi Halal</h4>
             <p className="text-xs text-slate-400 mb-3">Format: .doc, .docx, .pdf — bisa pilih lebih dari 1 file</p>
-            <input type="file" name="permohonan" accept=".pdf,.doc,.docx" multiple onChange={(e) => handleMultiFileUpload(e, 'permohonan', setLegalData)} className="w-full text-xs text-slate-500 file:mr-4 file:py-2 file:px-4 file:rounded-lg file:border-0 file:text-xs file:font-semibold file:bg-emerald-50 file:text-emerald-700 hover:file:bg-emerald-100 cursor-pointer" />
+            <input type="file" name="permohonan" accept=".pdf,.doc,.docx" multiple onChange={(e) => handleMultiFileUpload(e, 'permohonan', setLegalData)} className="block w-full text-xs text-slate-500 file:cursor-pointer file:mr-3 file:m-1 file:py-2 file:px-4 file:rounded-md file:border-0 file:font-bold file:bg-emerald-600 file:text-white hover:file:bg-emerald-700 file:transition-colors border border-slate-200 rounded-lg bg-white cursor-pointer hover:border-emerald-300 transition-colors shadow-2xs focus:outline-none" />
             {legalData.permohonan && legalData.permohonan.split(',').map((f, i) => (
               <a key={i} href={`/uploads/${f.trim()}`} target="_blank" rel="noreferrer" className="text-xs text-emerald-600 font-medium mt-1 flex items-center gap-1 truncate w-full hover:underline" title={f.trim()}>
                 ✓ Terunggah: {f.trim()} (Klik untuk Lihat)
@@ -1061,7 +1061,7 @@ const StepDokumen = ({ legalData, setLegalData, handleGenericFileUpload }) => {
           <div className="p-4 border rounded-xl bg-white shadow-xs">
             <h4 className="font-semibold text-sm text-slate-800 mb-1">2. SK Penyelia Halal</h4>
             <p className="text-xs text-slate-400 mb-3">Format: .doc, .docx, .pdf — bisa pilih lebih dari 1 file</p>
-            <input type="file" name="sk_penyelia" accept=".pdf,.doc,.docx" multiple onChange={(e) => handleMultiFileUpload(e, 'sk_penyelia', setLegalData)} className="w-full text-xs text-slate-500 file:mr-4 file:py-2 file:px-4 file:rounded-lg file:border-0 file:text-xs file:font-semibold file:bg-emerald-50 file:text-emerald-700 hover:file:bg-emerald-100 cursor-pointer" />
+            <input type="file" name="sk_penyelia" accept=".pdf,.doc,.docx" multiple onChange={(e) => handleMultiFileUpload(e, 'sk_penyelia', setLegalData)} className="block w-full text-xs text-slate-500 file:cursor-pointer file:mr-3 file:m-1 file:py-2 file:px-4 file:rounded-md file:border-0 file:font-bold file:bg-emerald-600 file:text-white hover:file:bg-emerald-700 file:transition-colors border border-slate-200 rounded-lg bg-white cursor-pointer hover:border-emerald-300 transition-colors shadow-2xs focus:outline-none" />
             {legalData.sk_penyelia && legalData.sk_penyelia.split(',').map((f, i) => (
               <a key={i} href={`/uploads/${f.trim()}`} target="_blank" rel="noreferrer" className="text-xs text-emerald-600 font-medium mt-1 flex items-center gap-1 truncate w-full hover:underline" title={f.trim()}>
                 ✓ Terunggah: {f.trim()} (Klik untuk Lihat)
@@ -1074,7 +1074,7 @@ const StepDokumen = ({ legalData, setLegalData, handleGenericFileUpload }) => {
           <div className="p-4 border rounded-xl bg-white shadow-xs">
             <h4 className="font-semibold text-sm text-slate-800 mb-1">3. SK Manajemen Halal</h4>
             <p className="text-xs text-slate-400 mb-3">Format: .doc, .docx, .pdf — bisa pilih lebih dari 1 file</p>
-            <input type="file" name="sk_manajemen" accept=".pdf,.doc,.docx" multiple onChange={(e) => handleMultiFileUpload(e, 'sk_manajemen', setLegalData)} className="w-full text-xs text-slate-500 file:mr-4 file:py-2 file:px-4 file:rounded-lg file:border-0 file:text-xs file:font-semibold file:bg-emerald-50 file:text-emerald-700 hover:file:bg-emerald-100 cursor-pointer" />
+            <input type="file" name="sk_manajemen" accept=".pdf,.doc,.docx" multiple onChange={(e) => handleMultiFileUpload(e, 'sk_manajemen', setLegalData)} className="block w-full text-xs text-slate-500 file:cursor-pointer file:mr-3 file:m-1 file:py-2 file:px-4 file:rounded-md file:border-0 file:font-bold file:bg-emerald-600 file:text-white hover:file:bg-emerald-700 file:transition-colors border border-slate-200 rounded-lg bg-white cursor-pointer hover:border-emerald-300 transition-colors shadow-2xs focus:outline-none" />
             {legalData.sk_manajemen && legalData.sk_manajemen.split(',').map((f, i) => (
               <a key={i} href={`/uploads/${f.trim()}`} target="_blank" rel="noreferrer" className="text-xs text-emerald-600 font-medium mt-1 flex items-center gap-1 truncate w-full hover:underline" title={f.trim()}>
                 ✓ Terunggah: {f.trim()} (Klik untuk Lihat)
@@ -1085,7 +1085,7 @@ const StepDokumen = ({ legalData, setLegalData, handleGenericFileUpload }) => {
           <div className="p-4 border rounded-xl bg-white shadow-xs">
             <h4 className="font-semibold text-sm text-slate-800 mb-1">4. Kebijakan Halal</h4>
             <p className="text-xs text-slate-400 mb-3">Format: .doc, .docx, .pdf — bisa pilih lebih dari 1 file</p>
-            <input type="file" name="kebijakan" accept=".pdf,.doc,.docx" multiple onChange={(e) => handleMultiFileUpload(e, 'kebijakan', setLegalData)} className="w-full text-xs text-slate-500 file:mr-4 file:py-2 file:px-4 file:rounded-lg file:border-0 file:text-xs file:font-semibold file:bg-emerald-50 file:text-emerald-700 hover:file:bg-emerald-100 cursor-pointer" />
+            <input type="file" name="kebijakan" accept=".pdf,.doc,.docx" multiple onChange={(e) => handleMultiFileUpload(e, 'kebijakan', setLegalData)} className="block w-full text-xs text-slate-500 file:cursor-pointer file:mr-3 file:m-1 file:py-2 file:px-4 file:rounded-md file:border-0 file:font-bold file:bg-emerald-600 file:text-white hover:file:bg-emerald-700 file:transition-colors border border-slate-200 rounded-lg bg-white cursor-pointer hover:border-emerald-300 transition-colors shadow-2xs focus:outline-none" />
             {legalData.kebijakan && legalData.kebijakan.split(',').map((f, i) => (
               <a key={i} href={`/uploads/${f.trim()}`} target="_blank" rel="noreferrer" className="text-xs text-emerald-600 font-medium mt-1 flex items-center gap-1 truncate w-full hover:underline" title={f.trim()}>
                 ✓ Terunggah: {f.trim()} (Klik untuk Lihat)
@@ -1098,7 +1098,7 @@ const StepDokumen = ({ legalData, setLegalData, handleGenericFileUpload }) => {
       <div className="grid grid-cols-1 md:grid-cols-2 gap-6 pt-4 border-t">
         <div className="p-4 bg-slate-50 rounded-xl border">
           <h4 className="font-semibold text-sm text-slate-800 mb-2">Upload Tanda Tangan Pemilik Usaha</h4>
-          <input type="file" name="ttdPemilik" accept="image/*" onChange={(e) => handleGenericFileUpload(e, 'ttdPemilik', setLegalData)} className="w-full text-xs text-slate-500 file:py-2 file:px-3 file:rounded-lg file:border-0 file:bg-slate-200 file:font-semibold" />
+          <input type="file" name="ttdPemilik" accept="image/*" onChange={(e) => handleGenericFileUpload(e, 'ttdPemilik', setLegalData)} className="block w-full text-xs text-slate-500 file:cursor-pointer file:mr-3 file:m-1 file:py-2 file:px-4 file:rounded-md file:border-0 file:font-bold file:bg-emerald-600 file:text-white hover:file:bg-emerald-700 file:transition-colors border border-slate-200 rounded-lg bg-white cursor-pointer hover:border-emerald-300 transition-colors shadow-2xs focus:outline-none mt-1" />
           {legalData.ttdPemilik && (
             <a href={`/uploads/${legalData.ttdPemilik}`} target="_blank" rel="noreferrer" className="text-xs text-emerald-600 mt-2 block truncate w-full hover:underline font-medium" title={legalData.ttdPemilik}>
               ✓ TTD Pemilik Terunggah (Klik untuk Lihat)
@@ -1107,7 +1107,7 @@ const StepDokumen = ({ legalData, setLegalData, handleGenericFileUpload }) => {
         </div>
         <div className="p-4 bg-slate-50 rounded-xl border">
           <h4 className="font-semibold text-sm text-slate-800 mb-2">Upload KTP Pemilik / Penanggung Jawab</h4>
-          <input type="file" name="ktpPemilik" accept="image/*,.pdf" onChange={(e) => handleGenericFileUpload(e, 'ktpPemilik', setLegalData)} className="w-full text-xs text-slate-500 file:py-2 file:px-3 file:rounded-lg file:border-0 file:bg-slate-200 file:font-semibold" />
+          <input type="file" name="ktpPemilik" accept="image/*,.pdf" onChange={(e) => handleGenericFileUpload(e, 'ktpPemilik', setLegalData)} className="block w-full text-xs text-slate-500 file:cursor-pointer file:mr-3 file:m-1 file:py-2 file:px-4 file:rounded-md file:border-0 file:font-bold file:bg-emerald-600 file:text-white hover:file:bg-emerald-700 file:transition-colors border border-slate-200 rounded-lg bg-white cursor-pointer hover:border-emerald-300 transition-colors shadow-2xs focus:outline-none mt-1" />
           {legalData.ktpPemilik && (
             <a href={`/uploads/${legalData.ktpPemilik}`} target="_blank" rel="noreferrer" className="text-xs text-emerald-600 mt-2 block truncate w-full hover:underline font-medium" title={legalData.ktpPemilik}>
               ✓ KTP Pemilik Terunggah (Klik untuk Lihat)
@@ -1116,7 +1116,7 @@ const StepDokumen = ({ legalData, setLegalData, handleGenericFileUpload }) => {
         </div>
         <div className="p-4 bg-slate-50 rounded-xl border">
           <h4 className="font-semibold text-sm text-slate-800 mb-2">Upload Tanda Tangan Penyelia Halal</h4>
-          <input type="file" name="ttdPenyelia" accept="image/*" onChange={(e) => handleGenericFileUpload(e, 'ttdPenyelia', setLegalData)} className="w-full text-xs text-slate-500 file:py-2 file:px-3 file:rounded-lg file:border-0 file:bg-slate-200 file:font-semibold" />
+          <input type="file" name="ttdPenyelia" accept="image/*" onChange={(e) => handleGenericFileUpload(e, 'ttdPenyelia', setLegalData)} className="block w-full text-xs text-slate-500 file:cursor-pointer file:mr-3 file:m-1 file:py-2 file:px-4 file:rounded-md file:border-0 file:font-bold file:bg-emerald-600 file:text-white hover:file:bg-emerald-700 file:transition-colors border border-slate-200 rounded-lg bg-white cursor-pointer hover:border-emerald-300 transition-colors shadow-2xs focus:outline-none mt-1" />
           {legalData.ttdPenyelia && (
             <a href={`/uploads/${legalData.ttdPenyelia}`} target="_blank" rel="noreferrer" className="text-xs text-emerald-600 mt-2 block truncate w-full hover:underline font-medium" title={legalData.ttdPenyelia}>
               ✓ TTD Penyelia Terunggah (Klik untuk Lihat)
@@ -1125,7 +1125,7 @@ const StepDokumen = ({ legalData, setLegalData, handleGenericFileUpload }) => {
         </div>
         <div className="p-4 bg-slate-50 rounded-xl border">
           <h4 className="font-semibold text-sm text-slate-800 mb-2">Upload KTP Penyelia Halal</h4>
-          <input type="file" name="ktpPenyelia" accept="image/*,.pdf" onChange={(e) => handleGenericFileUpload(e, 'ktpPenyelia', setLegalData)} className="w-full text-xs text-slate-500 file:py-2 file:px-3 file:rounded-lg file:border-0 file:bg-slate-200 file:font-semibold" />
+          <input type="file" name="ktpPenyelia" accept="image/*,.pdf" onChange={(e) => handleGenericFileUpload(e, 'ktpPenyelia', setLegalData)} className="block w-full text-xs text-slate-500 file:cursor-pointer file:mr-3 file:m-1 file:py-2 file:px-4 file:rounded-md file:border-0 file:font-bold file:bg-emerald-600 file:text-white hover:file:bg-emerald-700 file:transition-colors border border-slate-200 rounded-lg bg-white cursor-pointer hover:border-emerald-300 transition-colors shadow-2xs focus:outline-none mt-1" />
           {legalData.ktpPenyelia && (
             <a href={`/uploads/${legalData.ktpPenyelia}`} target="_blank" rel="noreferrer" className="text-xs text-emerald-600 mt-2 block truncate w-full hover:underline font-medium" title={legalData.ktpPenyelia}>
               ✓ KTP Penyelia Terunggah (Klik untuk Lihat)
@@ -2332,7 +2332,7 @@ const StepUploadEvidence = ({ evidenceData, setEvidenceData, handleGenericFileUp
         <div className="p-4 border rounded-xl bg-slate-50">
           <h4 className="font-semibold text-sm text-slate-800 mb-1">1. Bukti Foto Sosialisasi/Training Halal</h4>
           <p className="text-xs text-slate-400 mb-2">Format: Gambar (JPG, PNG) — bisa upload lebih dari 1 foto</p>
-          <input type="file" multiple name="sosialisasiFoto" accept="image/*" onChange={(e) => handleMultiFileUpload(e, 'sosialisasiFoto', setEvidenceData)} className="w-full text-xs text-slate-500 file:mr-3 file:py-1.5 file:px-3 file:rounded-lg file:border-0 file:text-xs file:font-semibold file:bg-emerald-50 file:text-emerald-700 hover:file:bg-emerald-100 cursor-pointer" />
+          <input type="file" multiple name="sosialisasiFoto" accept="image/*" onChange={(e) => handleMultiFileUpload(e, 'sosialisasiFoto', setEvidenceData)} className="block w-full text-xs text-slate-500 file:cursor-pointer file:mr-3 file:m-1 file:py-2 file:px-4 file:rounded-md file:border-0 file:font-bold file:bg-emerald-600 file:text-white hover:file:bg-emerald-700 file:transition-colors border border-slate-200 rounded-lg bg-white cursor-pointer hover:border-emerald-300 transition-colors shadow-2xs focus:outline-none" />
           {evidenceData.sosialisasiFoto && (
             <div className="mt-3 space-y-1.5">
               {evidenceData.sosialisasiFoto.split(',').map((f, i) => {
@@ -2362,7 +2362,7 @@ const StepUploadEvidence = ({ evidenceData, setEvidenceData, handleGenericFileUp
         <div className="p-4 border rounded-xl bg-slate-50">
           <h4 className="font-semibold text-sm text-slate-800 mb-1">2. Bukti Foto Audit Internal</h4>
           <p className="text-xs text-slate-400 mb-2">Format: Gambar (JPG, PNG) — bisa upload lebih dari 1 foto</p>
-          <input type="file" multiple name="auditInternalFoto" accept="image/*" onChange={(e) => handleMultiFileUpload(e, 'auditInternalFoto', setEvidenceData)} className="w-full text-xs text-slate-500 file:mr-3 file:py-1.5 file:px-3 file:rounded-lg file:border-0 file:text-xs file:font-semibold file:bg-emerald-50 file:text-emerald-700 hover:file:bg-emerald-100 cursor-pointer" />
+          <input type="file" multiple name="auditInternalFoto" accept="image/*" onChange={(e) => handleMultiFileUpload(e, 'auditInternalFoto', setEvidenceData)} className="block w-full text-xs text-slate-500 file:cursor-pointer file:mr-3 file:m-1 file:py-2 file:px-4 file:rounded-md file:border-0 file:font-bold file:bg-emerald-600 file:text-white hover:file:bg-emerald-700 file:transition-colors border border-slate-200 rounded-lg bg-white cursor-pointer hover:border-emerald-300 transition-colors shadow-2xs focus:outline-none" />
           {evidenceData.auditInternalFoto && (
             <div className="mt-3 space-y-1.5">
               {evidenceData.auditInternalFoto.split(',').map((f, i) => {
@@ -2391,7 +2391,7 @@ const StepUploadEvidence = ({ evidenceData, setEvidenceData, handleGenericFileUp
 
         <div className="p-4 border rounded-xl bg-slate-50">
           <h4 className="font-semibold text-sm text-slate-800 mb-1">3. Upload Daftar Hadir Sosialisasi Halal</h4>
-          <input type="file" name="sosialisasiAbsen" accept=".pdf,.doc,.docx" onChange={(e) => handleGenericFileUpload(e, 'sosialisasiAbsen', setEvidenceData)} className="w-full text-xs text-slate-500 mt-2" />
+          <input type="file" name="sosialisasiAbsen" accept=".pdf,.doc,.docx" onChange={(e) => handleGenericFileUpload(e, 'sosialisasiAbsen', setEvidenceData)} className="block w-full text-xs text-slate-500 file:cursor-pointer file:mr-3 file:m-1 file:py-2 file:px-4 file:rounded-md file:border-0 file:font-bold file:bg-emerald-600 file:text-white hover:file:bg-emerald-700 file:transition-colors border border-slate-200 rounded-lg bg-white cursor-pointer hover:border-emerald-300 transition-colors shadow-2xs focus:outline-none mt-2" />
           {evidenceData.sosialisasiAbsen && (
             <a href={`/uploads/${evidenceData.sosialisasiAbsen}`} target="_blank" rel="noreferrer" className="text-xs text-emerald-600 font-semibold mt-1 block truncate w-full hover:underline" title={evidenceData.sosialisasiAbsen}>
               ✓ {evidenceData.sosialisasiAbsen} (Klik untuk Lihat)
@@ -2401,7 +2401,7 @@ const StepUploadEvidence = ({ evidenceData, setEvidenceData, handleGenericFileUp
 
         <div className="p-4 border rounded-xl bg-slate-50">
           <h4 className="font-semibold text-sm text-slate-800 mb-1">4. Upload Daftar Hadir Audit Internal</h4>
-          <input type="file" name="auditInternalAbsen" accept=".pdf,.doc,.docx" onChange={(e) => handleGenericFileUpload(e, 'auditInternalAbsen', setEvidenceData)} className="w-full text-xs text-slate-500 mt-2" />
+          <input type="file" name="auditInternalAbsen" accept=".pdf,.doc,.docx" onChange={(e) => handleGenericFileUpload(e, 'auditInternalAbsen', setEvidenceData)} className="block w-full text-xs text-slate-500 file:cursor-pointer file:mr-3 file:m-1 file:py-2 file:px-4 file:rounded-md file:border-0 file:font-bold file:bg-emerald-600 file:text-white hover:file:bg-emerald-700 file:transition-colors border border-slate-200 rounded-lg bg-white cursor-pointer hover:border-emerald-300 transition-colors shadow-2xs focus:outline-none mt-2" />
           {evidenceData.auditInternalAbsen && (
             <a href={`/uploads/${evidenceData.auditInternalAbsen}`} target="_blank" rel="noreferrer" className="text-xs text-emerald-600 font-semibold mt-1 block truncate w-full hover:underline" title={evidenceData.auditInternalAbsen}>
               ✓ {evidenceData.auditInternalAbsen} (Klik untuk Lihat)
@@ -2411,7 +2411,7 @@ const StepUploadEvidence = ({ evidenceData, setEvidenceData, handleGenericFileUp
 
         <div className="p-4 border rounded-xl bg-slate-50">
           <h4 className="font-semibold text-sm text-slate-800 mb-1">5. Sampel Catatan Pembelian Bahan</h4>
-          <input type="file" name="pembelianBahan" accept=".pdf,.doc,.docx,image/*" onChange={(e) => handleGenericFileUpload(e, 'pembelianBahan', setEvidenceData)} className="w-full text-xs text-slate-500 mt-2" />
+          <input type="file" name="pembelianBahan" accept=".pdf,.doc,.docx,image/*" onChange={(e) => handleGenericFileUpload(e, 'pembelianBahan', setEvidenceData)} className="block w-full text-xs text-slate-500 file:cursor-pointer file:mr-3 file:m-1 file:py-2 file:px-4 file:rounded-md file:border-0 file:font-bold file:bg-emerald-600 file:text-white hover:file:bg-emerald-700 file:transition-colors border border-slate-200 rounded-lg bg-white cursor-pointer hover:border-emerald-300 transition-colors shadow-2xs focus:outline-none mt-2" />
           {evidenceData.pembelianBahan && (
             <a href={`/uploads/${evidenceData.pembelianBahan}`} target="_blank" rel="noreferrer" className="text-xs text-emerald-600 font-semibold mt-1 block truncate w-full hover:underline" title={evidenceData.pembelianBahan}>
               ✓ {evidenceData.pembelianBahan} (Klik untuk Lihat)
@@ -2421,7 +2421,7 @@ const StepUploadEvidence = ({ evidenceData, setEvidenceData, handleGenericFileUp
 
         <div className="p-4 border rounded-xl bg-slate-50">
           <h4 className="font-semibold text-sm text-slate-800 mb-1">6. Catatan Penyimpanan Bahan</h4>
-          <input type="file" name="penyimpananBahan" accept=".pdf,.doc,.docx,image/*" onChange={(e) => handleGenericFileUpload(e, 'penyimpananBahan', setEvidenceData)} className="w-full text-xs text-slate-500 mt-2" />
+          <input type="file" name="penyimpananBahan" accept=".pdf,.doc,.docx,image/*" onChange={(e) => handleGenericFileUpload(e, 'penyimpananBahan', setEvidenceData)} className="block w-full text-xs text-slate-500 file:cursor-pointer file:mr-3 file:m-1 file:py-2 file:px-4 file:rounded-md file:border-0 file:font-bold file:bg-emerald-600 file:text-white hover:file:bg-emerald-700 file:transition-colors border border-slate-200 rounded-lg bg-white cursor-pointer hover:border-emerald-300 transition-colors shadow-2xs focus:outline-none mt-2" />
           {evidenceData.penyimpananBahan && (
             <a href={`/uploads/${evidenceData.penyimpananBahan}`} target="_blank" rel="noreferrer" className="text-xs text-emerald-600 font-semibold mt-1 block truncate w-full hover:underline" title={evidenceData.penyimpananBahan}>
               ✓ {evidenceData.penyimpananBahan} (Klik untuk Lihat)
@@ -2431,7 +2431,7 @@ const StepUploadEvidence = ({ evidenceData, setEvidenceData, handleGenericFileUp
 
         <div className="p-4 border rounded-xl bg-slate-50">
           <h4 className="font-semibold text-sm text-slate-800 mb-1">7. Catatan Hasil Produksi</h4>
-          <input type="file" name="hasilProduksi" accept=".pdf,.doc,.docx,image/*" onChange={(e) => handleGenericFileUpload(e, 'hasilProduksi', setEvidenceData)} className="w-full text-xs text-slate-500 mt-2" />
+          <input type="file" name="hasilProduksi" accept=".pdf,.doc,.docx,image/*" onChange={(e) => handleGenericFileUpload(e, 'hasilProduksi', setEvidenceData)} className="block w-full text-xs text-slate-500 file:cursor-pointer file:mr-3 file:m-1 file:py-2 file:px-4 file:rounded-md file:border-0 file:font-bold file:bg-emerald-600 file:text-white hover:file:bg-emerald-700 file:transition-colors border border-slate-200 rounded-lg bg-white cursor-pointer hover:border-emerald-300 transition-colors shadow-2xs focus:outline-none mt-2" />
           {evidenceData.hasilProduksi && (
             <a href={`/uploads/${evidenceData.hasilProduksi}`} target="_blank" rel="noreferrer" className="text-xs text-emerald-600 font-semibold mt-1 block truncate w-full hover:underline" title={evidenceData.hasilProduksi}>
               ✓ {evidenceData.hasilProduksi} (Klik untuk Lihat)
@@ -2441,7 +2441,7 @@ const StepUploadEvidence = ({ evidenceData, setEvidenceData, handleGenericFileUp
 
         <div className="p-4 border rounded-xl bg-slate-50">
           <h4 className="font-semibold text-sm text-slate-800 mb-1">8. Catatan Penjualan/Distribusi Produk</h4>
-          <input type="file" name="distribusiProduk" accept=".pdf,.doc,.docx,image/*" onChange={(e) => handleGenericFileUpload(e, 'distribusiProduk', setEvidenceData)} className="w-full text-xs text-slate-500 mt-2" />
+          <input type="file" name="distribusiProduk" accept=".pdf,.doc,.docx,image/*" onChange={(e) => handleGenericFileUpload(e, 'distribusiProduk', setEvidenceData)} className="block w-full text-xs text-slate-500 file:cursor-pointer file:mr-3 file:m-1 file:py-2 file:px-4 file:rounded-md file:border-0 file:font-bold file:bg-emerald-600 file:text-white hover:file:bg-emerald-700 file:transition-colors border border-slate-200 rounded-lg bg-white cursor-pointer hover:border-emerald-300 transition-colors shadow-2xs focus:outline-none mt-2" />
           {evidenceData.distribusiProduk && (
             <a href={`/uploads/${evidenceData.distribusiProduk}`} target="_blank" rel="noreferrer" className="text-xs text-emerald-600 font-semibold mt-1 block truncate w-full hover:underline" title={evidenceData.distribusiProduk}>
               ✓ {evidenceData.distribusiProduk} (Klik untuk Lihat)
