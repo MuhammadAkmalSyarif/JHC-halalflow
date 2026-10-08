@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import * as XLSX from 'xlsx';
+import { showConfirm, showAlert, showToast } from './utils/swalHelpers';
 
 // =============================================
 // ADMIN API BASE & AUTH HELPER
@@ -1236,7 +1237,7 @@ function CompaniesPage({ onSelectCompany }) {
   };
 
   const handleDeleteCompany = async (id) => {
-    if (!window.confirm('Apakah Anda yakin ingin menghapus data perusahaan ini? Tindakan ini tidak dapat dibatalkan.')) return;
+    if (!(await showConfirm('Apakah Anda yakin ingin menghapus data perusahaan ini? Tindakan ini tidak dapat dibatalkan.'))) return;
     try {
       const res = await adminFetch(`/api/admin/companies/${id}`, { method: 'DELETE' });
       if (res.ok) {

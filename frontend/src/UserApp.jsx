@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import * as XLSX from 'xlsx';
+import { showConfirm, showAlert, showToast } from './utils/swalHelpers';
 
 // SVG Icons helper component
 const Icons = {
@@ -1159,7 +1160,7 @@ const StepMatrixBahanHalal = ({ materials, setMaterials, matrixSubmitted, setMat
 
   const handleBulkDelete = async () => {
     if (selectedIds.length === 0) return;
-    if (!window.confirm(`Apakah Anda yakin ingin menghapus ${selectedIds.length} bahan baku terpilih?`)) return;
+    if (!(await showConfirm(`Apakah Anda yakin ingin menghapus ${selectedIds.length} bahan baku terpilih?`))) return;
     try {
       const res = await apiFetch('/api/materials/bulk-delete', {
         method: 'POST',
@@ -1197,11 +1198,9 @@ const StepMatrixBahanHalal = ({ materials, setMaterials, matrixSubmitted, setMat
         if (res.ok) {
           setMaterials(data.materials);
           setEditingId(null);
-          setNewMaterial({ name: '', jenis: '', produsen: '', negara: '', supplier: '', lembaga: '', sertifikat: '', expired: '' });
-          setSuccessMsg('Bahan baku berhasil diperbarui!');
-          setTimeout(() => setSuccessMsg(''), 3000);
+          showToast('Bahan baku berhasil diperbarui!');
         } else {
-          alert('Gagal memperbarui bahan: ' + (data.error || 'Server error'));
+          showAlert('Gagal memperbarui bahan: ' + (data.error || 'Server error'));
         }
       } else {
         // Add new material
@@ -1214,15 +1213,14 @@ const StepMatrixBahanHalal = ({ materials, setMaterials, matrixSubmitted, setMat
         if (res.ok) {
           setMaterials(data.materials);
           setNewMaterial({ name: '', jenis: '', produsen: '', negara: '', supplier: '', lembaga: '', sertifikat: '', expired: '' });
-          setSuccessMsg('Bahan baku berhasil ditambahkan!');
-          setTimeout(() => setSuccessMsg(''), 3000);
+          showToast('Bahan baku berhasil ditambahkan!');
         } else {
-          alert('Gagal menambah bahan: ' + (data.error || 'Server error'));
+          showAlert('Gagal menambah bahan: ' + (data.error || 'Server error'));
         }
       }
     } catch (err) {
       console.error(err);
-      alert('Terjadi kesalahan jaringan atau server: ' + err.message);
+      showAlert('Terjadi kesalahan jaringan atau server: ' + err.message);
     }
   };
 
@@ -1247,7 +1245,7 @@ const StepMatrixBahanHalal = ({ materials, setMaterials, matrixSubmitted, setMat
   };
 
   const handleDelete = async (id) => {
-    if (!window.confirm('Apakah Anda yakin ingin menghapus bahan baku ini?')) return;
+    if (!(await showConfirm('Apakah Anda yakin ingin menghapus bahan baku ini?'))) return;
     try {
       const res = await apiFetch(`/api/materials/${id}`, {
         method: 'DELETE'
@@ -1258,8 +1256,7 @@ const StepMatrixBahanHalal = ({ materials, setMaterials, matrixSubmitted, setMat
         if (editingId === id) {
           handleCancelEdit();
         }
-        setSuccessMsg('Bahan baku berhasil dihapus!');
-        setTimeout(() => setSuccessMsg(''), 3000);
+        showToast('Bahan baku berhasil dihapus!');
       }
     } catch (err) {
       console.error(err);
@@ -1643,8 +1640,8 @@ const StepUploadProduk = ({ products, setProducts, materials, productsSubmitted,
     setTimeout(() => setSuccessMsg(''), 3000);
   };
 
-  const handleDeletePending = (id) => {
-    if (!window.confirm('Hapus produk ini dari daftar?')) return;
+  const handleDeletePending = async (id) => {
+    if (!(await showConfirm('Hapus produk ini dari daftar?'))) return;
     setPendingProducts(prev => prev.filter(p => p.id !== id));
     if (selectedPendingId === id) {
       setSelectedPendingId(null);
@@ -1654,13 +1651,12 @@ const StepUploadProduk = ({ products, setProducts, materials, productsSubmitted,
   };
 
   const handleDeleteBOM = async (bomProduct) => {
-    if (!window.confirm(`Hapus produk "${bomProduct.name}" dari BOM Final?`)) return;
+    if (!(await showConfirm(`Hapus produk "${bomProduct.name}" dari BOM Final?`))) return;
     try {
       await apiFetch(`/api/products/${bomProduct.id}`, { method: 'DELETE' });
     } catch (e) { /* ignore if no backend endpoint */ }
     setBomProducts(prev => prev.filter(p => p.id !== bomProduct.id));
-    setSuccessMsg(`Produk "${bomProduct.name}" berhasil dihapus dari BOM!`);
-    setTimeout(() => setSuccessMsg(''), 3000);
+    showToast(`Produk "${bomProduct.name}" berhasil dihapus dari BOM!`);
   };
 
   const handleEditBOM = (bomProduct) => {
@@ -2237,7 +2233,7 @@ const StepUploadEvidence = ({ evidenceData, setEvidenceData, handleGenericFileUp
   const [deletingFile, setDeletingFile] = useState('');
 
   const handleDeleteFile = async (field, filename) => {
-    const confirmDelete = window.confirm(`Apakah Anda yakin ingin menghapus foto "${filename}"?`);
+    const confirmDelete = await showConfirm(`Apakah Anda yakin ingin menghapus foto "${filename}"?`);
     if (!confirmDelete) return;
 
     setDeletingFile(filename);
@@ -2269,15 +2265,14 @@ const StepUploadEvidence = ({ evidenceData, setEvidenceData, handleGenericFileUp
           body: JSON.stringify(updatedData)
         });
 
-        setSuccessMsg('Foto berhasil dihapus.');
-        setTimeout(() => setSuccessMsg(''), 3000);
+        showToast('Foto berhasil dihapus.');
       } else {
         const data = await res.json().catch(() => ({}));
-        alert('Gagal menghapus file: ' + (data.error || 'Terjadi kesalahan pada server'));
+        showAlert('Gagal menghapus file: ' + (data.error || 'Terjadi kesalahan pada server'));
       }
     } catch (err) {
       console.error('Delete error:', err);
-      alert('Terjadi kesalahan saat menghapus file.');
+      showAlert('Terjadi kesalahan saat menghapus file.');
     } finally {
       setDeletingFile('');
     }
