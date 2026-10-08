@@ -125,12 +125,31 @@ const db = {
         rows: res.rows
       };
     } catch (err) {
+      if (isInsert && err.message.includes('duplicate key value violates unique constraint') && err.message.includes('_pkey')) {
+        // Auto-heal sequence for out-of-sync migrated data
+        const match = queryText.match(/^\s*insert\s+into\s+([a-zA-Z0-9_]+)/i);
+        if (match) {
+          const tableName = match[1];
+          try {
+            await p.query(`SELECT setval(pg_get_serial_sequence('${tableName}', 'id'), coalesce(max(id), 0) + 1, false) FROM ${tableName};`);
+            const res = await p.query(queryText, params); // Retry
+            return { lastInsertRowid: res.rows[0]?.id || null, rowCount: res.rowCount, rows: res.rows };
+          } catch(syncErr) {
+            console.error(`⚠️ Failed to auto-sync sequence for ${tableName}:`, syncErr.message);
+          }
+        }
+      }
+
       // Jika INSERT ON CONFLICT DO NOTHING dan tidak ada row yang kembali
       if (err.message.includes('ON CONFLICT') || isInsert) {
-        // Retry tanpa RETURNING jika error kolom id
-        const cleanQuery = normalizeQuery(sql);
-        const res = await p.query(cleanQuery, params);
-        return { lastInsertRowid: null, rowCount: res.rowCount };
+        try {
+          // Retry tanpa RETURNING jika error kolom id
+          const cleanQuery = normalizeQuery(sql);
+          const res = await p.query(cleanQuery, params);
+          return { lastInsertRowid: null, rowCount: res.rowCount };
+        } catch(retryErr) {
+          throw retryErr;
+        }
       }
       throw err;
     }
