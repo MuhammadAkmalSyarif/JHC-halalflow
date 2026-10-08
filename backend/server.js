@@ -1439,8 +1439,10 @@ app.post('/api/evidence', authMiddleware, async (req, res) => {
   const company = await db.prepare('SELECT id FROM companies WHERE user_id=?').get(userId);
   if (!company) return res.status(404).json({ error: 'Perusahaan tidak ditemukan' });
   const data = req.body;
-  const existing = await db.prepare('SELECT * FROM evidence_data WHERE company_id=?').get(company.id);
-  if (existing) {
+  
+  try {
+    const existing = await db.prepare('SELECT * FROM evidence_data WHERE company_id=?').get(company.id);
+    if (existing) {
     await db.prepare(`
       UPDATE evidence_data SET 
         sosialisasiFoto=?, auditInternalFoto=?, sosialisasiAbsen=?, auditInternalAbsen=?, 
@@ -1468,9 +1470,14 @@ app.post('/api/evidence', authMiddleware, async (req, res) => {
       data.pembelianBahan||'', data.penyimpananBahan||'', data.hasilProduksi||'', data.distribusiProduk||''
     );
   }
-  await db.prepare(`UPDATE certification_progress SET status='Menunggu Verifikasi', updated_at=datetime('now') WHERE company_id=? AND stage=6`).run(company.id);
-  await logActivity(db, company.id, userId, 'evidence_save', 'Dokumen evidence disimpan');
-  res.json({ message: 'OK' });
+    
+    await db.prepare(`UPDATE certification_progress SET status='Menunggu Verifikasi', updated_at=datetime('now') WHERE company_id=? AND stage=6`).run(company.id);
+    await logActivity(db, company.id, userId, 'evidence_save', 'Dokumen evidence disimpan');
+    res.json({ message: 'OK' });
+  } catch (err) {
+    console.error('Evidence save error:', err);
+    res.status(500).json({ error: err.message });
+  }
 });
 
 // =============================================
