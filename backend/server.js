@@ -2808,6 +2808,16 @@ app.get('/api/admin/companies/:id/evidence', adminAuthMiddleware, async (req, re
 
 
 // =============================================
+// GLOBAL ERROR HANDLER
+// =============================================
+app.use((err, req, res, next) => {
+  console.error('Unhandled Express Error:', err);
+  res.status(err.status || 500).json({
+    error: err.message || 'Internal Server Error (Global)'
+  });
+});
+
+// =============================================
 // START SERVER
 // =============================================
 if (require.main === module) {
