@@ -861,78 +861,83 @@ app.get('/api/companies/:id/progress', authMiddleware, async (req, res) => {
 // =============================================
 
 // POST /api/upload (Base64 JSON)
-app.post('/api/upload', authMiddleware, async (req, res) => {
-  const { filename, mimetype, base64, company_id, document_type } = req.body;
-  if (!filename || !base64) return res.status(400).json({ error: 'File tidak ada atau format tidak valid' });
-
-  const companyId = company_id ? parseInt(company_id) : null;
-  const docType = document_type || 'general';
-
-  const ext = require('path').extname(filename);
-  const basename = require('path').basename(filename, ext).replace(/[^a-zA-Z0-9]/g, '_');
-  const storedName = `${basename}-${Date.now()}-${Math.round(Math.random() * 1e9)}${ext}`;
-
-  // Convert Base64 back to Buffer
-  const base64Data = base64.replace(/^data:.*?;base64,/, '');
-  const fileBuffer = Buffer.from(base64Data, 'base64');
-
-  // Upload ke Supabase Storage
-  const supabase = getSupabase();
-  const bucketName = process.env.SUPABASE_STORAGE_BUCKET || 'halal-flow-uploads';
-  let fileUrl = `/uploads/${storedName}`;
-
-  if (supabase) {
-    try {
-      // Direct REST API fetch to bypass supabase-js / undici hanging bug on Vercel
-      const uploadUrl = `${process.env.SUPABASE_URL}/storage/v1/object/${bucketName}/${storedName}`;
-      
-      const uploadPromise = fetch(uploadUrl, {
-        method: 'POST',
-        headers: {
-          'Authorization': `Bearer ${process.env.SUPABASE_KEY}`,
-          'Content-Type': mimetype || 'application/octet-stream',
-          'x-upsert': 'true'
-        },
-        body: fileBuffer
-      }).then(async (response) => {
-        if (!response.ok) {
-          const errData = await response.json().catch(() => ({}));
-          throw new Error(errData.error || errData.message || 'HTTP ' + response.status);
-        }
-        return response.json();
-      });
-
-      const timeoutPromise = new Promise((_, reject) => 
-        setTimeout(() => reject(new Error('Supabase upload timeout exceeded 5000ms')), 5000)
-      );
-
-      await Promise.race([uploadPromise, timeoutPromise]);
-      
-      const publicUrl = `${process.env.SUPABASE_URL}/storage/v1/object/public/${bucketName}/${storedName}`;
-      fileUrl = publicUrl;
-      
-    } catch(uploadErr) {
-      console.error('Failed to upload to Supabase storage:', uploadErr.message);
-      return res.status(500).json({ error: 'Gagal mengupload file: ' + uploadErr.message });
-    }
-  }
-
-  // Simpan record ke database
+app.post('/api/upload', authMiddleware, async (req, res, next) => {
   try {
-    await db.prepare(`
-      INSERT INTO uploaded_files (company_id, user_id, original_name, stored_name, file_path, document_type)
-      VALUES (?, ?, ?, ?, ?, ?)
-    `).run(companyId, req.user.id, filename, storedName, fileUrl, docType);
+    const { filename, mimetype, base64, company_id, document_type } = req.body;
+    if (!filename || !base64) return res.status(400).json({ error: 'File tidak ada atau format tidak valid' });
 
-    res.json({
-      message: 'File berhasil diupload',
-      filename: storedName,
-      originalName: filename,
-      url: fileUrl
-    });
-  } catch (dbErr) {
-    console.error('Failed to save to database:', dbErr);
-    res.status(500).json({ error: 'Gagal menyimpan ke database: ' + dbErr.message });
+    const companyId = company_id ? parseInt(company_id) : null;
+    const docType = document_type || 'general';
+
+    const ext = require('path').extname(filename);
+    const basename = require('path').basename(filename, ext).replace(/[^a-zA-Z0-9]/g, '_');
+    const storedName = `${basename}-${Date.now()}-${Math.round(Math.random() * 1e9)}${ext}`;
+
+    // Convert Base64 back to Buffer
+    const base64Data = base64.replace(/^data:.*?;base64,/, '');
+    const fileBuffer = Buffer.from(base64Data, 'base64');
+
+    // Upload ke Supabase Storage
+    const supabase = getSupabase();
+    const bucketName = process.env.SUPABASE_STORAGE_BUCKET || 'halal-flow-uploads';
+    let fileUrl = `/uploads/${storedName}`;
+
+    if (supabase) {
+      try {
+        // Direct REST API fetch to bypass supabase-js / undici hanging bug on Vercel
+        const uploadUrl = `${process.env.SUPABASE_URL}/storage/v1/object/${bucketName}/${storedName}`;
+        
+        const uploadPromise = fetch(uploadUrl, {
+          method: 'POST',
+          headers: {
+            'Authorization': `Bearer ${process.env.SUPABASE_KEY}`,
+            'Content-Type': mimetype || 'application/octet-stream',
+            'x-upsert': 'true'
+          },
+          body: fileBuffer
+        }).then(async (response) => {
+          if (!response.ok) {
+            const errData = await response.json().catch(() => ({}));
+            throw new Error(errData.error || errData.message || 'HTTP ' + response.status);
+          }
+          return response.json();
+        });
+
+        const timeoutPromise = new Promise((_, reject) => 
+          setTimeout(() => reject(new Error('Supabase upload timeout exceeded 5000ms')), 5000)
+        );
+
+        await Promise.race([uploadPromise, timeoutPromise]);
+        
+        const publicUrl = `${process.env.SUPABASE_URL}/storage/v1/object/public/${bucketName}/${storedName}`;
+        fileUrl = publicUrl;
+        
+      } catch(uploadErr) {
+        console.error('Failed to upload to Supabase storage:', uploadErr.message);
+        return res.status(500).json({ error: 'Gagal mengupload file: ' + uploadErr.message });
+      }
+    }
+
+    // Simpan record ke database
+    try {
+      await db.prepare(`
+        INSERT INTO uploaded_files (company_id, user_id, original_name, stored_name, file_path, document_type)
+        VALUES (?, ?, ?, ?, ?, ?)
+      `).run(companyId, req.user.id, filename, storedName, fileUrl, docType);
+
+      res.json({
+        message: 'File berhasil diupload',
+        filename: storedName,
+        originalName: filename,
+        url: fileUrl
+      });
+    } catch (dbErr) {
+      console.error('Failed to save to database:', dbErr);
+      res.status(500).json({ error: 'Gagal menyimpan ke database: ' + dbErr.message });
+    }
+  } catch (err) {
+    console.error('Unhandled error in /api/upload:', err);
+    res.status(500).json({ error: 'Terjadi kesalahan sistem saat upload: ' + err.message });
   }
 });
 
