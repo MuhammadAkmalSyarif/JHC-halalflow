@@ -918,17 +918,22 @@ app.post('/api/upload', authMiddleware, async (req, res) => {
   }
 
   // Simpan record ke database
-  await db.prepare(`
-    INSERT INTO uploaded_files (company_id, user_id, original_name, stored_name, file_path, document_type)
-    VALUES (?, ?, ?, ?, ?, ?)
-  `).run(companyId, req.user.id, filename, storedName, fileUrl, docType);
+  try {
+    await db.prepare(`
+      INSERT INTO uploaded_files (company_id, user_id, original_name, stored_name, file_path, document_type)
+      VALUES (?, ?, ?, ?, ?, ?)
+    `).run(companyId, req.user.id, filename, storedName, fileUrl, docType);
 
-  res.json({
-    message: 'File berhasil diupload',
-    filename: storedName,
-    originalName: filename,
-    url: fileUrl
-  });
+    res.json({
+      message: 'File berhasil diupload',
+      filename: storedName,
+      originalName: filename,
+      url: fileUrl
+    });
+  } catch (dbErr) {
+    console.error('Failed to save to database:', dbErr);
+    res.status(500).json({ error: 'Gagal menyimpan ke database: ' + dbErr.message });
+  }
 });
 
 // DELETE /api/upload/:filename
