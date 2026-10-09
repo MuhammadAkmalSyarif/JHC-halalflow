@@ -1484,6 +1484,7 @@ app.post('/api/evidence', authMiddleware, async (req, res) => {
       INSERT INTO evidence_data (
         company_id, sosialisasiFoto, auditInternalFoto, sosialisasiAbsen, auditInternalAbsen,
         pembelianBahan, penyimpananBahan, hasilProduksi, distribusiProduk
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
     `).run(
       company.id, data.sosialisasiFoto||'', data.auditInternalFoto||'', data.sosialisasiAbsen||'', data.auditInternalAbsen||'',
       data.pembelianBahan||'', data.penyimpananBahan||'', data.hasilProduksi||'', data.distribusiProduk||''
