@@ -1059,7 +1059,7 @@ function ApplicationsPage({ onSelectCompany }) {
                   )}
 
                   {detailTab === 'evidence' && (
-                    <div className="grid grid-cols-2 gap-3">
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
                       {[
                         { label: '1. Bukti Foto Sosialisasi', file: detailData?.evidence?.sosialisasiFoto },
                         { label: '2. Bukti Foto Audit Internal', file: detailData?.evidence?.auditInternalFoto },
@@ -1069,18 +1069,40 @@ function ApplicationsPage({ onSelectCompany }) {
                         { label: '6. Catatan Penyimpanan Bahan', file: detailData?.evidence?.penyimpananBahan },
                         { label: '7. Catatan Hasil Produksi', file: detailData?.evidence?.hasilProduksi },
                         { label: '8. Catatan Distribusi Produk', file: detailData?.evidence?.distribusiProduk },
-                      ].map((ev, i) => (
-                        <div key={i} className="p-3 bg-slate-50 border rounded-xl flex items-center justify-between">
-                          <span className="font-semibold text-slate-700 text-[11px] truncate pr-2">{ev.label}</span>
-                          {ev.file ? (
-                            <a href={`/uploads/${ev.file}`} target="_blank" rel="noreferrer" className="text-emerald-600 font-bold hover:underline shrink-0">
-                              Buka ↗
-                            </a>
-                          ) : (
-                            <span className="text-slate-400 italic shrink-0">Tidak ada</span>
-                          )}
-                        </div>
-                      ))}
+                      ].map((ev, i) => {
+                        const files = (ev.file || '').split(',').map(f => f.trim()).filter(Boolean);
+                        return (
+                          <div key={i} className={`p-3 border rounded-xl flex flex-col gap-2 ${files.length ? 'bg-emerald-50/50 border-emerald-200' : 'bg-slate-50 border-slate-200'}`}>
+                            <div className="flex items-center justify-between">
+                              <span className="font-semibold text-slate-800 text-[11px] truncate pr-2">{ev.label}</span>
+                              {files.length > 0 ? (
+                                <span className="text-[10px] font-bold px-1.5 py-0.5 rounded bg-emerald-100 text-emerald-800 border border-emerald-200">
+                                  {files.length} file
+                                </span>
+                              ) : (
+                                <span className="text-slate-400 italic text-[11px]">Belum upload</span>
+                              )}
+                            </div>
+                            {files.length > 0 && (
+                              <div className="flex flex-col gap-1.5 pt-1">
+                                {files.map((f, idx) => (
+                                  <div key={idx} className="flex items-center justify-between gap-2 p-1.5 bg-white rounded-lg border border-emerald-100 text-[11px]">
+                                    <span className="text-slate-600 font-mono truncate flex-1" title={f}>{idx + 1}. {f}</span>
+                                    <a
+                                      href={getFullUrl(`/uploads/${f}`)}
+                                      target="_blank"
+                                      rel="noreferrer"
+                                      className="text-emerald-700 hover:text-emerald-900 font-bold hover:underline shrink-0 flex items-center gap-1"
+                                    >
+                                      <Icons.Eye className="w-3 h-3"/> Buka ↗
+                                    </a>
+                                  </div>
+                                ))}
+                              </div>
+                            )}
+                          </div>
+                        );
+                      })}
                     </div>
                   )}
                 </>
@@ -1879,24 +1901,44 @@ function CompanyDetailPage({ companyId, onBack }) {
                 { label: '7. Catatan Hasil Produksi', key: 'hasilProduksi' },
                 { label: '8. Bukti Distribusi/Penjualan', key: 'distribusiProduk' },
               ].map(({ label, key }) => {
-                const filename = evidence[key];
+                const rawVal = evidence[key];
+                const files = (rawVal || '').split(',').map(f => f.trim()).filter(Boolean);
+                const hasFiles = files.length > 0;
+
                 return (
-                  <div key={key} className={`p-4 rounded-xl border flex items-center justify-between ${filename ? 'bg-emerald-50 border-emerald-200' : 'bg-slate-50 border-slate-200'}`}>
-                    <div>
-                      <h4 className="font-bold text-xs text-slate-800">{label}</h4>
-                      {filename && <p className="text-[10px] text-slate-500 font-mono mt-1 truncate max-w-[200px]" title={filename}>{filename}</p>}
+                  <div key={key} className={`p-4 rounded-xl border flex flex-col gap-2.5 ${hasFiles ? 'bg-emerald-50/60 border-emerald-200' : 'bg-slate-50 border-slate-200'}`}>
+                    <div className="flex items-center justify-between gap-2">
+                      <div className="flex items-center gap-2">
+                        <h4 className="font-bold text-xs text-slate-800">{label}</h4>
+                        {hasFiles && (
+                          <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-800 border border-emerald-300">
+                            {files.length} Foto/File
+                          </span>
+                        )}
+                      </div>
+                      {!hasFiles && (
+                        <span className="text-[10px] text-slate-400 font-semibold whitespace-nowrap bg-slate-100 px-2 py-1 rounded">Belum upload</span>
+                      )}
                     </div>
-                    {filename ? (
-                      <a
-                        href={`/uploads/${filename}`}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className="inline-flex items-center gap-1 px-3 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white text-[10px] font-bold rounded-lg transition-colors shadow-sm whitespace-nowrap"
-                      >
-                        <Icons.Eye className="w-3 h-3"/> Lihat File
-                      </a>
-                    ) : (
-                      <span className="text-[10px] text-slate-400 font-semibold whitespace-nowrap">Belum upload</span>
+
+                    {hasFiles && (
+                      <div className="space-y-1.5 mt-1">
+                        {files.map((file, idx) => (
+                          <div key={idx} className="flex items-center justify-between gap-2 p-2 bg-white rounded-lg border border-emerald-100">
+                            <span className="text-[11px] text-slate-600 font-mono truncate flex-1" title={file}>
+                              {idx + 1}. {file}
+                            </span>
+                            <a
+                              href={getFullUrl(`/uploads/${file}`)}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="inline-flex items-center gap-1 px-2.5 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white text-[10px] font-bold rounded-md transition-colors shadow-2xs whitespace-nowrap shrink-0"
+                            >
+                              <Icons.Eye className="w-3 h-3"/> Lihat File {files.length > 1 ? `#${idx + 1}` : ''}
+                            </a>
+                          </div>
+                        ))}
+                      </div>
                     )}
                   </div>
                 );

@@ -80,85 +80,146 @@ function normalizeQuery(sql) {
   return normalized;
 }
 
+const Database = require('better-sqlite3');
+const path = require('path');
+
+let sqliteDb = null;
+function getSqlite() {
+  if (!sqliteDb) {
+    const dbPath = path.join(__dirname, 'halalflow.db');
+    sqliteDb = new Database(dbPath);
+    sqliteDb.pragma('journal_mode = WAL');
+    sqliteDb.pragma('foreign_keys = ON');
+    console.log('📦 [Database] DATABASE_URL tidak diatur. Menggunakan SQLite lokal:', dbPath);
+  }
+  return sqliteDb;
+}
+
+function normalizeSqlite(sql) {
+  return sql
+    .replace(/\$[0-9]+/g, '?')
+    .replace(/\bDEFAULT\s+NOW\(\)/gi, "DEFAULT (datetime('now'))")
+    .replace(/\bNOW\(\)/gi, "datetime('now')")
+    .replace(/SERIAL PRIMARY KEY/gi, 'INTEGER PRIMARY KEY AUTOINCREMENT')
+    .replace(/TIMESTAMP WITH TIME ZONE/gi, 'TEXT')
+    .replace(/TIMESTAMP/gi, 'TEXT')
+    .replace(/JSONB/gi, 'TEXT')
+    .replace(/::[a-zA-Z0-9_]+/g, '');
+}
+
 /**
- * Helper Database Async kompatibel
+ * Helper Database Async kompatibel (Dual Driver: Supabase PostgreSQL / Local SQLite)
  */
 const db = {
   getPool,
   getSupabase,
 
   async query(sql, params = []) {
-    const p = getPool();
-    const queryText = normalizeQuery(sql);
-    return await p.query(queryText, params);
+    if (getConnectionString()) {
+      const p = getPool();
+      const queryText = normalizeQuery(sql);
+      return await p.query(queryText, params);
+    }
+    const cleanSql = normalizeSqlite(sql).trim();
+    if (/^\s*select/i.test(cleanSql)) {
+      const rows = getSqlite().prepare(cleanSql).all(...params);
+      return { rows, rowCount: rows.length };
+    } else {
+      const info = getSqlite().prepare(cleanSql).run(...params);
+      return { rows: [], rowCount: info.changes, lastInsertRowid: info.lastInsertRowid };
+    }
   },
 
   async get(sql, params = []) {
-    const p = getPool();
-    const queryText = normalizeQuery(sql);
-    const res = await p.query(queryText, params);
-    return res.rows[0] || null;
+    if (getConnectionString()) {
+      const p = getPool();
+      const queryText = normalizeQuery(sql);
+      const res = await p.query(queryText, params);
+      return res.rows[0] || null;
+    }
+    const cleanSql = normalizeSqlite(sql);
+    return getSqlite().prepare(cleanSql).get(...params) || null;
   },
 
   async all(sql, params = []) {
-    const p = getPool();
-    const queryText = normalizeQuery(sql);
-    const res = await p.query(queryText, params);
-    return res.rows;
+    if (getConnectionString()) {
+      const p = getPool();
+      const queryText = normalizeQuery(sql);
+      const res = await p.query(queryText, params);
+      return res.rows;
+    }
+    const cleanSql = normalizeSqlite(sql);
+    return getSqlite().prepare(cleanSql).all(...params) || [];
   },
 
   async run(sql, params = []) {
-    const p = getPool();
-    let queryText = normalizeQuery(sql);
-    
-    // Jika INSERT dan belum punya RETURNING, tambahkan RETURNING id
-    const isInsert = /^\s*insert\s+into/i.test(queryText);
-    if (isInsert && !/returning/i.test(queryText)) {
-      queryText += ' RETURNING id';
-    }
+    if (getConnectionString()) {
+      const p = getPool();
+      let queryText = normalizeQuery(sql);
+      
+      // Jika INSERT dan belum punya RETURNING, tambahkan RETURNING id
+      const isInsert = /^\s*insert\s+into/i.test(queryText);
+      if (isInsert && !/returning/i.test(queryText)) {
+        queryText += ' RETURNING id';
+      }
 
-    try {
-      const res = await p.query(queryText, params);
-      return {
-        lastInsertRowid: res.rows[0]?.id || null,
-        rowCount: res.rowCount,
-        rows: res.rows
-      };
-    } catch (err) {
-      if (isInsert && err.message.includes('duplicate key value violates unique constraint') && err.message.includes('_pkey')) {
-        // Auto-heal sequence for out-of-sync migrated data
-        const match = queryText.match(/^\s*insert\s+into\s+([a-zA-Z0-9_]+)/i);
-        if (match) {
-          const tableName = match[1];
-          try {
-            await p.query(`SELECT setval(pg_get_serial_sequence('${tableName}', 'id'), coalesce(max(id), 0) + 1, false) FROM ${tableName};`);
-            const res = await p.query(queryText, params); // Retry
-            return { lastInsertRowid: res.rows[0]?.id || null, rowCount: res.rowCount, rows: res.rows };
-          } catch(syncErr) {
-            console.error(`⚠️ Failed to auto-sync sequence for ${tableName}:`, syncErr.message);
+      try {
+        const res = await p.query(queryText, params);
+        return {
+          lastInsertRowid: res.rows[0]?.id || null,
+          rowCount: res.rowCount,
+          rows: res.rows
+        };
+      } catch (err) {
+        if (isInsert && err.message.includes('duplicate key value violates unique constraint') && err.message.includes('_pkey')) {
+          // Auto-heal sequence for out-of-sync migrated data
+          const match = queryText.match(/^\s*insert\s+into\s+([a-zA-Z0-9_]+)/i);
+          if (match) {
+            const tableName = match[1];
+            try {
+              await p.query(`SELECT setval(pg_get_serial_sequence('${tableName}', 'id'), coalesce(max(id), 0) + 1, false) FROM ${tableName};`);
+              const res = await p.query(queryText, params); // Retry
+              return { lastInsertRowid: res.rows[0]?.id || null, rowCount: res.rowCount, rows: res.rows };
+            } catch(syncErr) {
+              console.error(`⚠️ Failed to auto-sync sequence for ${tableName}:`, syncErr.message);
+            }
           }
         }
-      }
 
-      // Jika INSERT ON CONFLICT DO NOTHING dan tidak ada row yang kembali
-      if (err.message.includes('ON CONFLICT') || isInsert) {
-        try {
-          // Retry tanpa RETURNING jika error kolom id
-          const cleanQuery = normalizeQuery(sql);
-          const res = await p.query(cleanQuery, params);
-          return { lastInsertRowid: null, rowCount: res.rowCount };
-        } catch(retryErr) {
-          throw retryErr;
+        // Jika INSERT ON CONFLICT DO NOTHING dan tidak ada row yang kembali
+        if (err.message.includes('ON CONFLICT') || isInsert) {
+          try {
+            // Retry tanpa RETURNING jika error kolom id
+            const cleanQuery = normalizeQuery(sql);
+            const res = await p.query(cleanQuery, params);
+            return { lastInsertRowid: null, rowCount: res.rowCount };
+          } catch(retryErr) {
+            throw retryErr;
+          }
         }
+        throw err;
       }
-      throw err;
     }
+
+    // SQLite fallback mode
+    let cleanSql = normalizeSqlite(sql);
+    cleanSql = cleanSql.replace(/\s+RETURNING\s+[a-zA-Z0-9_*,\s]+/i, '');
+    const info = getSqlite().prepare(cleanSql).run(...params);
+    return {
+      lastInsertRowid: info.lastInsertRowid,
+      rowCount: info.changes,
+      rows: []
+    };
   },
 
   async exec(sql) {
-    const p = getPool();
-    const queryText = normalizeQuery(sql);
-    return await p.query(queryText);
+    if (getConnectionString()) {
+      const p = getPool();
+      const queryText = normalizeQuery(sql);
+      return await p.query(queryText);
+    }
+    const cleanSql = normalizeSqlite(sql);
+    return getSqlite().exec(cleanSql);
   },
 
   prepare(sql) {
@@ -185,7 +246,10 @@ const db = {
   },
 
   pragma(cmd) {
-    return [];
+    if (getConnectionString()) {
+      return [];
+    }
+    return getSqlite().pragma(cmd);
   }
 };
 

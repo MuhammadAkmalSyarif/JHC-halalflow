@@ -103,6 +103,35 @@ const uploadsDir = process.env.VERCEL ? path.join('/tmp', 'uploads') : path.join
 try {
   if (!fs.existsSync(uploadsDir)) fs.mkdirSync(uploadsDir, { recursive: true });
 } catch(e) {}
+app.get('/uploads/:filename', (req, res, next) => {
+  let filename = req.params.filename;
+  if (!filename) return next();
+  if (filename.includes(',')) {
+    filename = filename.split(',')[0].trim();
+  }
+  filename = path.basename(filename);
+  const filePath = path.join(uploadsDir, filename);
+  if (fs.existsSync(filePath)) {
+    return res.sendFile(filePath);
+  }
+  if (process.env.SUPABASE_URL) {
+    const bucket = process.env.SUPABASE_STORAGE_BUCKET || 'halal-flow-uploads';
+    const supabaseUrl = `${process.env.SUPABASE_URL}/storage/v1/object/public/${bucket}/${encodeURIComponent(filename)}`;
+    
+    // Simpan cache ke lokal secara asynchronous
+    fetch(supabaseUrl)
+      .then(async (r) => {
+        if (r.ok) {
+          const buf = Buffer.from(await r.arrayBuffer());
+          fs.writeFileSync(filePath, buf);
+        }
+      })
+      .catch(() => {});
+
+    return res.redirect(supabaseUrl);
+  }
+  return res.status(404).send('File tidak ditemukan');
+});
 app.use('/uploads', express.static(uploadsDir));
 
 // Multer config
@@ -877,6 +906,14 @@ app.post('/api/upload', authMiddleware, async (req, res, next) => {
     const base64Data = base64.replace(/^data:.*?;base64,/, '');
     const fileBuffer = Buffer.from(base64Data, 'base64');
 
+    // Simpan file ke folder uploads lokal
+    try {
+      if (!fs.existsSync(uploadsDir)) fs.mkdirSync(uploadsDir, { recursive: true });
+      fs.writeFileSync(path.join(uploadsDir, storedName), fileBuffer);
+    } catch(fsErr) {
+      console.warn('⚠️ Gagal menulis file ke disk lokal:', fsErr.message);
+    }
+
     // Upload ke Supabase Storage
     const supabase = getSupabase();
     const bucketName = process.env.SUPABASE_STORAGE_BUCKET || 'halal-flow-uploads';
@@ -914,7 +951,10 @@ app.post('/api/upload', authMiddleware, async (req, res, next) => {
         
       } catch(uploadErr) {
         console.error('Failed to upload to Supabase storage:', uploadErr.message);
-        return res.status(500).json({ error: 'Gagal mengupload file: ' + uploadErr.message });
+        // Jika file sudah tersimpan di disk lokal, izinkan tetap sukses
+        if (!fs.existsSync(path.join(uploadsDir, storedName))) {
+          return res.status(500).json({ error: 'Gagal mengupload file: ' + uploadErr.message });
+        }
       }
     }
 
