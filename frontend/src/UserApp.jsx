@@ -345,11 +345,14 @@ export default function UserApp() {
           },
           body: JSON.stringify(payload)
         });
-        const data = await res.json().catch(() => ({}));
+        const text = await res.text().catch(() => '');
+        let data = {};
+        try { data = JSON.parse(text); } catch (e) {}
+
         if (res.ok) {
           uploadedNames.push(data.filename);
         } else {
-          showAlert('Gagal mengunggah berkas: ' + (data.error || 'Server error'), 'error');
+          showAlert(`Gagal mengunggah berkas (Status ${res.status}): ` + (data.error || text.substring(0, 150) || 'Server error'), 'error');
         }
       }
       
