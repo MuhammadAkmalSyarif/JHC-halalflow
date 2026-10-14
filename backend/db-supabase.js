@@ -89,6 +89,9 @@ function getCleanSupabaseConfig() {
 
   let rawBucket = process.env.SUPABASE_STORAGE_BUCKET || '';
   let bucket = rawBucket.replace(/[\r\n\t]/g, '').trim().replace(/^["']+|["']+$/g, '') || fallbackBucket;
+  if (bucket === 'halalflow-uploads' || !bucket) {
+    bucket = 'halal-flow-uploads';
+  }
 
   return { url, key, bucket };
 }
