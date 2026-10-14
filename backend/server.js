@@ -923,10 +923,9 @@ app.post('/api/upload', authMiddleware, async (req, res, next) => {
 
     // Upload ke Supabase Storage
     const { url: sbUrl, key: sbKey, bucket: bucketName } = getCleanSupabaseConfig();
-    const supabase = getSupabase();
     let fileUrl = `/uploads/${storedName}`;
 
-    if (supabase && sbUrl && sbKey) {
+    if (sbUrl && sbKey) {
       try {
         // Direct REST API fetch to bypass supabase-js / undici hanging bug on Vercel
         const uploadUrl = `${sbUrl}/storage/v1/object/${bucketName}/${storedName}`;

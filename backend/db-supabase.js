@@ -57,26 +57,38 @@ function getPool() {
 }
 
 function getCleanSupabaseConfig() {
-  let url = (process.env.SUPABASE_URL || 'https://qptzbrbtzfnjuvurkbhr.supabase.co').trim().replace(/^["']|["']$/g, '');
+  let rawUrl = process.env.SUPABASE_URL || '';
+  let url = rawUrl.replace(/[\r\n\t]/g, '').trim().replace(/^["']+|["']+$/g, '');
+  if (!url || url.length < 10) {
+    url = 'https://qptzbrbtzfnjuvurkbhr.supabase.co';
+  }
   if (!url.startsWith('http://') && !url.startsWith('https://')) {
     url = `https://${url}`;
   }
   url = url.replace(/\/+$/, '');
 
-  let key = (process.env.SUPABASE_KEY || process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.SUPABASE_ANON_KEY || 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InFwdHpicmJ0emZuanV2dXJrYmhyIiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImlhdCI6MTc5MTI2OTMxMCwiZXhwIjoyMTA2ODQ1MzEwfQ.SXFlMQ_hJa7ZXZ3na4dy_ycCYtm43ma2WAUCrFfxq-w').trim().replace(/^["']|["']$/g, '');
+  let rawKey = process.env.SUPABASE_KEY || process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.SUPABASE_ANON_KEY || '';
+  let key = rawKey.replace(/[\r\n\t]/g, '').trim().replace(/^["']+|["']+$/g, '');
+  if (!key || key.length < 20) {
+    key = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InFwdHpicmJ0emZuanV2dXJrYmhyIiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImlhdCI6MTc5MTI2OTMxMCwiZXhwIjoyMTA2ODQ1MzEwfQ.SXFlMQ_hJa7ZXZ3na4dy_ycCYtm43ma2WAUCrFfxq-w';
+  }
 
-  const bucket = (process.env.SUPABASE_STORAGE_BUCKET || 'halal-flow-uploads').trim().replace(/^["']|["']$/g, '');
+  let rawBucket = process.env.SUPABASE_STORAGE_BUCKET || '';
+  let bucket = rawBucket.replace(/[\r\n\t]/g, '').trim().replace(/^["']+|["']+$/g, '') || 'halal-flow-uploads';
 
   return { url, key, bucket };
 }
 
 function getSupabase() {
   if (!supabaseClient) {
-    const { url, key } = getCleanSupabaseConfig();
     try {
-      supabaseClient = createClient(url, key);
+      const { url, key } = getCleanSupabaseConfig();
+      if (url && key) {
+        supabaseClient = createClient(url, key);
+      }
     } catch (err) {
       console.error('Failed to init Supabase client:', err.message);
+      return null;
     }
   }
   return supabaseClient;
