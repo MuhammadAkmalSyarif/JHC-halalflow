@@ -80,12 +80,17 @@ function normalizeQuery(sql) {
   return normalized;
 }
 
-const Database = require('better-sqlite3');
 const path = require('path');
 
 let sqliteDb = null;
 function getSqlite() {
   if (!sqliteDb) {
+    let Database;
+    try {
+      Database = require('better-sqlite3');
+    } catch (err) {
+      throw new Error("Modul 'better-sqlite3' tidak terpasang. Di server production/Vercel, gunakan DATABASE_URL (Supabase PostgreSQL).");
+    }
     const dbPath = path.join(__dirname, 'halalflow.db');
     sqliteDb = new Database(dbPath);
     sqliteDb.pragma('journal_mode = WAL');
