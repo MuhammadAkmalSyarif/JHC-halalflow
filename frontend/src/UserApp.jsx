@@ -281,7 +281,69 @@ export default function UserApp() {
     };
   }, [isLoggedIn]);
 
-  // Shared file upload function (with JWT, Base64 JSON for 100% Vercel & Localhost reliability)
+  // Compress image on client side before upload to prevent Vercel 4.5MB payload limit & timeouts
+  const compressImageFile = async (file, maxWidth = 1600, maxHeight = 1600, quality = 0.8) => {
+    if (!file) return null;
+    // If not an image (e.g. PDF, DOCX), read as base64 directly
+    if (!file.type || !file.type.startsWith('image/')) {
+      if (file.size > 4.2 * 1024 * 1024) {
+        throw new Error(`Ukuran file "${file.name}" melebihi batas 4MB (${(file.size / (1024 * 1024)).toFixed(1)}MB). Silakan gunakan file dokumen yang lebih kecil.`);
+      }
+      return new Promise((resolve, reject) => {
+        const reader = new FileReader();
+        reader.readAsDataURL(file);
+        reader.onload = () => resolve({ base64: reader.result, filename: file.name, mimetype: file.type || 'application/octet-stream' });
+        reader.onerror = reject;
+      });
+    }
+
+    // It's an image: compress via HTML5 Canvas
+    return new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.readAsDataURL(file);
+      reader.onload = (event) => {
+        const img = new Image();
+        img.onload = () => {
+          let width = img.width;
+          let height = img.height;
+
+          if (width > height) {
+            if (width > maxWidth) {
+              height = Math.round((height * maxWidth) / width);
+              width = maxWidth;
+            }
+          } else {
+            if (height > maxHeight) {
+              width = Math.round((width * maxHeight) / height);
+              height = maxHeight;
+            }
+          }
+
+          const canvas = document.createElement('canvas');
+          canvas.width = width;
+          canvas.height = height;
+          const ctx = canvas.getContext('2d');
+          ctx.drawImage(img, 0, 0, width, height);
+
+          const compressedBase64 = canvas.toDataURL('image/jpeg', quality);
+          const newFilename = file.name.replace(/\.[^/.]+$/, '') + '.jpg';
+          resolve({
+            base64: compressedBase64,
+            filename: newFilename,
+            mimetype: 'image/jpeg'
+          });
+        };
+        img.onerror = () => {
+          // Fallback to original
+          resolve({ base64: event.target.result, filename: file.name, mimetype: file.type });
+        };
+        img.src = event.target.result;
+      };
+      reader.onerror = reject;
+    });
+  };
+
+  // Shared file upload function (with JWT, Base64 JSON & Auto Image Compression)
   const handleGenericFileUpload = async (e, fieldName, setLocalStateVal) => {
     const file = e.target.files[0];
     if (!file) return;
@@ -289,18 +351,13 @@ export default function UserApp() {
     const token = localStorage.getItem('jhc_token');
 
     try {
-      showToast('Mengunggah berkas...');
-      const base64Data = await new Promise((resolve, reject) => {
-        const reader = new FileReader();
-        reader.readAsDataURL(file);
-        reader.onload = () => resolve(reader.result);
-        reader.onerror = error => reject(error);
-      });
+      showToast('Mengoptimalkan & mengunggah berkas...');
+      const { base64, filename, mimetype } = await compressImageFile(file);
 
       const payload = {
-        filename: file.name,
-        mimetype: file.type,
-        base64: base64Data
+        filename,
+        mimetype,
+        base64
       };
       if (token) payload._token = token;
 
@@ -312,8 +369,8 @@ export default function UserApp() {
         },
         body: JSON.stringify(payload)
       });
-      const data = await res.json();
-      if (res.ok) {
+      const data = await res.json().catch(() => ({}));
+      if (res.ok && data.filename) {
         setLocalStateVal(prev => ({
           ...prev,
           [fieldName]: data.filename
@@ -325,7 +382,7 @@ export default function UserApp() {
       }
     } catch (err) {
       console.error('Upload error:', err);
-      showAlert('Terjadi kesalahan saat mengunggah berkas.', 'error');
+      showAlert(err.message || 'Terjadi kesalahan saat mengunggah berkas.', 'error');
     }
   };
 
@@ -336,20 +393,15 @@ export default function UserApp() {
     const token = localStorage.getItem('jhc_token');
     
     try {
+      showToast(`Mengompres & mengunggah ${files.length} foto...`);
       const uploadedNames = [];
       for (const file of files) {
-        // Read file as Base64 to avoid Vercel multipart stream issues
-        const base64Data = await new Promise((resolve, reject) => {
-          const reader = new FileReader();
-          reader.readAsDataURL(file);
-          reader.onload = () => resolve(reader.result);
-          reader.onerror = error => reject(error);
-        });
+        const { base64, filename, mimetype } = await compressImageFile(file);
 
         const payload = {
-          filename: file.name,
-          mimetype: file.type,
-          base64: base64Data
+          filename,
+          mimetype,
+          base64
         };
         if (token) payload._token = token;
 
@@ -365,7 +417,7 @@ export default function UserApp() {
         let data = {};
         try { data = JSON.parse(text); } catch (e) {}
 
-        if (res.ok) {
+        if (res.ok && data.filename) {
           uploadedNames.push(data.filename);
         } else {
           showAlert(`Gagal mengunggah berkas (Status ${res.status}): ` + (data.error || text.substring(0, 150) || 'Server error'), 'error');
@@ -380,10 +432,11 @@ export default function UserApp() {
             [fieldName]: existing + uploadedNames.join(',')
           };
         });
+        showToast(`${uploadedNames.length} foto berhasil diunggah.`);
       }
     } catch (err) {
       console.error('Upload error:', err);
-      showToast('Terjadi kesalahan saat mengunggah berkas.');
+      showAlert(err.message || 'Terjadi kesalahan saat mengunggah berkas.', 'error');
     }
   };
 
@@ -2285,13 +2338,13 @@ const StepUploadEvidence = ({ evidenceData, setEvidenceData, handleGenericFileUp
   const handleUploadSingle = async (e, field) => {
     const filename = await handleGenericFileUpload(e, field, setEvidenceData);
     if (filename) {
-      const updated = { ...evidenceData, [field]: filename };
       try {
         await apiFetch('/api/evidence', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(updated)
+          body: JSON.stringify({ [field]: filename })
         });
+        showToast('Dokumen tersimpan otomatis.');
       } catch (err) {
         console.error('Auto-save evidence error:', err);
       }
@@ -2305,7 +2358,7 @@ const StepUploadEvidence = ({ evidenceData, setEvidenceData, handleGenericFileUp
         apiFetch('/api/evidence', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(updated)
+          body: JSON.stringify({ [field]: updated[field] })
         }).catch(err => console.error('Auto-save evidence error:', err));
         return updated;
       });
@@ -2344,7 +2397,7 @@ const StepUploadEvidence = ({ evidenceData, setEvidenceData, handleGenericFileUp
         await apiFetch('/api/evidence', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(updatedData)
+          body: JSON.stringify({ [field]: updatedList })
         });
       } else {
         const data = await res.json().catch(() => ({}));
@@ -2360,6 +2413,7 @@ const StepUploadEvidence = ({ evidenceData, setEvidenceData, handleGenericFileUp
 
   const handleSave = async () => {
     try {
+      showToast('Menyimpan seluruh evidence...');
       const res = await apiFetch('/api/evidence', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -2367,10 +2421,15 @@ const StepUploadEvidence = ({ evidenceData, setEvidenceData, handleGenericFileUp
       });
       if (res.ok) {
         setSuccessMsg('Seluruh evidence (bukti) berhasil disimpan!');
+        showToast('Seluruh evidence berhasil disimpan!');
         setTimeout(() => setSuccessMsg(''), 3000);
+      } else {
+        const d = await res.json().catch(() => ({}));
+        showAlert('Gagal menyimpan evidence: ' + (d.error || 'Server error'), 'error');
       }
     } catch (err) {
-      console.error(err);
+      console.error('Save evidence error:', err);
+      showAlert('Terjadi kesalahan saat menyimpan evidence.', 'error');
     }
   };
 

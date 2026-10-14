@@ -895,7 +895,13 @@ app.post('/api/upload', authMiddleware, async (req, res, next) => {
     const { filename, mimetype, base64, company_id, document_type } = req.body;
     if (!filename || !base64) return res.status(400).json({ error: 'File tidak ada atau format tidak valid' });
 
-    const companyId = company_id ? parseInt(company_id) : null;
+    let companyId = company_id ? parseInt(company_id) : (req.user?.company_id || null);
+    if (!companyId && req.user?.id) {
+      try {
+        const comp = await db.prepare('SELECT id FROM companies WHERE user_id=?').get(req.user.id);
+        if (comp) companyId = comp.id;
+      } catch (e) {}
+    }
     const docType = document_type || 'general';
 
     const ext = require('path').extname(filename);
@@ -941,7 +947,7 @@ app.post('/api/upload', authMiddleware, async (req, res, next) => {
         });
 
         const timeoutPromise = new Promise((_, reject) => 
-          setTimeout(() => reject(new Error('Supabase upload timeout exceeded 5000ms')), 5000)
+          setTimeout(() => reject(new Error('Supabase upload timeout exceeded 15000ms')), 15000)
         );
 
         await Promise.race([uploadPromise, timeoutPromise]);
@@ -953,7 +959,7 @@ app.post('/api/upload', authMiddleware, async (req, res, next) => {
         console.error('Failed to upload to Supabase storage:', uploadErr.message);
         // Jika file sudah tersimpan di disk lokal, izinkan tetap sukses
         if (!fs.existsSync(path.join(uploadsDir, storedName))) {
-          return res.status(500).json({ error: 'Gagal mengupload file: ' + uploadErr.message });
+          return res.status(500).json({ error: 'Gagal mengupload file ke penyimpanan: ' + uploadErr.message });
         }
       }
     }
@@ -1508,40 +1514,56 @@ app.post('/api/evidence', authMiddleware, async (req, res) => {
   const userId = req.user.id;
   const company = await db.prepare('SELECT id FROM companies WHERE user_id=?').get(userId);
   if (!company) return res.status(404).json({ error: 'Perusahaan tidak ditemukan' });
-  const data = req.body;
+  const data = req.body || {};
   
   try {
     const existing = await db.prepare('SELECT * FROM evidence_data WHERE company_id=?').get(company.id);
-    if (existing) {
-    await db.prepare(`
-      UPDATE evidence_data SET 
-        sosialisasiFoto=?, auditInternalFoto=?, sosialisasiAbsen=?, auditInternalAbsen=?, 
-        pembelianBahan=?, penyimpananBahan=?, hasilProduksi=?, distribusiProduk=?, updated_at=datetime('now')
-      WHERE company_id=?
-    `).run(
-      data.sosialisasiFoto !== undefined ? data.sosialisasiFoto : (existing.sosialisasiFoto || existing.sosialisasifoto || ''),
-      data.auditInternalFoto !== undefined ? data.auditInternalFoto : (existing.auditInternalFoto || existing.auditinternalfoto || ''),
-      data.sosialisasiAbsen !== undefined ? data.sosialisasiAbsen : (existing.sosialisasiAbsen || existing.sosialisasiabsen || ''),
-      data.auditInternalAbsen !== undefined ? data.auditInternalAbsen : (existing.auditInternalAbsen || existing.auditinternalabsen || ''),
-      data.pembelianBahan !== undefined ? data.pembelianBahan : (existing.pembelianBahan || existing.pembelianbahan || ''),
-      data.penyimpananBahan !== undefined ? data.penyimpananBahan : (existing.penyimpananBahan || existing.penyimpananbahan || ''),
-      data.hasilProduksi !== undefined ? data.hasilProduksi : (existing.hasilProduksi || existing.hasilproduksi || ''),
-      data.distribusiProduk !== undefined ? data.distribusiProduk : (existing.distribusiProduk || existing.distribusiproduk || ''),
-      company.id
-    );
-  } else {
-    await db.prepare(`
-      INSERT INTO evidence_data (
-        company_id, sosialisasiFoto, auditInternalFoto, sosialisasiAbsen, auditInternalAbsen,
-        pembelianBahan, penyimpananBahan, hasilProduksi, distribusiProduk
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
-    `).run(
-      company.id, data.sosialisasiFoto||'', data.auditInternalFoto||'', data.sosialisasiAbsen||'', data.auditInternalAbsen||'',
-      data.pembelianBahan||'', data.penyimpananBahan||'', data.hasilProduksi||'', data.distribusiProduk||''
-    );
-  }
     
-    await db.prepare(`UPDATE certification_progress SET status='Menunggu Verifikasi', updated_at=datetime('now') WHERE company_id=? AND stage=6`).run(company.id);
+    const resolveField = (camelKey, lowerKey) => {
+      if (data[camelKey] !== undefined) {
+        return data[camelKey];
+      }
+      if (existing) {
+        return existing[camelKey] !== undefined ? existing[camelKey] : (existing[lowerKey] !== undefined ? existing[lowerKey] : '');
+      }
+      return '';
+    };
+
+    const sosialisasiFoto = resolveField('sosialisasiFoto', 'sosialisasifoto');
+    const auditInternalFoto = resolveField('auditInternalFoto', 'auditinternalfoto');
+    const sosialisasiAbsen = resolveField('sosialisasiAbsen', 'sosialisasiabsen');
+    const auditInternalAbsen = resolveField('auditInternalAbsen', 'auditinternalabsen');
+    const pembelianBahan = resolveField('pembelianBahan', 'pembelianbahan');
+    const penyimpananBahan = resolveField('penyimpananBahan', 'penyimpananbahan');
+    const hasilProduksi = resolveField('hasilProduksi', 'hasilproduksi');
+    const distribusiProduk = resolveField('distribusiProduk', 'distribusiproduk');
+
+    if (existing) {
+      await db.prepare(`
+        UPDATE evidence_data SET 
+          sosialisasiFoto=?, auditInternalFoto=?, sosialisasiAbsen=?, auditInternalAbsen=?, 
+          pembelianBahan=?, penyimpananBahan=?, hasilProduksi=?, distribusiProduk=?, updated_at=datetime('now')
+        WHERE company_id=?
+      `).run(
+        sosialisasiFoto, auditInternalFoto, sosialisasiAbsen, auditInternalAbsen,
+        pembelianBahan, penyimpananBahan, hasilProduksi, distribusiProduk,
+        company.id
+      );
+    } else {
+      await db.prepare(`
+        INSERT INTO evidence_data (
+          company_id, sosialisasiFoto, auditInternalFoto, sosialisasiAbsen, auditInternalAbsen,
+          pembelianBahan, penyimpananBahan, hasilProduksi, distribusiProduk
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+      `).run(
+        company.id, sosialisasiFoto, auditInternalFoto, sosialisasiAbsen, auditInternalAbsen,
+        pembelianBahan, penyimpananBahan, hasilProduksi, distribusiProduk
+      );
+    }
+    
+    try {
+      await db.prepare(`UPDATE certification_progress SET status='Menunggu Verifikasi', updated_at=datetime('now') WHERE company_id=? AND stage=6`).run(company.id);
+    } catch(e) {}
     await logActivity(db, company.id, userId, 'evidence_save', 'Dokumen evidence disimpan');
     res.json({ message: 'OK' });
   } catch (err) {
