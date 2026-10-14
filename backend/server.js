@@ -103,6 +103,43 @@ const uploadsDir = process.env.VERCEL ? path.join('/tmp', 'uploads') : path.join
 try {
   if (!fs.existsSync(uploadsDir)) fs.mkdirSync(uploadsDir, { recursive: true });
 } catch(e) {}
+
+let bucketEnsuredCache = false;
+async function ensureSupabaseBucket(sbUrl, sbKey, bucketName) {
+  if (bucketEnsuredCache) return;
+  try {
+    const listRes = await fetch(`${sbUrl}/storage/v1/bucket`, {
+      headers: {
+        'apikey': sbKey,
+        'Authorization': `Bearer ${sbKey}`
+      }
+    });
+    const buckets = await listRes.json().catch(() => []);
+    const exists = Array.isArray(buckets) && buckets.some(b => b.id === bucketName || b.name === bucketName);
+    
+    if (!exists) {
+      await fetch(`${sbUrl}/storage/v1/bucket`, {
+        method: 'POST',
+        headers: {
+          'apikey': sbKey,
+          'Authorization': `Bearer ${sbKey}`,
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+          id: bucketName,
+          name: bucketName,
+          public: true,
+          file_size_limit: 52428800
+        })
+      });
+      console.log(`✅ Supabase bucket '${bucketName}' ensured as public.`);
+    }
+    bucketEnsuredCache = true;
+  } catch (err) {
+    console.warn('⚠️ Gagal memastikan bucket Supabase:', err.message);
+  }
+}
+
 app.get('/uploads/:filename', (req, res, next) => {
   let filename = req.params.filename;
   if (!filename) return next();
@@ -224,6 +261,60 @@ app.get('/api/debug-env', async (req, res) => {
     });
   } catch (e) {
     res.status(500).json({ error: e.message });
+  }
+});
+
+app.get('/api/debug-storage', async (req, res) => {
+  try {
+    const { url: sbUrl, key: sbKey, bucket: bucketName } = getCleanSupabaseConfig();
+    
+    // 1. List buckets
+    const listRes = await fetch(`${sbUrl}/storage/v1/bucket`, {
+      headers: { 'apikey': sbKey, 'Authorization': `Bearer ${sbKey}` }
+    });
+    const buckets = await listRes.json().catch(e => ({ error: e.message }));
+
+    // 2. Ensure bucket
+    let createRes = null;
+    const exists = Array.isArray(buckets) && buckets.some(b => b.id === bucketName || b.name === bucketName);
+    if (!exists) {
+      const c = await fetch(`${sbUrl}/storage/v1/bucket`, {
+        method: 'POST',
+        headers: {
+          'apikey': sbKey,
+          'Authorization': `Bearer ${sbKey}`,
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({ id: bucketName, name: bucketName, public: true })
+      });
+      createRes = await c.json().catch(e => ({ error: e.message }));
+    }
+
+    // 3. Test small upload
+    const testUploadRes = await fetch(`${sbUrl}/storage/v1/object/${bucketName}/_test.txt`, {
+      method: 'POST',
+      headers: {
+        'apikey': sbKey,
+        'Authorization': `Bearer ${sbKey}`,
+        'Content-Type': 'text/plain',
+        'x-upsert': 'true'
+      },
+      body: 'Supabase Storage is connected and working!'
+    });
+    const testUploadData = await testUploadRes.json().catch(e => ({ status: testUploadRes.status }));
+
+    res.json({
+      status: 'ok',
+      sbUrl,
+      bucketName,
+      buckets,
+      bucketExists: exists,
+      createRes,
+      testUploadData,
+      testFileUrl: `${sbUrl}/storage/v1/object/public/${bucketName}/_test.txt`
+    });
+  } catch (err) {
+    res.status(500).json({ error: err.message, stack: err.stack });
   }
 });
 
@@ -927,12 +1018,15 @@ app.post('/api/upload', authMiddleware, async (req, res, next) => {
 
     if (sbUrl && sbKey) {
       try {
-        // Direct REST API fetch to bypass supabase-js / undici hanging bug on Vercel
-        const uploadUrl = `${sbUrl}/storage/v1/object/${bucketName}/${storedName}`;
+        await ensureSupabaseBucket(sbUrl, sbKey, bucketName);
+
+        // Direct REST API fetch with apikey & Authorization
+        const uploadUrl = `${sbUrl}/storage/v1/object/${bucketName}/${encodeURIComponent(storedName)}`;
         
         const uploadPromise = fetch(uploadUrl, {
           method: 'POST',
           headers: {
+            'apikey': sbKey,
             'Authorization': `Bearer ${sbKey}`,
             'Content-Type': mimetype || 'application/octet-stream',
             'x-upsert': 'true'
@@ -952,15 +1046,12 @@ app.post('/api/upload', authMiddleware, async (req, res, next) => {
 
         await Promise.race([uploadPromise, timeoutPromise]);
         
-        const publicUrl = `${sbUrl}/storage/v1/object/public/${bucketName}/${storedName}`;
+        const publicUrl = `${sbUrl}/storage/v1/object/public/${bucketName}/${encodeURIComponent(storedName)}`;
         fileUrl = publicUrl;
         
       } catch(uploadErr) {
         console.error('Failed to upload to Supabase storage:', uploadErr.message);
-        // Jika file sudah tersimpan di disk lokal, izinkan tetap sukses
-        if (!fs.existsSync(path.join(uploadsDir, storedName))) {
-          return res.status(500).json({ error: 'Gagal mengupload file ke penyimpanan: ' + uploadErr.message });
-        }
+        return res.status(500).json({ error: 'Gagal mengupload file ke penyimpanan cloud: ' + uploadErr.message });
       }
     }
 
