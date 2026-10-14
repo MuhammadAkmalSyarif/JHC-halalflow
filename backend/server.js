@@ -4,6 +4,7 @@ const cors = require('cors');
 const multer = require('multer');
 const path = require('path');
 const fs = require('fs');
+const https = require('https');
 const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
 const crypto = require('crypto');
@@ -108,36 +109,122 @@ let bucketEnsuredCache = false;
 async function ensureSupabaseBucket(sbUrl, sbKey, bucketName) {
   if (bucketEnsuredCache) return;
   try {
-    const listRes = await fetch(`${sbUrl}/storage/v1/bucket`, {
-      headers: {
-        'apikey': sbKey,
-        'Authorization': `Bearer ${sbKey}`
-      }
+    await new Promise((resolve) => {
+      const targetUrl = new URL(`${sbUrl}/storage/v1/bucket`);
+      const req = https.request({
+        hostname: targetUrl.hostname,
+        port: 443,
+        path: targetUrl.pathname,
+        method: 'GET',
+        headers: {
+          'apikey': sbKey,
+          'Authorization': `Bearer ${sbKey}`
+        },
+        timeout: 10000
+      }, (res) => {
+        let respBody = '';
+        res.on('data', chunk => { respBody += chunk; });
+        res.on('end', () => {
+          try {
+            const buckets = JSON.parse(respBody);
+            const exists = Array.isArray(buckets) && buckets.some(b => b.id === bucketName || b.name === bucketName);
+            if (!exists) {
+              const createReq = https.request({
+                hostname: targetUrl.hostname,
+                port: 443,
+                path: targetUrl.pathname,
+                method: 'POST',
+                headers: {
+                  'apikey': sbKey,
+                  'Authorization': `Bearer ${sbKey}`,
+                  'Content-Type': 'application/json'
+                },
+                timeout: 10000
+              }, (createRes) => {
+                createRes.on('data', () => {});
+                createRes.on('end', () => {
+                  bucketEnsuredCache = true;
+                  resolve();
+                });
+              });
+              createReq.on('error', () => resolve());
+              createReq.write(JSON.stringify({
+                id: bucketName,
+                name: bucketName,
+                public: true,
+                file_size_limit: 52428800
+              }));
+              createReq.end();
+            } else {
+              bucketEnsuredCache = true;
+              resolve();
+            }
+          } catch(e) {
+            resolve();
+          }
+        });
+      });
+      req.on('error', () => resolve());
+      req.on('timeout', () => { req.destroy(); resolve(); });
+      req.end();
     });
-    const buckets = await listRes.json().catch(() => []);
-    const exists = Array.isArray(buckets) && buckets.some(b => b.id === bucketName || b.name === bucketName);
-    
-    if (!exists) {
-      await fetch(`${sbUrl}/storage/v1/bucket`, {
+  } catch (err) {
+    console.warn('⚠️ Gagal memastikan bucket Supabase:', err.message);
+  }
+}
+
+function uploadBufferToSupabase(fileBuffer, storedName, mimetype) {
+  const { url: sbUrl, key: sbKey, bucket: bucketName } = getCleanSupabaseConfig();
+  if (!sbUrl || !sbKey) {
+    return Promise.reject(new Error('Konfigurasi Supabase Storage belum lengkap (URL atau Key tidak ditemukan)'));
+  }
+
+  return new Promise((resolve, reject) => {
+    try {
+      const targetUrl = new URL(`${sbUrl}/storage/v1/object/${bucketName}/${encodeURIComponent(storedName)}`);
+      const req = https.request({
+        hostname: targetUrl.hostname,
+        port: 443,
+        path: targetUrl.pathname + targetUrl.search,
         method: 'POST',
         headers: {
           'apikey': sbKey,
           'Authorization': `Bearer ${sbKey}`,
-          'Content-Type': 'application/json'
+          'Content-Type': mimetype || 'application/octet-stream',
+          'Content-Length': fileBuffer.length,
+          'x-upsert': 'true'
         },
-        body: JSON.stringify({
-          id: bucketName,
-          name: bucketName,
-          public: true,
-          file_size_limit: 52428800
-        })
+        timeout: 25000
+      }, (res) => {
+        let respBody = '';
+        res.on('data', chunk => { respBody += chunk; });
+        res.on('end', () => {
+          if (res.statusCode >= 200 && res.statusCode < 300) {
+            const publicUrl = `${sbUrl}/storage/v1/object/public/${bucketName}/${encodeURIComponent(storedName)}`;
+            resolve(publicUrl);
+          } else {
+            let errMsg = `HTTP ${res.statusCode}`;
+            try {
+              const parsed = JSON.parse(respBody);
+              errMsg = parsed.message || parsed.error || errMsg;
+            } catch(e) {}
+            reject(new Error(`Supabase Storage: ${errMsg}`));
+          }
+        });
       });
-      console.log(`✅ Supabase bucket '${bucketName}' ensured as public.`);
+
+      req.on('error', (err) => reject(err));
+      req.on('timeout', () => {
+        req.destroy();
+        reject(new Error('Koneksi upload ke Supabase Storage timeout (25s)'));
+      });
+
+      req.write(fileBuffer);
+      req.end();
+    } catch (err) {
+      reject(err);
     }
-    bucketEnsuredCache = true;
-  } catch (err) {
-    console.warn('⚠️ Gagal memastikan bucket Supabase:', err.message);
-  }
+  });
 }
 
 app.get('/uploads/:filename', (req, res, next) => {
@@ -268,53 +355,26 @@ app.get('/api/debug-storage', async (req, res) => {
   try {
     const { url: sbUrl, key: sbKey, bucket: bucketName } = getCleanSupabaseConfig();
     
-    // 1. List buckets
-    const listRes = await fetch(`${sbUrl}/storage/v1/bucket`, {
-      headers: { 'apikey': sbKey, 'Authorization': `Bearer ${sbKey}` }
-    });
-    const buckets = await listRes.json().catch(e => ({ error: e.message }));
+    // Ensure bucket exists
+    await ensureSupabaseBucket(sbUrl, sbKey, bucketName);
 
-    // 2. Ensure bucket
-    let createRes = null;
-    const exists = Array.isArray(buckets) && buckets.some(b => b.id === bucketName || b.name === bucketName);
-    if (!exists) {
-      const c = await fetch(`${sbUrl}/storage/v1/bucket`, {
-        method: 'POST',
-        headers: {
-          'apikey': sbKey,
-          'Authorization': `Bearer ${sbKey}`,
-          'Content-Type': 'application/json'
-        },
-        body: JSON.stringify({ id: bucketName, name: bucketName, public: true })
-      });
-      createRes = await c.json().catch(e => ({ error: e.message }));
-    }
-
-    // 3. Test small upload
-    const testUploadRes = await fetch(`${sbUrl}/storage/v1/object/${bucketName}/_test.txt`, {
-      method: 'POST',
-      headers: {
-        'apikey': sbKey,
-        'Authorization': `Bearer ${sbKey}`,
-        'Content-Type': 'text/plain',
-        'x-upsert': 'true'
-      },
-      body: 'Supabase Storage is connected and working!'
-    });
-    const testUploadData = await testUploadRes.json().catch(e => ({ status: testUploadRes.status }));
+    // Test upload using https helper
+    const testBuf = Buffer.from('Supabase Storage is connected and working! ' + new Date().toISOString());
+    const testUrl = await uploadBufferToSupabase(testBuf, '_test.txt', 'text/plain');
 
     res.json({
       status: 'ok',
       sbUrl,
       bucketName,
-      buckets,
-      bucketExists: exists,
-      createRes,
-      testUploadData,
-      testFileUrl: `${sbUrl}/storage/v1/object/public/${bucketName}/_test.txt`
+      keyPrefix: sbKey.slice(0, 10) + '...',
+      testUrl
     });
   } catch (err) {
-    res.status(500).json({ error: err.message, stack: err.stack });
+    res.status(500).json({
+      error: err.message,
+      stack: err.stack,
+      cause: err.cause ? (err.cause.message || String(err.cause)) : null
+    });
   }
 });
 
@@ -1019,36 +1079,7 @@ app.post('/api/upload', authMiddleware, async (req, res, next) => {
     if (sbUrl && sbKey) {
       try {
         await ensureSupabaseBucket(sbUrl, sbKey, bucketName);
-
-        // Direct REST API fetch with apikey & Authorization
-        const uploadUrl = `${sbUrl}/storage/v1/object/${bucketName}/${encodeURIComponent(storedName)}`;
-        
-        const uploadPromise = fetch(uploadUrl, {
-          method: 'POST',
-          headers: {
-            'apikey': sbKey,
-            'Authorization': `Bearer ${sbKey}`,
-            'Content-Type': mimetype || 'application/octet-stream',
-            'x-upsert': 'true'
-          },
-          body: fileBuffer
-        }).then(async (response) => {
-          if (!response.ok) {
-            const errData = await response.json().catch(() => ({}));
-            throw new Error(errData.error || errData.message || 'HTTP ' + response.status);
-          }
-          return response.json();
-        });
-
-        const timeoutPromise = new Promise((_, reject) => 
-          setTimeout(() => reject(new Error('Supabase upload timeout exceeded 15000ms')), 15000)
-        );
-
-        await Promise.race([uploadPromise, timeoutPromise]);
-        
-        const publicUrl = `${sbUrl}/storage/v1/object/public/${bucketName}/${encodeURIComponent(storedName)}`;
-        fileUrl = publicUrl;
-        
+        fileUrl = await uploadBufferToSupabase(fileBuffer, storedName, mimetype);
       } catch(uploadErr) {
         console.error('Failed to upload to Supabase storage:', uploadErr.message);
         return res.status(500).json({ error: 'Gagal mengupload file ke penyimpanan cloud: ' + uploadErr.message });
@@ -2619,7 +2650,22 @@ const issueCertificateHandler = async (req, res) => {
   let fileName = company.file_sertifikat || '';
   const uploadedFile = req.file || (req.files && req.files[0]);
   if (uploadedFile) {
-    fileName = uploadedFile.filename;
+    const ext = path.extname(uploadedFile.originalname || '.pdf') || '.pdf';
+    const basename = path.basename(uploadedFile.originalname || 'sertifikat', ext).replace(/[^a-zA-Z0-9]/g, '_');
+    fileName = `sertifikat_${basename}-${Date.now()}${ext}`;
+
+    if (uploadedFile.buffer) {
+      try {
+        if (!fs.existsSync(uploadsDir)) fs.mkdirSync(uploadsDir, { recursive: true });
+        fs.writeFileSync(path.join(uploadsDir, fileName), uploadedFile.buffer);
+      } catch(e) {}
+
+      try {
+        await uploadBufferToSupabase(uploadedFile.buffer, fileName, uploadedFile.mimetype);
+      } catch(err) {
+        console.warn('⚠️ Gagal upload sertifikat ke Supabase:', err.message);
+      }
+    }
   }
 
   await db.prepare(`

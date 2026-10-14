@@ -56,10 +56,42 @@ function getPool() {
   return pool;
 }
 
+function getCleanSupabaseConfig() {
+  const fallbackUrl = 'https://qptzbrbtzfnjuvurkbhr.supabase.co';
+  const fallbackKey = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InFwdHpicmJ0emZuanV2dXJrYmhyIiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImlhdCI6MTc5MTI2OTMxMCwiZXhwIjoyMTA2ODQ1MzEwfQ.SXFlMQ_hJa7ZXZ3na4dy_ycCYtm43ma2WAUCrFfxq-w';
+  const fallbackBucket = 'halal-flow-uploads';
+
+  let rawUrl = process.env.SUPABASE_URL || '';
+  let url = rawUrl.replace(/[\r\n\t]/g, '').trim().replace(/^["']+|["']+$/g, '');
+  if (!url || url.includes('postgresql:') || url.includes('db.') || url.includes(':5432') || url.includes(':6543') || !url.includes('.supabase.co')) {
+    const fullSource = `${rawUrl} ${process.env.DATABASE_URL || ''}`;
+    const match = fullSource.match(/(?:db\.|postgres\.|\/\/)([a-z0-9]{20})(?:\.supabase\.co|@)/);
+    if (match && match[1]) {
+      url = `https://${match[1]}.supabase.co`;
+    } else {
+      url = fallbackUrl;
+    }
+  }
+  if (!url.startsWith('http://') && !url.startsWith('https://')) {
+    url = `https://${url}`;
+  }
+  url = url.replace(/\/+$/, '');
+
+  let rawKey = process.env.SUPABASE_KEY || process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.SUPABASE_ANON_KEY || '';
+  let key = rawKey.replace(/[\r\n\t]/g, '').trim().replace(/^["']+|["']+$/g, '');
+  if (!key || !key.startsWith('eyJ') || key.length < 50) {
+    key = fallbackKey;
+  }
+
+  let rawBucket = process.env.SUPABASE_STORAGE_BUCKET || '';
+  let bucket = rawBucket.replace(/[\r\n\t]/g, '').trim().replace(/^["']+|["']+$/g, '') || fallbackBucket;
+
+  return { url, key, bucket };
+}
+
 function getSupabase() {
   if (!supabaseClient) {
-    const url = process.env.SUPABASE_URL;
-    const key = process.env.SUPABASE_KEY || process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.SUPABASE_ANON_KEY;
+    const { url, key } = getCleanSupabaseConfig();
     if (url && key) {
       supabaseClient = createClient(url, key);
     }
