@@ -56,12 +56,27 @@ function getPool() {
   return pool;
 }
 
+function getCleanSupabaseConfig() {
+  let url = (process.env.SUPABASE_URL || 'https://qptzbrbtzfnjuvurkbhr.supabase.co').trim().replace(/^["']|["']$/g, '');
+  if (!url.startsWith('http://') && !url.startsWith('https://')) {
+    url = `https://${url}`;
+  }
+  url = url.replace(/\/+$/, '');
+
+  let key = (process.env.SUPABASE_KEY || process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.SUPABASE_ANON_KEY || 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InFwdHpicmJ0emZuanV2dXJrYmhyIiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImlhdCI6MTc5MTI2OTMxMCwiZXhwIjoyMTA2ODQ1MzEwfQ.SXFlMQ_hJa7ZXZ3na4dy_ycCYtm43ma2WAUCrFfxq-w').trim().replace(/^["']|["']$/g, '');
+
+  const bucket = (process.env.SUPABASE_STORAGE_BUCKET || 'halal-flow-uploads').trim().replace(/^["']|["']$/g, '');
+
+  return { url, key, bucket };
+}
+
 function getSupabase() {
   if (!supabaseClient) {
-    const url = process.env.SUPABASE_URL;
-    const key = process.env.SUPABASE_KEY || process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.SUPABASE_ANON_KEY;
-    if (url && key) {
+    const { url, key } = getCleanSupabaseConfig();
+    try {
       supabaseClient = createClient(url, key);
+    } catch (err) {
+      console.error('Failed to init Supabase client:', err.message);
     }
   }
   return supabaseClient;
@@ -262,5 +277,6 @@ module.exports = {
   db,
   getPool,
   getSupabase,
-  getConnectionString
+  getConnectionString,
+  getCleanSupabaseConfig
 };

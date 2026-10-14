@@ -10,7 +10,7 @@ const crypto = require('crypto');
 const nodemailer = require('nodemailer');
 const XLSX = require('xlsx');
 
-const { db, getSupabase, getConnectionString } = require('./db-supabase');
+const { db, getSupabase, getConnectionString, getCleanSupabaseConfig } = require('./db-supabase');
 
 async function initCompanyProgress(database, companyId) {
   const STAGES = [
@@ -114,9 +114,10 @@ app.get('/uploads/:filename', (req, res, next) => {
   if (fs.existsSync(filePath)) {
     return res.sendFile(filePath);
   }
-  if (process.env.SUPABASE_URL) {
-    const bucket = process.env.SUPABASE_STORAGE_BUCKET || 'halal-flow-uploads';
-    const supabaseUrl = `${process.env.SUPABASE_URL}/storage/v1/object/public/${bucket}/${encodeURIComponent(filename)}`;
+  const { url: sbUrl, bucket: sbBucket } = getCleanSupabaseConfig ? getCleanSupabaseConfig() : {};
+  if (sbUrl) {
+    const bucket = sbBucket || 'halal-flow-uploads';
+    const supabaseUrl = `${sbUrl}/storage/v1/object/public/${bucket}/${encodeURIComponent(filename)}`;
     
     // Simpan cache ke lokal secara asynchronous
     fetch(supabaseUrl)
@@ -921,19 +922,19 @@ app.post('/api/upload', authMiddleware, async (req, res, next) => {
     }
 
     // Upload ke Supabase Storage
+    const { url: sbUrl, key: sbKey, bucket: bucketName } = getCleanSupabaseConfig();
     const supabase = getSupabase();
-    const bucketName = process.env.SUPABASE_STORAGE_BUCKET || 'halal-flow-uploads';
     let fileUrl = `/uploads/${storedName}`;
 
-    if (supabase) {
+    if (supabase && sbUrl && sbKey) {
       try {
         // Direct REST API fetch to bypass supabase-js / undici hanging bug on Vercel
-        const uploadUrl = `${process.env.SUPABASE_URL}/storage/v1/object/${bucketName}/${storedName}`;
+        const uploadUrl = `${sbUrl}/storage/v1/object/${bucketName}/${storedName}`;
         
         const uploadPromise = fetch(uploadUrl, {
           method: 'POST',
           headers: {
-            'Authorization': `Bearer ${process.env.SUPABASE_KEY}`,
+            'Authorization': `Bearer ${sbKey}`,
             'Content-Type': mimetype || 'application/octet-stream',
             'x-upsert': 'true'
           },
@@ -952,7 +953,7 @@ app.post('/api/upload', authMiddleware, async (req, res, next) => {
 
         await Promise.race([uploadPromise, timeoutPromise]);
         
-        const publicUrl = `${process.env.SUPABASE_URL}/storage/v1/object/public/${bucketName}/${storedName}`;
+        const publicUrl = `${sbUrl}/storage/v1/object/public/${bucketName}/${storedName}`;
         fileUrl = publicUrl;
         
       } catch(uploadErr) {
