@@ -28,6 +28,8 @@ const Icons = {
   Package: (props) => <svg {...props} fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4"/></svg>,
   User: (props) => <svg {...props} fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z"/></svg>,
   Menu: (props) => <svg {...props} fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M4 6h16M4 12h16M4 18h16"/></svg>,
+  CheckCircle: (props) => <svg {...props} fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>,
+  AlertCircle: (props) => <svg {...props} fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>,
   Send: (props) => <svg {...props} fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8"/></svg>
 };
 
@@ -183,7 +185,7 @@ export default function UserApp() {
   const [jadwalAudit, setJadwalAudit] = useState('');
   const [auditorName, setAuditorName] = useState('');
 
-  const showToast = (text, type = 'error', duration = 5000) => {
+  const showToast = (text, type = 'success', duration = 4000) => {
     setGlobalToast({ text, type });
     setTimeout(() => setGlobalToast({ text: '', type: '' }), duration);
   };
@@ -699,13 +701,19 @@ export default function UserApp() {
       </div>
 
       {/* Floating AI Chatbot Toggle & Drawer */}
-      <div className="fixed bottom-6 right-6 z-50">
+      <div className="fixed bottom-4 right-4 sm:bottom-5 sm:right-6 z-40">
         {!chatOpen ? (
-          <button onClick={() => setChatOpen(true)} className="flex items-center gap-2 bg-emerald-600 hover:bg-emerald-700 text-white px-5 py-3 rounded-full shadow-lg font-bold text-sm transition-all hover:scale-105 active:scale-95">
-            <Icons.Bot className="w-5 h-5" /> Tanya AI Halal Assistant
+          <button 
+            onClick={() => setChatOpen(true)} 
+            className="flex items-center gap-1.5 bg-emerald-600 hover:bg-emerald-700 text-white px-3 py-1.5 sm:px-3.5 sm:py-2 rounded-full shadow-md hover:shadow-lg font-semibold text-xs transition-all hover:scale-105 active:scale-95 group"
+            title="Tanya AI Halal Assistant"
+          >
+            <Icons.Bot className="w-4 h-4 shrink-0 transition-transform group-hover:rotate-12" />
+            <span className="hidden sm:inline">Tanya AI Halal Assistant</span>
+            <span className="sm:hidden">Tanya AI</span>
           </button>
         ) : (
-          <div className="w-[360px] bg-white rounded-2xl shadow-2xl border border-slate-200 flex flex-col overflow-hidden animate-fade-in" style={{height: '520px'}}>
+          <div className="w-[340px] sm:w-[360px] max-w-[calc(100vw-2rem)] bg-white rounded-2xl shadow-2xl border border-slate-200 flex flex-col overflow-hidden animate-fade-in" style={{height: '500px', maxHeight: 'calc(100vh - 80px)'}}>
             {/* Header */}
             <div className="bg-gradient-to-r from-emerald-600 to-emerald-500 text-white px-4 py-3 flex justify-between items-center shrink-0">
               <div className="flex items-center gap-2.5">
@@ -770,9 +778,14 @@ export default function UserApp() {
 
       {/* Global Toast Notification */}
       {globalToast.text && (
-        <div className={`fixed top-5 right-5 z-[100] px-5 py-3.5 rounded-xl shadow-xl text-sm font-semibold flex items-center gap-3 max-w-sm ${globalToast.type === 'success' ? 'bg-emerald-600 text-white' : 'bg-red-600 text-white'}`}>
-          <span>{globalToast.text}</span>
-          <button onClick={() => setGlobalToast({ text: '', type: '' })} className="opacity-70 hover:opacity-100 text-xl leading-none shrink-0">×</button>
+        <div className={`fixed top-5 right-5 z-[100] px-4 py-3 rounded-xl shadow-xl text-sm font-semibold flex items-center gap-2.5 max-w-sm transition-all duration-300 animate-fade-in ${globalToast.type === 'error' ? 'bg-red-600 text-white shadow-red-900/20' : 'bg-emerald-600 text-white shadow-emerald-900/20'}`}>
+          {globalToast.type === 'error' ? (
+            <Icons.AlertCircle className="w-4 h-4 shrink-0 text-white" />
+          ) : (
+            <Icons.CheckCircle className="w-4 h-4 shrink-0 text-white" />
+          )}
+          <span className="flex-1 leading-snug">{globalToast.text}</span>
+          <button onClick={() => setGlobalToast({ text: '', type: '' })} className="opacity-75 hover:opacity-100 p-0.5 rounded text-lg leading-none shrink-0 transition-opacity" title="Tutup">×</button>
         </div>
       )}
     </div>
