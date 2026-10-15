@@ -1170,7 +1170,6 @@ function DashboardPage({ onNavigate }) {
   if (loading) return <LoadingState text="Memuat dashboard..."/>;
 
   const stats = data?.stats || {};
-  const activities = data?.recentActivities || [];
 
   const statCards = [
     {
@@ -1332,49 +1331,6 @@ function DashboardPage({ onNavigate }) {
             </button>
           ))}
         </div>
-      </div>
-
-      {/* Recent Activities Feed */}
-      <div className="bg-white border border-slate-200 rounded-2xl p-6 shadow-sm">
-        <div className="flex items-center justify-between mb-4">
-          <div>
-            <h2 className="text-base font-bold text-slate-800">Aktivitas Sistem Terbaru</h2>
-            <p className="text-xs text-slate-500 mt-0.5">Log interaksi terkini oleh pengguna dan admin</p>
-          </div>
-          <span className="text-xs font-semibold text-emerald-700 bg-emerald-50 px-2.5 py-1 rounded-full border border-emerald-200">
-            {activities.length} Aktivitas
-          </span>
-        </div>
-
-        {activities.length === 0 ? (
-          <div className="py-8 text-center text-slate-400 text-xs">Belum ada aktivitas tercatat di sistem.</div>
-        ) : (
-          <div className="divide-y divide-slate-100">
-            {activities.map((act) => (
-              <div key={act.id} className="py-3 flex items-start justify-between gap-4 hover:bg-slate-50/80 px-2 rounded-xl transition-colors">
-                <div className="flex items-start gap-3">
-                  <div className="w-8 h-8 rounded-xl bg-emerald-50 text-emerald-600 flex items-center justify-center shrink-0 mt-0.5 border border-emerald-100">
-                    <Icons.Activity className="w-4 h-4" />
-                  </div>
-                  <div>
-                    <p className="text-xs font-bold text-slate-800">{act.description}</p>
-                    <div className="flex items-center gap-2 mt-1 flex-wrap text-[11px] text-slate-500">
-                      {act.company_name && (
-                        <span className="font-semibold text-emerald-800 bg-emerald-50 px-2 py-0.5 rounded border border-emerald-200">
-                          {act.company_name}
-                        </span>
-                      )}
-                      {act.user_name && <span>Oleh: {act.user_name}</span>}
-                    </div>
-                  </div>
-                </div>
-                <span className="text-[10px] text-slate-400 whitespace-nowrap font-medium shrink-0 pt-1">
-                  {timeAgo(act.created_at)}
-                </span>
-              </div>
-            ))}
-          </div>
-        )}
       </div>
     </div>
   );
