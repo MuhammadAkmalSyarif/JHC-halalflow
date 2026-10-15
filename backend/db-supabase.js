@@ -119,6 +119,7 @@ function normalizeQuery(sql) {
   let index = 1;
   let normalized = sql
     .replace(/\?/g, () => `$${index++}`)
+    .replace(/datetime\('now',\s*'-([0-9]+)\s*days?'\)/gi, "(NOW() - INTERVAL '$1 days')")
     .replace(/datetime\('now'\)/gi, 'NOW()')
     .replace(/INSERT\s+OR\s+IGNORE\s+INTO/gi, 'INSERT INTO');
   return normalized;

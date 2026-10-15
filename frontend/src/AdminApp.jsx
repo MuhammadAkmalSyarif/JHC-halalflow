@@ -1164,50 +1164,171 @@ function ApplicationsPage({ onSelectCompany }) {
 function DashboardPage({ onNavigate }) {
   const [data, setData] = useState(null);
   const [loading, setLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
 
-  const fetchDashboard = useCallback(async () => {
+  const fetchDashboard = useCallback(async (isManual = false) => {
+    if (isManual) setRefreshing(true);
     try {
       const res = await adminFetch('/api/admin/dashboard');
       const d = await res.json();
       setData(d);
-    } catch (e) { console.error(e); }
-    finally { setLoading(false); }
+    } catch (e) {
+      console.error(e);
+    } finally {
+      setLoading(false);
+      if (isManual) setRefreshing(false);
+    }
   }, []);
 
-  useEffect(() => { fetchDashboard(); const i = setInterval(fetchDashboard, 15000); return () => clearInterval(i); }, [fetchDashboard]);
+  useEffect(() => {
+    fetchDashboard();
+    const i = setInterval(() => fetchDashboard(false), 15000);
+    return () => clearInterval(i);
+  }, [fetchDashboard]);
 
-  if (loading) return <LoadingState text="Memuat dashboard..."/>;
+  if (loading) return <LoadingState text="Memuat dashboard..." />;
 
   const stats = data?.stats || {};
   const activities = data?.recentActivities || [];
 
+  const statCards = [
+    {
+      label: 'Pengajuan Menunggu',
+      value: stats.applicationsPending || 0,
+      icon: Icons.AlertTriangle,
+      color: 'text-amber-500',
+      bg: 'bg-amber-50',
+      border: 'border-amber-300 ring-2 ring-amber-100',
+      page: 'applications',
+      highlight: (stats.applicationsPending || 0) > 0
+    },
+    {
+      label: 'Total Perusahaan',
+      value: stats.totalCompanies || 0,
+      icon: Icons.Building,
+      color: 'text-blue-500',
+      bg: 'bg-blue-50',
+      border: 'border-slate-200',
+      page: 'companies'
+    },
+    {
+      label: 'Perusahaan Baru (7 hr)',
+      value: stats.newThisWeek || 0,
+      icon: Icons.Users,
+      color: 'text-violet-500',
+      bg: 'bg-violet-50',
+      border: 'border-slate-200',
+      page: 'companies'
+    },
+    {
+      label: 'Total Pengguna',
+      value: stats.totalUsers || 0,
+      icon: Icons.Users,
+      color: 'text-indigo-500',
+      bg: 'bg-indigo-50',
+      border: 'border-slate-200',
+      page: 'companies'
+    },
+    {
+      label: 'Legal Menunggu',
+      value: stats.legalPending || 0,
+      icon: Icons.FileText,
+      color: 'text-amber-500',
+      bg: 'bg-amber-50',
+      border: (stats.legalPending || 0) > 0 ? 'border-amber-300 ring-1 ring-amber-200' : 'border-slate-200',
+      page: 'companies',
+      highlight: (stats.legalPending || 0) > 0
+    },
+    {
+      label: 'Legal Terverifikasi',
+      value: stats.legalVerified || 0,
+      icon: Icons.Check,
+      color: 'text-emerald-600',
+      bg: 'bg-emerald-50',
+      border: 'border-slate-200',
+      page: 'companies'
+    },
+    {
+      label: 'Matrix Menunggu',
+      value: stats.matrixPending || 0,
+      icon: Icons.List,
+      color: 'text-orange-500',
+      bg: 'bg-orange-50',
+      border: (stats.matrixPending || 0) > 0 ? 'border-orange-300 ring-1 ring-orange-200' : 'border-slate-200',
+      page: 'companies',
+      highlight: (stats.matrixPending || 0) > 0
+    },
+  ];
+
   return (
     <div className="space-y-6">
-      <div>
-        <h1 className="text-2xl font-black text-slate-800">Dashboard</h1>
-        <p className="text-slate-500 text-sm mt-1">Overview sistem sertifikasi halal JHC HalalFlow</p>
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+        <div>
+          <h1 className="text-2xl font-black text-slate-800">Dashboard</h1>
+          <p className="text-slate-500 text-sm mt-1">Overview sistem sertifikasi halal JHC HalalFlow</p>
+        </div>
+        <button
+          onClick={() => fetchDashboard(true)}
+          className="inline-flex items-center gap-2 px-3.5 py-2 rounded-xl bg-white border border-slate-200 hover:bg-slate-50 text-slate-700 text-xs font-bold shadow-xs transition-colors self-start sm:self-auto"
+        >
+          <Icons.Refresh className={`w-3.5 h-3.5 ${refreshing ? 'animate-spin text-emerald-600' : 'text-slate-500'}`} />
+          <span>{refreshing ? 'Memperbarui...' : 'Segarkan Data'}</span>
+        </button>
       </div>
+
+      {/* Action Required Banner if pending items exist */}
+      {(stats.applicationsPending > 0 || stats.legalPending > 0 || stats.matrixPending > 0) && (
+        <div className="bg-gradient-to-r from-amber-50 via-amber-50/70 to-emerald-50/50 border border-amber-300 rounded-2xl p-4 flex flex-col md:flex-row items-start md:items-center justify-between gap-4 shadow-xs">
+          <div className="flex items-center gap-3">
+            <div className="w-10 h-10 rounded-xl bg-amber-500 text-white flex items-center justify-center shrink-0 shadow-sm">
+              <Icons.AlertTriangle className="w-5 h-5" />
+            </div>
+            <div>
+              <p className="font-bold text-slate-800 text-sm">Menunggu Tindakan Verifikasi Admin</p>
+              <p className="text-xs text-slate-600 mt-0.5">
+                {[
+                  stats.applicationsPending > 0 ? `${stats.applicationsPending} Permohonan` : null,
+                  stats.legalPending > 0 ? `${stats.legalPending} Dokumen Legal` : null,
+                  stats.matrixPending > 0 ? `${stats.matrixPending} Matrix Bahan` : null,
+                ].filter(Boolean).join(' • ')} membutuhkan verifikasi Anda.
+              </p>
+            </div>
+          </div>
+          <div className="flex items-center gap-2 shrink-0">
+            {stats.applicationsPending > 0 && (
+              <button
+                onClick={() => onNavigate('applications')}
+                className="px-3.5 py-1.5 bg-amber-500 hover:bg-amber-600 text-white text-xs font-bold rounded-xl transition-colors shadow-xs"
+              >
+                Buka Pengajuan
+              </button>
+            )}
+            <button
+              onClick={() => onNavigate('companies')}
+              className="px-3.5 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold rounded-xl transition-colors shadow-xs"
+            >
+              Buka Perusahaan
+            </button>
+          </div>
+        </div>
+      )}
 
       {/* Stats Cards */}
       <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-7 gap-4">
-        {[
-          { label: 'Pengajuan Menunggu', value: stats.applicationsPending || 0, icon: Icons.AlertTriangle, color: 'text-amber-500', bg: 'bg-amber-50', border: 'border-amber-300 ring-2 ring-amber-100', isApp: true },
-          { label: 'Total Perusahaan', value: stats.totalCompanies || 0, icon: Icons.Building, color: 'text-blue-500', bg: 'bg-blue-50' },
-          { label: 'Perusahaan Baru (7 hr)', value: stats.newThisWeek || 0, icon: Icons.Users, color: 'text-violet-500', bg: 'bg-violet-50' },
-          { label: 'Total Pengguna', value: stats.totalUsers || 0, icon: Icons.Users, color: 'text-indigo-500', bg: 'bg-indigo-50' },
-          { label: 'Legal Menunggu', value: stats.legalPending || 0, icon: Icons.FileText, color: 'text-amber-500', bg: 'bg-amber-50' },
-          { label: 'Legal Terverifikasi', value: stats.legalVerified || 0, icon: Icons.Check, color: 'text-emerald-600', bg: 'bg-emerald-50' },
-          { label: 'Matrix Menunggu', value: stats.matrixPending || 0, icon: Icons.List, color: 'text-orange-500', bg: 'bg-orange-50' },
-        ].map((s, i) => (
+        {statCards.map((s, i) => (
           <div 
             key={i} 
-            onClick={s.isApp ? () => onNavigate('applications') : undefined}
-            className={`bg-white border ${s.border || 'border-slate-200'} rounded-2xl p-4 shadow-sm ${s.isApp ? 'cursor-pointer hover:shadow-md hover:scale-[1.02] transition-all' : ''}`}
+            onClick={() => onNavigate(s.page)}
+            className={`bg-white border ${s.border} rounded-2xl p-4 shadow-xs cursor-pointer hover:shadow-md hover:scale-[1.02] hover:border-emerald-400 transition-all group`}
+            title={`Klik untuk membuka halaman ${s.label}`}
           >
-            <div className={`w-8 h-8 ${s.bg} rounded-xl flex items-center justify-center mb-2.5`}>
-              <s.icon className={`w-4 h-4 ${s.color}`}/>
+            <div className="flex items-center justify-between mb-2.5">
+              <div className={`w-8 h-8 ${s.bg} rounded-xl flex items-center justify-center group-hover:scale-110 transition-transform`}>
+                <s.icon className={`w-4 h-4 ${s.color}`}/>
+              </div>
+              <Icons.ChevronRight className="w-3.5 h-3.5 text-slate-300 group-hover:text-emerald-500 group-hover:translate-x-0.5 transition-all" />
             </div>
-            <p className="text-xl font-black text-slate-800">{s.value}</p>
+            <p className="text-2xl font-black text-slate-800">{s.value}</p>
             <p className="text-[10px] text-slate-500 font-semibold mt-0.5 leading-tight">{s.label}</p>
           </div>
         ))}
@@ -1220,7 +1341,7 @@ function DashboardPage({ onNavigate }) {
           {[
             { label: 'Pengajuan Permohonan', desc: 'Verifikasi, approve & tolak berkas', icon: Icons.Award, page: 'applications', highlight: true },
             { label: 'Data Perusahaan', desc: 'Lihat & kelola semua perusahaan', icon: Icons.Building, page: 'companies' },
-            { label: 'Dokumen Legal', desc: 'Verifikasi dokumen legal & vault', icon: Icons.FileText, page: 'legal' },
+            { label: 'Dokumen Legal', desc: 'Verifikasi dokumen legal & vault', icon: Icons.FileText, page: 'companies' },
           ].map((item, i) => (
             <button 
               key={i} 
@@ -1237,6 +1358,49 @@ function DashboardPage({ onNavigate }) {
             </button>
           ))}
         </div>
+      </div>
+
+      {/* Recent Activities Feed */}
+      <div className="bg-white border border-slate-200 rounded-2xl p-6 shadow-sm">
+        <div className="flex items-center justify-between mb-4">
+          <div>
+            <h2 className="text-base font-bold text-slate-800">Aktivitas Sistem Terbaru</h2>
+            <p className="text-xs text-slate-500 mt-0.5">Log interaksi terkini oleh pengguna dan admin</p>
+          </div>
+          <span className="text-xs font-semibold text-emerald-700 bg-emerald-50 px-2.5 py-1 rounded-full border border-emerald-200">
+            {activities.length} Aktivitas
+          </span>
+        </div>
+
+        {activities.length === 0 ? (
+          <div className="py-8 text-center text-slate-400 text-xs">Belum ada aktivitas tercatat di sistem.</div>
+        ) : (
+          <div className="divide-y divide-slate-100">
+            {activities.map((act) => (
+              <div key={act.id} className="py-3 flex items-start justify-between gap-4 hover:bg-slate-50/80 px-2 rounded-xl transition-colors">
+                <div className="flex items-start gap-3">
+                  <div className="w-8 h-8 rounded-xl bg-emerald-50 text-emerald-600 flex items-center justify-center shrink-0 mt-0.5 border border-emerald-100">
+                    <Icons.Activity className="w-4 h-4" />
+                  </div>
+                  <div>
+                    <p className="text-xs font-bold text-slate-800">{act.description}</p>
+                    <div className="flex items-center gap-2 mt-1 flex-wrap text-[11px] text-slate-500">
+                      {act.company_name && (
+                        <span className="font-semibold text-emerald-800 bg-emerald-50 px-2 py-0.5 rounded border border-emerald-200">
+                          {act.company_name}
+                        </span>
+                      )}
+                      {act.user_name && <span>Oleh: {act.user_name}</span>}
+                    </div>
+                  </div>
+                </div>
+                <span className="text-[10px] text-slate-400 whitespace-nowrap font-medium shrink-0 pt-1">
+                  {timeAgo(act.created_at)}
+                </span>
+              </div>
+            ))}
+          </div>
+        )}
       </div>
     </div>
   );

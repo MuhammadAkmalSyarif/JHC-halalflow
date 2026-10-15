@@ -1775,33 +1775,59 @@ app.get('/api/template/produk', async (req, res) => {
 
 // GET /api/admin/dashboard
 app.get('/api/admin/dashboard', adminAuthMiddleware, async (req, res) => {
-  const totalCompanies = await db.prepare('SELECT COUNT(*) as c FROM companies').get().c;
-  const newThisWeek = await db.prepare(`SELECT COUNT(*) as c FROM companies WHERE created_at >= datetime('now', '-7 days')`).get().c;
-  const totalUsers = await db.prepare('SELECT COUNT(*) as c FROM users').get().c;
+  try {
+    const totalCompaniesRow = await db.prepare('SELECT COUNT(*) as c FROM companies').get();
+    const totalCompanies = Number(totalCompaniesRow?.c || totalCompaniesRow?.count || 0);
 
-  const legalPending = await db.prepare(`SELECT COUNT(*) as c FROM legal_documents WHERE status = 'Menunggu Verifikasi'`).get().c;
-  const legalVerified = await db.prepare(`SELECT COUNT(*) as c FROM legal_documents WHERE status = 'Terverifikasi'`).get().c;
-  const matrixPending = await db.prepare(`SELECT COUNT(*) as c FROM certification_progress WHERE stage = 3 AND status = 'Menunggu Verifikasi'`).get().c;
+    const newThisWeekRow = await db.prepare(`SELECT COUNT(*) as c FROM companies WHERE created_at >= datetime('now', '-7 days')`).get();
+    const newThisWeek = Number(newThisWeekRow?.c || newThisWeekRow?.count || 0);
 
-  // Stage status overview
-  const stageStats = await db.prepare(`
-    SELECT status, COUNT(*) as count FROM certification_progress GROUP BY status
-  `).all();
+    const totalUsersRow = await db.prepare('SELECT COUNT(*) as c FROM users').get();
+    const totalUsers = Number(totalUsersRow?.c || totalUsersRow?.count || 0);
 
-  // Recent activities
-  const recentActivities = await db.prepare(`
-    SELECT a.*, c.nama as company_name, u.name as user_name
-    FROM activities a
-    LEFT JOIN companies c ON a.company_id = c.id
-    LEFT JOIN users u ON a.user_id = u.id
-    ORDER BY a.created_at DESC LIMIT 10
-  `).all();
+    const applicationsPendingRow = await db.prepare(`SELECT COUNT(*) as c FROM companies WHERE permohonan_status = 'menunggu'`).get();
+    const applicationsPending = Number(applicationsPendingRow?.c || applicationsPendingRow?.count || 0);
 
-  res.json({
-    stats: { totalCompanies, newThisWeek, totalUsers, legalPending, legalVerified, matrixPending },
-    stageStats,
-    recentActivities
-  });
+    const legalPendingRow = await db.prepare(`SELECT COUNT(*) as c FROM certification_progress WHERE stage = 2 AND status = 'Menunggu Verifikasi'`).get();
+    const legalPending = Number(legalPendingRow?.c || legalPendingRow?.count || 0);
+
+    const legalVerifiedRow = await db.prepare(`SELECT COUNT(*) as c FROM certification_progress WHERE stage = 2 AND status IN ('Terverifikasi', 'Selesai')`).get();
+    const legalVerified = Number(legalVerifiedRow?.c || legalVerifiedRow?.count || 0);
+
+    const matrixPendingRow = await db.prepare(`SELECT COUNT(*) as c FROM certification_progress WHERE stage = 3 AND status = 'Menunggu Verifikasi'`).get();
+    const matrixPending = Number(matrixPendingRow?.c || matrixPendingRow?.count || 0);
+
+    // Stage status overview
+    const stageStats = await db.prepare(`
+      SELECT status, COUNT(*) as count FROM certification_progress GROUP BY status
+    `).all();
+
+    // Recent activities
+    const recentActivities = await db.prepare(`
+      SELECT a.*, c.nama as company_name, u.name as user_name
+      FROM activities a
+      LEFT JOIN companies c ON a.company_id = c.id
+      LEFT JOIN users u ON a.user_id = u.id
+      ORDER BY a.created_at DESC LIMIT 10
+    `).all();
+
+    res.json({
+      stats: {
+        applicationsPending,
+        totalCompanies,
+        newThisWeek,
+        totalUsers,
+        legalPending,
+        legalVerified,
+        matrixPending
+      },
+      stageStats: stageStats || [],
+      recentActivities: recentActivities || []
+    });
+  } catch (err) {
+    console.error('Error in /api/admin/dashboard:', err);
+    res.status(500).json({ error: 'Gagal memuat dashboard data' });
+  }
 });
 
 // GET /api/admin/companies
