@@ -1054,7 +1054,35 @@ app.post('/api/upload', authMiddleware, async (req, res, next) => {
         if (comp) companyId = comp.id;
       } catch (e) {}
     }
-    const docType = document_type || 'general';
+
+    // Auto-detect document_type from filename if not explicitly provided or is 'general'
+    let docType = document_type || 'general';
+    const lowerOrig = (filename || '').toLowerCase();
+    if (docType === 'general') {
+      if (lowerOrig.includes('babi') || lowerOrig.includes('bebas')) {
+        docType = 'bebasBabi';
+      } else if (lowerOrig.includes('alur') || lowerOrig.includes('proses') || lowerOrig.includes('sppg')) {
+        docType = 'alurProses';
+      } else if (lowerOrig.includes('layout') || lowerOrig.includes('denah') || lowerOrig.includes('ruang')) {
+        docType = 'layoutRuang';
+      } else if (lowerOrig.includes('ktp') && lowerOrig.includes('pemilik')) {
+        docType = 'ktpPemilik';
+      } else if (lowerOrig.includes('ktp') && (lowerOrig.includes('penyelia') || lowerOrig.includes('peny'))) {
+        docType = 'ktpPenyelia';
+      } else if (lowerOrig.includes('ttd') && lowerOrig.includes('pemilik')) {
+        docType = 'ttdPemilik';
+      } else if (lowerOrig.includes('ttd') && lowerOrig.includes('penyelia')) {
+        docType = 'ttdPenyelia';
+      } else if (lowerOrig.includes('permohonan')) {
+        docType = 'permohonan';
+      } else if (lowerOrig.includes('sk_penyelia') || (lowerOrig.includes('penyelia') && lowerOrig.includes('sk'))) {
+        docType = 'sk_penyelia';
+      } else if (lowerOrig.includes('sk_manajemen') || (lowerOrig.includes('manajemen') && lowerOrig.includes('sk'))) {
+        docType = 'sk_manajemen';
+      } else if (lowerOrig.includes('kebijakan')) {
+        docType = 'kebijakan';
+      }
+    }
 
     const ext = require('path').extname(filename);
     const basename = require('path').basename(filename, ext).replace(/[^a-zA-Z0-9]/g, '_');
@@ -1086,23 +1114,93 @@ app.post('/api/upload', authMiddleware, async (req, res, next) => {
       }
     }
 
-    // Simpan record ke database
+    // Simpan record ke database uploaded_files
     try {
       await db.prepare(`
         INSERT INTO uploaded_files (company_id, user_id, original_name, stored_name, file_path, document_type)
         VALUES (?, ?, ?, ?, ?, ?)
       `).run(companyId, req.user.id, filename, storedName, fileUrl, docType);
-
-      res.json({
-        message: 'File berhasil diupload',
-        filename: storedName,
-        originalName: filename,
-        url: fileUrl
-      });
     } catch (dbErr) {
-      console.error('Failed to save to database:', dbErr);
-      res.status(500).json({ error: 'Gagal menyimpan ke database: ' + dbErr.message });
+      console.error('Failed to save to uploaded_files:', dbErr);
     }
+
+    // Auto-sinkronisasi langsung ke tabel domain agar data otomatis terbaca di admin
+    if (companyId) {
+      try {
+        if (docType === 'alurProses') {
+          const ex = await db.prepare('SELECT id FROM production_data WHERE company_id=?').get(companyId);
+          if (ex) {
+            await db.prepare("UPDATE production_data SET alur_proses=?, updated_at=datetime('now') WHERE company_id=?").run(storedName, companyId);
+          } else {
+            await db.prepare('INSERT INTO production_data (company_id, alur_proses, layout_ruang, bebas_babi) VALUES (?,?,?,?)').run(companyId, storedName, '', '');
+          }
+          await db.prepare("UPDATE certification_progress SET status='Menunggu Verifikasi', updated_at=datetime('now') WHERE company_id=? AND stage=5").run(companyId);
+        } else if (docType === 'layoutRuang') {
+          const ex = await db.prepare('SELECT id FROM production_data WHERE company_id=?').get(companyId);
+          if (ex) {
+            await db.prepare("UPDATE production_data SET layout_ruang=?, updated_at=datetime('now') WHERE company_id=?").run(storedName, companyId);
+          } else {
+            await db.prepare('INSERT INTO production_data (company_id, alur_proses, layout_ruang, bebas_babi) VALUES (?,?,?,?)').run(companyId, '', storedName, '');
+          }
+          await db.prepare("UPDATE certification_progress SET status='Menunggu Verifikasi', updated_at=datetime('now') WHERE company_id=? AND stage=5").run(companyId);
+        } else if (docType === 'bebasBabi') {
+          const ex = await db.prepare('SELECT id FROM production_data WHERE company_id=?').get(companyId);
+          if (ex) {
+            await db.prepare("UPDATE production_data SET bebas_babi=?, updated_at=datetime('now') WHERE company_id=?").run(storedName, companyId);
+          } else {
+            await db.prepare('INSERT INTO production_data (company_id, alur_proses, layout_ruang, bebas_babi) VALUES (?,?,?,?)').run(companyId, '', '', storedName);
+          }
+          await db.prepare("UPDATE certification_progress SET status='Menunggu Verifikasi', updated_at=datetime('now') WHERE company_id=? AND stage=5").run(companyId);
+        } else if (['ttdPemilik', 'ktpPemilik', 'ttdPenyelia', 'ktpPenyelia'].includes(docType)) {
+          const colMap = {
+            ttdPemilik: 'ttd_pemilik',
+            ktpPemilik: 'ktp_pemilik',
+            ttdPenyelia: 'ttd_penyelia',
+            ktpPenyelia: 'ktp_penyelia'
+          };
+          const col = colMap[docType];
+          const ex = await db.prepare('SELECT id FROM legal_documents WHERE company_id=?').get(companyId);
+          if (ex) {
+            await db.prepare(`UPDATE legal_documents SET ${col}=?, updated_at=datetime('now') WHERE company_id=?`).run(storedName, companyId);
+          } else {
+            await db.prepare(`INSERT INTO legal_documents (company_id, ${col}, status) VALUES (?,?, 'Menunggu Verifikasi')`).run(companyId, storedName);
+          }
+        } else if (['permohonan', 'sk_penyelia', 'sk_manajemen', 'kebijakan'].includes(docType)) {
+          const ex = await db.prepare('SELECT * FROM legal_documents WHERE company_id=?').get(companyId);
+          if (ex) {
+            const currentVal = ex[docType] ? `${ex[docType]},${storedName}` : storedName;
+            await db.prepare(`UPDATE legal_documents SET ${docType}=?, updated_at=datetime('now') WHERE company_id=?`).run(currentVal, companyId);
+          } else {
+            await db.prepare(`INSERT INTO legal_documents (company_id, ${docType}, status) VALUES (?,?, 'Menunggu Verifikasi')`).run(companyId, storedName);
+          }
+        } else if (['sosialisasiFoto', 'auditInternalFoto'].includes(docType)) {
+          const ex = await db.prepare('SELECT * FROM evidence_data WHERE company_id=?').get(companyId);
+          if (ex) {
+            const currentVal = (ex[docType] || ex[docType.toLowerCase()]) ? `${ex[docType] || ex[docType.toLowerCase()]},${storedName}` : storedName;
+            await db.prepare(`UPDATE evidence_data SET ${docType}=?, updated_at=datetime('now') WHERE company_id=?`).run(currentVal, companyId);
+          } else {
+            await db.prepare(`INSERT INTO evidence_data (company_id, ${docType}) VALUES (?,?)`).run(companyId, storedName);
+          }
+        } else if (['sosialisasiAbsen', 'auditInternalAbsen', 'pembelianBahan', 'penyimpananBahan', 'hasilProduksi', 'distribusiProduk'].includes(docType)) {
+          const ex = await db.prepare('SELECT id FROM evidence_data WHERE company_id=?').get(companyId);
+          if (ex) {
+            await db.prepare(`UPDATE evidence_data SET ${docType}=?, updated_at=datetime('now') WHERE company_id=?`).run(storedName, companyId);
+          } else {
+            await db.prepare(`INSERT INTO evidence_data (company_id, ${docType}) VALUES (?,?)`).run(companyId, storedName);
+          }
+        }
+      } catch(syncErr) {
+        console.warn('⚠️ Auto-sync to domain table failed:', syncErr.message);
+      }
+    }
+
+    res.json({
+      message: 'File berhasil diupload',
+      filename: storedName,
+      originalName: filename,
+      url: fileUrl,
+      document_type: docType
+    });
   } catch (err) {
     console.error('Unhandled error in /api/upload:', err);
     res.status(500).json({ error: 'Terjadi kesalahan sistem saat upload: ' + err.message });
@@ -1224,13 +1322,55 @@ app.get('/api/legal', authMiddleware, async (req, res) => {
   const userId = req.user.id;
   const company = await db.prepare('SELECT id FROM companies WHERE user_id=?').get(userId);
   if (!company) return res.json({});
-  const doc = await db.prepare('SELECT * FROM legal_documents WHERE company_id=?').get(company.id);
-  if (!doc) return res.json({});
+  let doc = await db.prepare('SELECT * FROM legal_documents WHERE company_id=?').get(company.id);
+  if (!doc) doc = {};
+
+  let permohonan = doc.permohonan || '';
+  let sk_penyelia = doc.sk_penyelia || '';
+  let sk_manajemen = doc.sk_manajemen || '';
+  let kebijakan = doc.kebijakan || '';
+  let ttdPemilik = doc.ttd_pemilik || doc.ttdPemilik || '';
+  let ttdPenyelia = doc.ttd_penyelia || doc.ttdPenyelia || '';
+  let ktpPemilik = doc.ktp_pemilik || doc.ktpPemilik || '';
+  let ktpPenyelia = doc.ktp_penyelia || doc.ktpPenyelia || '';
+
+  // Fallback to check uploaded_files if any are missing
+  try {
+    const uploaded = await db.prepare('SELECT stored_name, original_name, document_type FROM uploaded_files WHERE company_id=? ORDER BY id DESC').all(company.id);
+    for (const f of uploaded) {
+      const sName = f.stored_name || '';
+      const oName = (f.original_name || '').toLowerCase();
+      const dType = f.document_type || '';
+
+      if (!ktpPemilik && (dType === 'ktpPemilik' || (oName.includes('ktp') && oName.includes('pemilik')))) {
+        ktpPemilik = sName;
+      } else if (!ktpPenyelia && (dType === 'ktpPenyelia' || (oName.includes('ktp') && (oName.includes('penyelia') || oName.includes('peny'))))) {
+        ktpPenyelia = sName;
+      } else if (!ttdPemilik && (dType === 'ttdPemilik' || (oName.includes('ttd') && oName.includes('pemilik')))) {
+        ttdPemilik = sName;
+      } else if (!ttdPenyelia && (dType === 'ttdPenyelia' || (oName.includes('ttd') && oName.includes('penyelia')))) {
+        ttdPenyelia = sName;
+      } else if (!permohonan && (dType === 'permohonan' || oName.includes('permohonan'))) {
+        permohonan = sName;
+      } else if (!sk_penyelia && (dType === 'sk_penyelia' || (oName.includes('sk') && oName.includes('penyelia')))) {
+        sk_penyelia = sName;
+      } else if (!sk_manajemen && (dType === 'sk_manajemen' || (oName.includes('sk') && oName.includes('manajemen')))) {
+        sk_manajemen = sName;
+      } else if (!kebijakan && (dType === 'kebijakan' || oName.includes('kebijakan'))) {
+        kebijakan = sName;
+      }
+    }
+  } catch(err) {}
+
   res.json({
-    telpPemilik: doc.telp_pemilik, telpPenyelia: doc.telp_penyelia,
-    emailSihalal: doc.email_sihalal, permohonan: doc.permohonan,
-    sk_penyelia: doc.sk_penyelia, sk_manajemen: doc.sk_manajemen,
-    kebijakan: doc.kebijakan, ttdPemilik: doc.ttd_pemilik, ttdPenyelia: doc.ttd_penyelia
+    telpPemilik: doc.telp_pemilik || '', telpPenyelia: doc.telp_penyelia || '',
+    emailSihalal: doc.email_sihalal || '', permohonan,
+    sk_penyelia, sk_manajemen, kebijakan,
+    ttdPemilik, ttdPenyelia, ktpPemilik, ktpPenyelia,
+    // snake_case aliases
+    telp_pemilik: doc.telp_pemilik || '', telp_penyelia: doc.telp_penyelia || '',
+    email_sihalal: doc.email_sihalal || '', ttd_pemilik: ttdPemilik,
+    ttd_penyelia: ttdPenyelia, ktp_pemilik: ktpPemilik, ktp_penyelia: ktpPenyelia
   });
 });
 
@@ -1240,7 +1380,19 @@ app.post('/api/legal', authMiddleware, async (req, res) => {
   const company = await db.prepare('SELECT id FROM companies WHERE user_id=?').get(userId);
   if (!company) return res.status(404).json({ error: 'Buat profil perusahaan dulu' });
 
-  const { telpPemilik, telpPenyelia, emailSihalal, permohonan, sk_penyelia, sk_manajemen, kebijakan, ttdPemilik, ttdPenyelia, ktpPemilik, ktpPenyelia } = req.body;
+  const b = req.body || {};
+  const telpPemilik = b.telpPemilik !== undefined ? b.telpPemilik : b.telp_pemilik;
+  const telpPenyelia = b.telpPenyelia !== undefined ? b.telpPenyelia : b.telp_penyelia;
+  const emailSihalal = b.emailSihalal !== undefined ? b.emailSihalal : b.email_sihalal;
+  const permohonan = b.permohonan;
+  const sk_penyelia = b.sk_penyelia;
+  const sk_manajemen = b.sk_manajemen;
+  const kebijakan = b.kebijakan;
+  const ttdPemilik = b.ttdPemilik !== undefined ? b.ttdPemilik : b.ttd_pemilik;
+  const ttdPenyelia = b.ttdPenyelia !== undefined ? b.ttdPenyelia : b.ttd_penyelia;
+  const ktpPemilik = b.ktpPemilik !== undefined ? b.ktpPemilik : b.ktp_pemilik;
+  const ktpPenyelia = b.ktpPenyelia !== undefined ? b.ktpPenyelia : b.ktp_penyelia;
+
   const existing = await db.prepare('SELECT * FROM legal_documents WHERE company_id=?').get(company.id);
   if (existing) {
     await db.prepare(`UPDATE legal_documents SET telp_pemilik=?,telp_penyelia=?,email_sihalal=?,permohonan=?,sk_penyelia=?,sk_manajemen=?,kebijakan=?,ttd_pemilik=?,ttd_penyelia=?,ktp_pemilik=?,ktp_penyelia=?,status='Menunggu Verifikasi',updated_at=datetime('now') WHERE company_id=?`
@@ -1551,9 +1703,48 @@ app.get('/api/production', authMiddleware, async (req, res) => {
   const userId = req.user.id;
   const company = await db.prepare('SELECT id FROM companies WHERE user_id=?').get(userId);
   if (!company) return res.json({});
-  const row = await db.prepare('SELECT * FROM production_data WHERE company_id=?').get(company.id);
-  if (!row) return res.json({});
-  res.json({ alurProses: row.alur_proses, layoutRuang: row.layout_ruang, bebasBabi: row.bebas_babi });
+  
+  let row = await db.prepare('SELECT * FROM production_data WHERE company_id=?').get(company.id);
+  
+  let alurProses = row?.alur_proses || row?.alurProses || row?.alurproses || '';
+  let layoutRuang = row?.layout_ruang || row?.layoutRuang || row?.layoutruang || '';
+  let bebasBabi = row?.bebas_babi || row?.bebasBabi || row?.bebasbabi || '';
+
+  // Fallback: search uploaded_files if any field is empty
+  if (!alurProses || !layoutRuang || !bebasBabi) {
+    try {
+      const uploaded = await db.prepare('SELECT stored_name, original_name, document_type FROM uploaded_files WHERE company_id=? ORDER BY id DESC').all(company.id);
+      for (const f of uploaded) {
+        const sName = f.stored_name || '';
+        const oName = (f.original_name || '').toLowerCase();
+        const dType = f.document_type || '';
+
+        if (!bebasBabi && (dType === 'bebasBabi' || oName.includes('babi') || oName.includes('bebas') || oName.includes('undangan') || (sName.toLowerCase().endsWith('.pdf') && !oName.includes('permohonan') && !oName.includes('sk_') && !oName.includes('kebijakan') && !oName.includes('ktp')))) {
+          bebasBabi = sName;
+        } else if (!alurProses && (dType === 'alurProses' || oName.includes('alur') || oName.includes('proses') || oName.includes('sppg'))) {
+          alurProses = sName;
+        } else if (!layoutRuang && (dType === 'layoutRuang' || oName.includes('layout') || oName.includes('denah') || oName.includes('ruang') || oName.includes('images'))) {
+          layoutRuang = sName;
+        }
+      }
+      if (alurProses || layoutRuang || bebasBabi) {
+        if (row) {
+          await db.prepare("UPDATE production_data SET alur_proses=coalesce(nullif(alur_proses,''), ?), layout_ruang=coalesce(nullif(layout_ruang,''), ?), bebas_babi=coalesce(nullif(bebas_babi,''), ?), updated_at=datetime('now') WHERE company_id=?")
+            .run(alurProses, layoutRuang, bebasBabi, company.id);
+        } else {
+          await db.prepare('INSERT INTO production_data (company_id, alur_proses, layout_ruang, bebas_babi) VALUES (?,?,?,?)')
+            .run(company.id, alurProses, layoutRuang, bebasBabi);
+        }
+      }
+    } catch(err) {
+      console.warn('Production fallback lookup warning:', err.message);
+    }
+  }
+
+  res.json({
+    alurProses, layoutRuang, bebasBabi,
+    alur_proses: alurProses, layout_ruang: layoutRuang, bebas_babi: bebasBabi
+  });
 });
 
 // POST /api/production
@@ -1561,14 +1752,21 @@ app.post('/api/production', authMiddleware, async (req, res) => {
   const userId = req.user.id;
   const company = await db.prepare('SELECT id FROM companies WHERE user_id=?').get(userId);
   if (!company) return res.status(404).json({ error: 'Perusahaan tidak ditemukan' });
-  const { alurProses, layoutRuang, bebasBabi } = req.body;
+  const alurProses = req.body.alurProses !== undefined ? req.body.alurProses : req.body.alur_proses;
+  const layoutRuang = req.body.layoutRuang !== undefined ? req.body.layoutRuang : req.body.layout_ruang;
+  const bebasBabi = req.body.bebasBabi !== undefined ? req.body.bebasBabi : req.body.bebas_babi;
+
   const existing = await db.prepare('SELECT * FROM production_data WHERE company_id=?').get(company.id);
   if (existing) {
+    const prevAlur = existing.alur_proses || existing.alurProses || existing.alurproses || '';
+    const prevLayout = existing.layout_ruang || existing.layoutRuang || existing.layoutruang || '';
+    const prevBabi = existing.bebas_babi || existing.bebasBabi || existing.bebasbabi || '';
+
     await db.prepare(`UPDATE production_data SET alur_proses=?, layout_ruang=?, bebas_babi=?, updated_at=datetime('now') WHERE company_id=?`)
       .run(
-        alurProses !== undefined ? alurProses : (existing.alur_proses || ''),
-        layoutRuang !== undefined ? layoutRuang : (existing.layout_ruang || ''),
-        bebasBabi !== undefined ? bebasBabi : (existing.bebas_babi || ''),
+        alurProses !== undefined ? alurProses : prevAlur,
+        layoutRuang !== undefined ? layoutRuang : prevLayout,
+        bebasBabi !== undefined ? bebasBabi : prevBabi,
         company.id
       );
   } else {
@@ -1577,7 +1775,7 @@ app.post('/api/production', authMiddleware, async (req, res) => {
   }
   await db.prepare(`UPDATE certification_progress SET status='Menunggu Verifikasi', updated_at=datetime('now') WHERE company_id=? AND stage=5`).run(company.id);
   await logActivity(db, company.id, userId, 'production_save', 'Dokumen proses produksi halal disimpan');
-  res.json({ message: 'OK' });
+  res.json({ message: 'OK', alurProses, layoutRuang, bebasBabi });
 });
 
 // =============================================
@@ -2331,9 +2529,54 @@ app.get('/api/admin/companies/:id/legal-documents', adminAuthMiddleware, async (
   const companyId = parseInt(req.params.id);
   const company = await db.prepare('SELECT id FROM companies WHERE id=?').get(companyId);
   if (!company) return res.status(404).json({ error: 'Perusahaan tidak ditemukan' });
-  const doc = await db.prepare('SELECT * FROM legal_documents WHERE company_id=?').get(companyId);
+  let doc = await db.prepare('SELECT * FROM legal_documents WHERE company_id=?').get(companyId);
+  if (!doc) doc = {};
   const files = await db.prepare('SELECT * FROM uploaded_files WHERE company_id=? ORDER BY uploaded_at DESC').all(companyId);
-  res.json({ legal: doc || {}, files });
+
+  let permohonan = doc.permohonan || '';
+  let sk_penyelia = doc.sk_penyelia || '';
+  let sk_manajemen = doc.sk_manajemen || '';
+  let kebijakan = doc.kebijakan || '';
+  let ttdPemilik = doc.ttd_pemilik || doc.ttdPemilik || '';
+  let ttdPenyelia = doc.ttd_penyelia || doc.ttdPenyelia || '';
+  let ktpPemilik = doc.ktp_pemilik || doc.ktpPemilik || '';
+  let ktpPenyelia = doc.ktp_penyelia || doc.ktpPenyelia || '';
+
+  // Fallback lookup from uploaded_files if missing in legal_documents
+  for (const f of files) {
+    const sName = f.stored_name || '';
+    const oName = (f.original_name || '').toLowerCase();
+    const dType = f.document_type || '';
+
+    if (!ktpPemilik && (dType === 'ktpPemilik' || (oName.includes('ktp') && oName.includes('pemilik')))) {
+      ktpPemilik = sName;
+    } else if (!ktpPenyelia && (dType === 'ktpPenyelia' || (oName.includes('ktp') && (oName.includes('penyelia') || oName.includes('peny'))))) {
+      ktpPenyelia = sName;
+    } else if (!ttdPemilik && (dType === 'ttdPemilik' || (oName.includes('ttd') && oName.includes('pemilik')))) {
+      ttdPemilik = sName;
+    } else if (!ttdPenyelia && (dType === 'ttdPenyelia' || (oName.includes('ttd') && oName.includes('penyelia')))) {
+      ttdPenyelia = sName;
+    } else if (!permohonan && (dType === 'permohonan' || oName.includes('permohonan'))) {
+      permohonan = sName;
+    } else if (!sk_penyelia && (dType === 'sk_penyelia' || (oName.includes('sk') && oName.includes('penyelia')))) {
+      sk_penyelia = sName;
+    } else if (!sk_manajemen && (dType === 'sk_manajemen' || (oName.includes('sk') && oName.includes('manajemen')))) {
+      sk_manajemen = sName;
+    } else if (!kebijakan && (dType === 'kebijakan' || oName.includes('kebijakan'))) {
+      kebijakan = sName;
+    }
+  }
+
+  res.json({
+    legal: {
+      ...doc,
+      permohonan, sk_penyelia, sk_manajemen, kebijakan,
+      ttd_pemilik: ttdPemilik, ttd_penyelia: ttdPenyelia,
+      ktp_pemilik: ktpPemilik, ktp_penyelia: ktpPenyelia,
+      ttdPemilik, ttdPenyelia, ktpPemilik, ktpPenyelia
+    },
+    files
+  });
 });
 
 // GET /api/admin/companies/:id/materials
@@ -2973,11 +3216,52 @@ app.get('/api/admin/companies/:id/production', adminAuthMiddleware, async (req, 
   const company = await db.prepare('SELECT id FROM companies WHERE id=?').get(companyId);
   if (!company) return res.status(404).json({ error: 'Perusahaan tidak ditemukan' });
   try {
-    const row = await db.prepare('SELECT * FROM production_data WHERE company_id=?').get(companyId);
+    let row = await db.prepare('SELECT * FROM production_data WHERE company_id=?').get(companyId);
     const stage = await db.prepare('SELECT status FROM certification_progress WHERE company_id=? AND stage=5').get(companyId);
+
+    let alurProses = row?.alur_proses || row?.alurProses || row?.alurproses || '';
+    let layoutRuang = row?.layout_ruang || row?.layoutRuang || row?.layoutruang || '';
+    let bebasBabi = row?.bebas_babi || row?.bebasBabi || row?.bebasbabi || '';
+
+    // Fallback: check uploaded_files table if any field is empty
+    if (!alurProses || !layoutRuang || !bebasBabi) {
+      try {
+        const uploaded = await db.prepare('SELECT stored_name, original_name, document_type FROM uploaded_files WHERE company_id=? ORDER BY id DESC').all(companyId);
+        for (const f of uploaded) {
+          const sName = f.stored_name || '';
+          const oName = (f.original_name || '').toLowerCase();
+          const dType = f.document_type || '';
+
+          if (!bebasBabi && (dType === 'bebasBabi' || oName.includes('babi') || oName.includes('bebas') || oName.includes('undangan') || (sName.toLowerCase().endsWith('.pdf') && !oName.includes('permohonan') && !oName.includes('sk_') && !oName.includes('kebijakan') && !oName.includes('ktp')))) {
+            bebasBabi = sName;
+          } else if (!alurProses && (dType === 'alurProses' || oName.includes('alur') || oName.includes('proses') || oName.includes('sppg'))) {
+            alurProses = sName;
+          } else if (!layoutRuang && (dType === 'layoutRuang' || oName.includes('layout') || oName.includes('denah') || oName.includes('ruang') || oName.includes('images'))) {
+            layoutRuang = sName;
+          }
+        }
+        // Auto-heal production_data if any file was found
+        if (alurProses || layoutRuang || bebasBabi) {
+          if (row) {
+            await db.prepare("UPDATE production_data SET alur_proses=coalesce(nullif(alur_proses,''), ?), layout_ruang=coalesce(nullif(layout_ruang,''), ?), bebas_babi=coalesce(nullif(bebas_babi,''), ?), updated_at=datetime('now') WHERE company_id=?")
+              .run(alurProses, layoutRuang, bebasBabi, companyId);
+          } else {
+            await db.prepare('INSERT INTO production_data (company_id, alur_proses, layout_ruang, bebas_babi) VALUES (?,?,?,?)')
+              .run(companyId, alurProses, layoutRuang, bebasBabi);
+          }
+        }
+      } catch(lookupErr) {
+        console.warn('Production admin fallback lookup warning:', lookupErr.message);
+      }
+    }
+
+    const hasData = Boolean(alurProses || layoutRuang || bebasBabi);
     res.json({
-      production: row ? { alurProses: row.alur_proses, layoutRuang: row.layout_ruang, bebasBabi: row.bebas_babi } : null,
-      stageStatus: stage?.status || 'Belum Dimulai'
+      production: hasData ? {
+        alurProses, layoutRuang, bebasBabi,
+        alur_proses: alurProses, layout_ruang: layoutRuang, bebas_babi: bebasBabi
+      } : null,
+      stageStatus: stage?.status || (hasData ? 'Menunggu Verifikasi' : 'Belum Dimulai')
     });
   } catch(e) {
     res.json({ production: null, stageStatus: 'Belum Dimulai' });
@@ -2990,26 +3274,72 @@ app.get('/api/admin/companies/:id/evidence', adminAuthMiddleware, async (req, re
   const company = await db.prepare('SELECT id FROM companies WHERE id=?').get(companyId);
   if (!company) return res.status(404).json({ error: 'Perusahaan tidak ditemukan' });
   try {
-    const row = await db.prepare('SELECT * FROM evidence_data WHERE company_id=?').get(companyId);
+    let row = await db.prepare('SELECT * FROM evidence_data WHERE company_id=?').get(companyId);
     const stage = await db.prepare('SELECT status FROM certification_progress WHERE company_id=? AND stage=6').get(companyId);
+    
+    let sosialisasiFoto = row?.sosialisasiFoto || row?.sosialisasifoto || '';
+    let auditInternalFoto = row?.auditInternalFoto || row?.auditinternalfoto || '';
+    let sosialisasiAbsen = row?.sosialisasiAbsen || row?.sosialisasiabsen || '';
+    let auditInternalAbsen = row?.auditInternalAbsen || row?.auditinternalabsen || '';
+    let pembelianBahan = row?.pembelianBahan || row?.pembelianbahan || '';
+    let penyimpananBahan = row?.penyimpananBahan || row?.penyimpananbahan || '';
+    let hasilProduksi = row?.hasilProduksi || row?.hasilproduksi || '';
+    let distribusiProduk = row?.distribusiProduk || row?.distribusiproduk || '';
+
+    // Fallback: check uploaded_files if missing
+    try {
+      const uploaded = await db.prepare('SELECT stored_name, original_name, document_type FROM uploaded_files WHERE company_id=? ORDER BY id DESC').all(companyId);
+      for (const f of uploaded) {
+        const sName = f.stored_name || '';
+        const oName = (f.original_name || '').toLowerCase();
+        const dType = f.document_type || '';
+
+        if (!sosialisasiFoto && (dType === 'sosialisasiFoto' || (oName.includes('sosialisasi') && (oName.includes('foto') || oName.includes('img') || sName.endsWith('.jpg') || sName.endsWith('.jpeg') || sName.endsWith('.png'))))) {
+          sosialisasiFoto = sName;
+        } else if (!auditInternalFoto && (dType === 'auditInternalFoto' || (oName.includes('audit') && (oName.includes('foto') || oName.includes('img') || sName.endsWith('.jpg') || sName.endsWith('.jpeg') || sName.endsWith('.png'))))) {
+          auditInternalFoto = sName;
+        } else if (!sosialisasiAbsen && (dType === 'sosialisasiAbsen' || (oName.includes('sosialisasi') && (oName.includes('absen') || oName.includes('hadir'))))) {
+          sosialisasiAbsen = sName;
+        } else if (!auditInternalAbsen && (dType === 'auditInternalAbsen' || (oName.includes('audit') && (oName.includes('absen') || oName.includes('hadir'))))) {
+          auditInternalAbsen = sName;
+        } else if (!pembelianBahan && (dType === 'pembelianBahan' || oName.includes('pembelian'))) {
+          pembelianBahan = sName;
+        } else if (!penyimpananBahan && (dType === 'penyimpananBahan' || oName.includes('penyimpanan'))) {
+          penyimpananBahan = sName;
+        } else if (!hasilProduksi && (dType === 'hasilProduksi' || oName.includes('hasil'))) {
+          hasilProduksi = sName;
+        } else if (!distribusiProduk && (dType === 'distribusiProduk' || oName.includes('distribusi'))) {
+          distribusiProduk = sName;
+        }
+      }
+    } catch(err) {}
+
+    const hasData = Boolean(sosialisasiFoto || auditInternalFoto || sosialisasiAbsen || auditInternalAbsen || pembelianBahan || penyimpananBahan || hasilProduksi || distribusiProduk);
     res.json({
-      evidence: row ? {
-        sosialisasiFoto: row.sosialisasiFoto || row.sosialisasifoto,
-        auditInternalFoto: row.auditInternalFoto || row.auditinternalfoto,
-        sosialisasiAbsen: row.sosialisasiAbsen || row.sosialisasiabsen,
-        auditInternalAbsen: row.auditInternalAbsen || row.auditinternalabsen,
-        pembelianBahan: row.pembelianBahan || row.pembelianbahan,
-        penyimpananBahan: row.penyimpananBahan || row.penyimpananbahan,
-        hasilProduksi: row.hasilProduksi || row.hasilproduksi,
-        distribusiProduk: row.distribusiProduk || row.distribusiproduk
+      evidence: hasData ? {
+        sosialisasiFoto, auditInternalFoto, sosialisasiAbsen, auditInternalAbsen,
+        pembelianBahan, penyimpananBahan, hasilProduksi, distribusiProduk
       } : null,
-      stageStatus: stage?.status || 'Belum Dimulai'
+      stageStatus: stage?.status || (hasData ? 'Menunggu Verifikasi' : 'Belum Dimulai')
     });
   } catch(e) {
     res.json({ evidence: null, stageStatus: 'Belum Dimulai' });
   }
 });
 
+// GET /api/admin/companies/:id/files — semua berkas yang pernah diunggah perusahaan
+app.get('/api/admin/companies/:id/files', adminAuthMiddleware, async (req, res) => {
+  try {
+    const companyId = parseInt(req.params.id, 10);
+    const files = await db.prepare(
+      'SELECT id, original_name, stored_name, file_size, mime_type, document_type, created_at FROM uploaded_files WHERE company_id=? ORDER BY id DESC'
+    ).all(companyId);
+    res.json({ files: files || [] });
+  } catch (err) {
+    console.error('Error fetching company files:', err);
+    res.status(500).json({ error: 'Gagal mengambil daftar berkas' });
+  }
+});
 
 // =============================================
 // GLOBAL ERROR HANDLER

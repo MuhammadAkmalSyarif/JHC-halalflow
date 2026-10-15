@@ -956,24 +956,39 @@ function ApplicationsPage({ onSelectCompany }) {
 
                       <div>
                         <h4 className="font-bold text-slate-800 mb-2">Dokumen Legal Terupload:</h4>
-                        <div className="grid grid-cols-2 gap-2">
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
                           {[
-                            { label: 'Surat Permohonan', file: detailData?.legal?.permohonan },
-                            { label: 'SK Penyelia Halal', file: detailData?.legal?.sk_penyelia },
-                            { label: 'SK Tim Manajemen', file: detailData?.legal?.sk_manajemen },
-                            { label: 'Kebijakan Halal', file: detailData?.legal?.kebijakan },
-                          ].map((doc, i) => (
-                            <div key={i} className="p-3 bg-slate-50 border rounded-xl flex items-center justify-between">
-                              <span className="font-semibold text-slate-700">{doc.label}</span>
-                              {doc.file ? (
-                                <a href={`/uploads/${doc.file}`} target="_blank" rel="noreferrer" className="text-emerald-600 font-bold hover:underline flex items-center gap-1">
-                                  Lihat File ↗
-                                </a>
-                              ) : (
-                                <span className="text-slate-400 italic">Belum diupload</span>
-                              )}
-                            </div>
-                          ))}
+                            { label: 'Surat Permohonan', raw: detailData?.legal?.permohonan },
+                            { label: 'SK Penyelia Halal', raw: detailData?.legal?.sk_penyelia },
+                            { label: 'SK Tim Manajemen', raw: detailData?.legal?.sk_manajemen },
+                            { label: 'Kebijakan Halal', raw: detailData?.legal?.kebijakan },
+                            { label: 'KTP Pemilik Usaha', raw: detailData?.legal?.ktp_pemilik || detailData?.legal?.ktpPemilik },
+                            { label: 'KTP Penyelia Halal', raw: detailData?.legal?.ktp_penyelia || detailData?.legal?.ktpPenyelia },
+                            { label: 'Tanda Tangan Pemilik', raw: detailData?.legal?.ttd_pemilik || detailData?.legal?.ttdPemilik },
+                            { label: 'Tanda Tangan Penyelia', raw: detailData?.legal?.ttd_penyelia || detailData?.legal?.ttdPenyelia },
+                          ].map((doc, i) => {
+                            const files = (doc.raw || '').split(',').map(f => f.trim()).filter(Boolean);
+                            return (
+                              <div key={i} className={`p-3 border rounded-xl flex flex-col gap-1.5 ${files.length ? 'bg-emerald-50/50 border-emerald-200' : 'bg-slate-50 border-slate-200'}`}>
+                                <div className="flex items-center justify-between">
+                                  <span className="font-semibold text-slate-700">{doc.label}</span>
+                                  {files.length === 0 && <span className="text-slate-400 italic">Belum diupload</span>}
+                                </div>
+                                {files.length > 0 && (
+                                  <div className="flex flex-col gap-1">
+                                    {files.map((f, fi) => (
+                                      <div key={fi} className="flex items-center justify-between gap-2 p-1.5 bg-white rounded-lg border border-emerald-100">
+                                        <span className="text-[11px] text-slate-600 font-mono truncate flex-1" title={f}>{f}</span>
+                                        <a href={getFullUrl(`/uploads/${f}`)} target="_blank" rel="noreferrer" className="text-emerald-600 font-bold hover:underline shrink-0 flex items-center gap-1 text-[11px]">
+                                          Lihat ↗
+                                        </a>
+                                      </div>
+                                    ))}
+                                  </div>
+                                )}
+                              </div>
+                            );
+                          })}
                         </div>
                       </div>
                     </div>
@@ -1040,15 +1055,18 @@ function ApplicationsPage({ onSelectCompany }) {
                   {detailTab === 'produksi' && (
                     <div className="space-y-3">
                       {[
-                        { label: 'Alur Proses Produksi', file: detailData?.production?.alurProses },
-                        { label: 'Layout Denah Ruang Produksi', file: detailData?.production?.layoutRuang },
-                        { label: 'Surat Pernyataan Bebas Babi', file: detailData?.production?.bebasBabi },
+                        { label: '1. Alur Proses Produksi', file: detailData?.production?.alurProses || detailData?.production?.alur_proses },
+                        { label: '2. Layout Ruang Produksi', file: detailData?.production?.layoutRuang || detailData?.production?.layout_ruang },
+                        { label: '3. Surat Pernyataan Bebas Babi Bermaterai', file: detailData?.production?.bebasBabi || detailData?.production?.bebas_babi },
                       ].map((item, i) => (
-                        <div key={i} className="p-4 bg-slate-50 border rounded-xl flex items-center justify-between">
-                          <span className="font-semibold text-slate-800">{item.label}</span>
+                        <div key={i} className={`p-4 border rounded-xl flex items-center justify-between ${item.file ? 'bg-emerald-50/50 border-emerald-200' : 'bg-slate-50 border-slate-200'}`}>
+                          <div>
+                            <span className="font-semibold text-slate-800">{item.label}</span>
+                            {item.file && <p className="text-[11px] text-slate-500 font-mono mt-0.5 truncate max-w-sm" title={item.file}>{item.file}</p>}
+                          </div>
                           {item.file ? (
-                            <a href={`/uploads/${item.file}`} target="_blank" rel="noreferrer" className="text-emerald-600 font-bold hover:underline flex items-center gap-1">
-                              Lihat Berkas ↗
+                            <a href={getFullUrl(`/uploads/${item.file}`)} target="_blank" rel="noreferrer" className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold rounded-lg transition-colors shadow-2xs">
+                              <Icons.Eye className="w-3.5 h-3.5"/> Buka Berkas ↗
                             </a>
                           ) : (
                             <span className="text-slate-400 italic">Belum diupload</span>
@@ -1391,6 +1409,7 @@ function CompanyDetailPage({ companyId, onBack }) {
   const [evidenceStageStatus, setEvidenceStageStatus] = useState('Belum Dimulai');
   const [activeTab, setActiveTab] = useState('overview');
   const [loading, setLoading] = useState(true);
+  const [companyFiles, setCompanyFiles] = useState([]);
   const [statusLoading, setStatusLoading] = useState(false);
   const [statusMsg, setStatusMsg] = useState('');
   const [isEditingAudit, setIsEditingAudit] = useState(false);
@@ -1399,7 +1418,7 @@ function CompanyDetailPage({ companyId, onBack }) {
 
   const fetchAll = useCallback(async () => {
     try {
-      const [compRes, legalRes, matRes, actRes, prodRes, productionRes, evidenceRes] = await Promise.all([
+      const [compRes, legalRes, matRes, actRes, prodRes, productionRes, evidenceRes, filesRes] = await Promise.all([
         adminFetch(`/api/admin/companies/${companyId}`),
         adminFetch(`/api/admin/companies/${companyId}/legal-documents`),
         adminFetch(`/api/admin/companies/${companyId}/materials`),
@@ -1407,6 +1426,7 @@ function CompanyDetailPage({ companyId, onBack }) {
         adminFetch(`/api/admin/companies/${companyId}/products`),
         adminFetch(`/api/admin/companies/${companyId}/production`),
         adminFetch(`/api/admin/companies/${companyId}/evidence`),
+        adminFetch(`/api/admin/companies/${companyId}/files`),
       ]);
       const compData = await compRes.json();
       setCompany(compData.company);
@@ -1428,6 +1448,8 @@ function CompanyDetailPage({ companyId, onBack }) {
       const evidenceData = await evidenceRes.json();
       setEvidence(evidenceData.evidence || null);
       setEvidenceStageStatus(evidenceData.stageStatus || 'Belum Dimulai');
+      const filesData = await filesRes.json().catch(() => ({ files: [] }));
+      setCompanyFiles(filesData.files || []);
     } catch (e) { console.error(e); }
     finally { setLoading(false); }
   }, [companyId]);
@@ -1515,8 +1537,18 @@ function CompanyDetailPage({ companyId, onBack }) {
   if (loading) return <LoadingState text="Memuat detail perusahaan..."/>;
   if (!company) return <EmptyState text="Perusahaan tidak ditemukan"/>;
 
-  const tabs = ['overview', 'registrasi', 'dokumen-legal', 'matrix-bahan', 'bom-produk', 'proses-produksi', 'evidence', 'sertifikasi-bpjph'];
-  const tabLabels = { 'overview': 'Overview', 'registrasi': 'Registrasi', 'dokumen-legal': 'Dokumen Legal', 'matrix-bahan': 'Matrix Bahan', 'bom-produk': 'BOM Produk', 'proses-produksi': 'Proses Produksi', 'evidence': 'Evidence (Bukti)', 'sertifikasi-bpjph': 'Sertifikasi BPJPH' };
+  const tabs = ['overview', 'registrasi', 'dokumen-legal', 'matrix-bahan', 'bom-produk', 'proses-produksi', 'evidence', 'arsip-berkas', 'sertifikasi-bpjph'];
+  const tabLabels = {
+    'overview': 'Overview',
+    'registrasi': 'Registrasi',
+    'dokumen-legal': 'Dokumen Legal',
+    'matrix-bahan': 'Matrix Bahan',
+    'bom-produk': 'BOM Produk',
+    'proses-produksi': 'Proses Produksi',
+    'evidence': 'Evidence (Bukti)',
+    'arsip-berkas': `Semua Berkas (${companyFiles.length})`,
+    'sertifikasi-bpjph': 'Sertifikasi BPJPH'
+  };
 
   return (
     <div className="space-y-6">
@@ -1698,31 +1730,48 @@ function CompanyDetailPage({ companyId, onBack }) {
             <h3 className="font-bold text-slate-800 mb-4">Dokumen yang Diupload</h3>
             <div className="space-y-3">
               {[
-                ['Permohonan Pendaftaran', legal.permohonan],
-                ['SK Penyelia Halal', legal.sk_penyelia],
-                ['SK Manajemen Halal', legal.sk_manajemen],
-                ['Kebijakan Halal Bermaterai', legal.kebijakan],
-                ['Tanda Tangan Pemilik', legal.ttd_pemilik],
-                ['Tanda Tangan Penyelia', legal.ttd_penyelia],
-              ].map(([label, filename]) => (
-                <div key={label} className={`flex items-center justify-between p-3 rounded-xl border ${filename ? 'bg-emerald-50 border-emerald-200' : 'bg-slate-50 border-slate-200'}`}>
-                  <div className="flex items-center gap-3">
-                    <Icons.FileText className={`w-4 h-4 ${filename ? 'text-emerald-600' : 'text-slate-400'}`}/>
-                    <div>
-                      <p className="text-xs font-semibold text-slate-800">{label}</p>
-                      {filename && <p className="text-[10px] text-slate-500 font-mono mt-0.5">{filename}</p>}
+                { label: 'Permohonan Pendaftaran', raw: legal.permohonan },
+                { label: 'SK Penyelia Halal', raw: legal.sk_penyelia },
+                { label: 'SK Manajemen Halal', raw: legal.sk_manajemen },
+                { label: 'Kebijakan Halal Bermaterai', raw: legal.kebijakan },
+                { label: 'KTP Pemilik Usaha', raw: legal.ktp_pemilik || legal.ktpPemilik },
+                { label: 'KTP Penyelia Halal', raw: legal.ktp_penyelia || legal.ktpPenyelia },
+                { label: 'Tanda Tangan Pemilik', raw: legal.ttd_pemilik || legal.ttdPemilik },
+                { label: 'Tanda Tangan Penyelia', raw: legal.ttd_penyelia || legal.ttdPenyelia },
+              ].map(({ label, raw }) => {
+                const files = (raw || '').split(',').map(f => f.trim()).filter(Boolean);
+                const hasFile = files.length > 0;
+                return (
+                  <div key={label} className={`p-3.5 rounded-xl border flex flex-col gap-2 ${hasFile ? 'bg-emerald-50/60 border-emerald-200' : 'bg-slate-50 border-slate-200'}`}>
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center gap-2.5">
+                        <Icons.FileText className={`w-4 h-4 ${hasFile ? 'text-emerald-600' : 'text-slate-400'}`}/>
+                        <span className="text-xs font-bold text-slate-800">{label}</span>
+                      </div>
+                      {!hasFile && <span className="text-[11px] text-slate-400 italic">Belum upload</span>}
                     </div>
+                    {hasFile && (
+                      <div className="space-y-1.5 pl-6">
+                        {files.map((file, idx) => (
+                          <div key={idx} className="flex items-center justify-between gap-2 p-2 bg-white rounded-lg border border-emerald-100">
+                            <span className="text-[11px] text-slate-600 font-mono truncate flex-1" title={file}>
+                              {idx + 1}. {file}
+                            </span>
+                            <a
+                              href={getFullUrl(`/uploads/${file}`)}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="inline-flex items-center gap-1 px-2.5 py-1 bg-emerald-600 hover:bg-emerald-700 text-white text-[11px] font-bold rounded-md transition-colors shadow-2xs whitespace-nowrap"
+                            >
+                              <Icons.Eye className="w-3 h-3"/> Lihat File
+                            </a>
+                          </div>
+                        ))}
+                      </div>
+                    )}
                   </div>
-                  {filename ? (
-                    <a href={`/uploads/${filename}`} target="_blank" rel="noopener noreferrer"
-                      className="text-[11px] font-bold text-emerald-600 hover:text-emerald-700 px-3 py-1.5 bg-emerald-50 hover:bg-emerald-100 border border-emerald-200 rounded-lg transition-colors">
-                      Lihat
-                    </a>
-                  ) : (
-                    <span className="text-[10px] text-slate-400 font-semibold">Belum upload</span>
-                  )}
-                </div>
-              ))}
+                );
+              })}
             </div>
           </div>
         </div>
@@ -1848,11 +1897,11 @@ function CompanyDetailPage({ companyId, onBack }) {
           ) : (
             <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
               {[
-                { label: '1. Alur Proses Produksi', key: 'alurProses', desc: 'Format: .jpeg / Gambar' },
-                { label: '2. Layout Ruang Produksi', key: 'layoutRuang', desc: 'Format: .jpeg / Denah Ruang' },
-                { label: '3. Surat Pernyataan Bebas Babi', key: 'bebasBabi', desc: 'Format: .pdf' },
-              ].map(({ label, key, desc }) => {
-                const filename = production[key];
+                { label: '1. Alur Proses Produksi', key: 'alurProses', altKey: 'alur_proses', desc: 'Format: .jpeg / .png / Gambar' },
+                { label: '2. Layout Ruang Produksi', key: 'layoutRuang', altKey: 'layout_ruang', desc: 'Format: .jpeg / .png / Denah Ruang' },
+                { label: '3. Surat Pernyataan Bebas Babi Bermaterai', key: 'bebasBabi', altKey: 'bebas_babi', desc: 'Format: .pdf' },
+              ].map(({ label, key, altKey, desc }) => {
+                const filename = production[key] || production[altKey];
                 return (
                   <div key={key} className={`p-5 rounded-2xl border ${filename ? 'bg-emerald-50 border-emerald-200' : 'bg-slate-50 border-slate-200'}`}>
                     <h4 className="font-bold text-sm text-slate-800 mb-1">{label}</h4>
@@ -1861,12 +1910,12 @@ function CompanyDetailPage({ companyId, onBack }) {
                       <div>
                         <p className="text-xs text-slate-500 font-mono mb-2 truncate" title={filename}>{filename}</p>
                         <a
-                          href={`/uploads/${filename}`}
+                          href={getFullUrl(`/uploads/${filename}`)}
                           target="_blank"
                           rel="noopener noreferrer"
                           className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold rounded-lg transition-colors shadow-sm"
                         >
-                          <Icons.Eye className="w-3.5 h-3.5"/> Lihat File
+                          <Icons.Eye className="w-3.5 h-3.5"/> Lihat File ↗
                         </a>
                       </div>
                     ) : (
@@ -1943,6 +1992,71 @@ function CompanyDetailPage({ companyId, onBack }) {
                   </div>
                 );
               })}
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* TAB: ARSIP SEMUA BERKAS TERUPLOAD */}
+      {activeTab === 'arsip-berkas' && (
+        <div className="bg-white border border-slate-200 rounded-2xl p-6 shadow-sm">
+          <div className="flex flex-col md:flex-row md:items-center justify-between gap-2 mb-5">
+            <div>
+              <h3 className="font-bold text-slate-800 text-base">Arsip Lengkap Berkas Terupload</h3>
+              <p className="text-xs text-slate-500 mt-0.5">Semua file fisik yang diunggah oleh perusahaan ini tercatat lengkap di bawah ini.</p>
+            </div>
+            <span className="text-xs font-bold px-3 py-1 bg-emerald-50 text-emerald-800 border border-emerald-200 rounded-full shrink-0">
+              Total {companyFiles.length} berkas
+            </span>
+          </div>
+
+          {companyFiles.length === 0 ? (
+            <EmptyState text="Belum ada berkas terupload" sub="Perusahaan belum pernah mengunggah berkas ke sistem" />
+          ) : (
+            <div className="overflow-x-auto border border-slate-200 rounded-xl">
+              <table className="w-full text-xs text-left">
+                <thead className="bg-slate-50 border-b border-slate-200 text-slate-600 font-bold">
+                  <tr>
+                    <th className="p-3 w-10">No</th>
+                    <th className="p-3">Nama Berkas Asli</th>
+                    <th className="p-3">Nama di Server</th>
+                    <th className="p-3">Kategori</th>
+                    <th className="p-3">Ukuran</th>
+                    <th className="p-3">Tanggal Unggah</th>
+                    <th className="p-3 text-center w-28">Aksi</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-slate-100">
+                  {companyFiles.map((f, idx) => (
+                    <tr key={f.id || idx} className="hover:bg-slate-50">
+                      <td className="p-3 text-slate-400">{idx + 1}</td>
+                      <td className="p-3 font-semibold text-slate-800 break-all">{f.original_name || f.stored_name}</td>
+                      <td className="p-3 font-mono text-slate-500 break-all">{f.stored_name}</td>
+                      <td className="p-3">
+                        <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-slate-100 text-slate-700">
+                          {f.document_type || 'Umum'}
+                        </span>
+                      </td>
+                      <td className="p-3 text-slate-500 whitespace-nowrap">
+                        {f.file_size ? `${(f.file_size / 1024).toFixed(1)} KB` : '-'}
+                      </td>
+                      <td className="p-3 text-slate-500 whitespace-nowrap">
+                        {f.created_at ? new Date(f.created_at).toLocaleString('id-ID') : '-'}
+                      </td>
+                      <td className="p-3 text-center">
+                        <a
+                          href={getFullUrl(`/uploads/${f.stored_name}`)}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="inline-flex items-center gap-1 px-2.5 py-1 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg font-bold text-[11px] shadow-2xs"
+                        >
+                          <Icons.Eye className="w-3 h-3"/> Lihat ↗
+                        </a>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
             </div>
           )}
         </div>
