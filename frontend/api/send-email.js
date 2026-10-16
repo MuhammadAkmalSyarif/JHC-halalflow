@@ -1,6 +1,4 @@
 import nodemailer from 'nodemailer';
-import fs from 'fs';
-import path from 'path';
 
 export default async function handler(req, res) {
   if (req.method !== 'POST') {
@@ -25,31 +23,6 @@ export default async function handler(req, res) {
     }
   });
 
-  const possibleLogoPaths = [
-    path.join(process.cwd(), 'frontend', 'public', 'logo.jpg'),
-    path.join(process.cwd(), 'public', 'logo.jpg'),
-    path.join(process.cwd(), 'backend', 'logo.jpg'),
-    path.join(process.cwd(), 'logo.jpg')
-  ];
-  let foundLogoPath = null;
-  for (const p of possibleLogoPaths) {
-    if (fs.existsSync(p)) {
-      foundLogoPath = p;
-      break;
-    }
-  }
-
-  const attachments = [];
-  let logoSrc = 'https://www.halalflow.or.id/logo.jpg';
-  if (foundLogoPath) {
-    logoSrc = 'cid:jhc_logo';
-    attachments.push({
-      filename: 'logo.jpg',
-      path: foundLogoPath,
-      cid: 'jhc_logo'
-    });
-  }
-
   const mailOptions = {
     from: process.env.EMAIL_FROM || `"JHC HalalFlow" <${process.env.SMTP_USER}>`,
     to: email,
@@ -57,9 +30,6 @@ export default async function handler(req, res) {
     html: `
       <div style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; max-width: 500px; margin: 0 auto; padding: 32px 24px; background: #ffffff; border: 1px solid #e2e8f0; border-radius: 16px;">
         <div style="text-align: center; margin-bottom: 24px;">
-          <div style="margin-bottom: 14px; display: inline-block;">
-            <img src="${logoSrc}" alt="JHC HalalFlow" width="76" height="76" style="display: block; width: 76px; height: 76px; object-fit: contain; border-radius: 14px; border: 1px solid #e2e8f0; padding: 4px; background-color: #ffffff; box-shadow: 0 4px 12px rgba(5, 150, 105, 0.08); margin: 0 auto;" />
-          </div>
           <h2 style="color: #059669; margin: 0; font-size: 24px; font-weight: 800; letter-spacing: -0.5px;">JHC HalalFlow</h2>
           <p style="color: #64748b; margin: 4px 0 0 0; font-size: 13px;">Sistem Manajemen Sertifikasi Halal</p>
         </div>
@@ -77,8 +47,7 @@ export default async function handler(req, res) {
           </p>
         </div>
       </div>
-    `,
-    ...(attachments.length > 0 ? { attachments } : {})
+    `
   };
 
   try {
