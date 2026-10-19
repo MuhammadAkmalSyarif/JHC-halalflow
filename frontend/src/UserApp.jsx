@@ -386,10 +386,23 @@ export default function UserApp() {
       });
       const data = await res.json().catch(() => ({}));
       if (res.ok && data.filename) {
-        setLocalStateVal(prev => ({
-          ...prev,
-          [fieldName]: data.filename
-        }));
+        const fieldMapping = {
+          alurProses: ['alurProses', 'alur_proses'],
+          layoutRuang: ['layoutRuang', 'layout_ruang'],
+          bebasBabi: ['bebasBabi', 'bebas_babi'],
+          ttdPemilik: ['ttdPemilik', 'ttd_pemilik'],
+          ktpPemilik: ['ktpPemilik', 'ktp_pemilik'],
+          ttdPenyelia: ['ttdPenyelia', 'ttd_penyelia'],
+          ktpPenyelia: ['ktpPenyelia', 'ktp_penyelia']
+        };
+        const keysToSet = fieldMapping[fieldName] || [fieldName];
+        setLocalStateVal(prev => {
+          const next = { ...prev };
+          keysToSet.forEach(k => {
+            next[k] = data.filename;
+          });
+          return next;
+        });
         showToast('Berkas berhasil diunggah.');
         return data.filename;
       } else {
@@ -1130,8 +1143,19 @@ const StepDokumen = ({ legalData, setLegalData, handleGenericFileUpload, handleM
   const handleUploadSingleLegal = async (e, field) => {
     const filename = await handleGenericFileUpload(e, field, setLegalData);
     if (filename) {
+      const legalSingleMap = {
+        ttdPemilik: ['ttdPemilik', 'ttd_pemilik'],
+        ktpPemilik: ['ktpPemilik', 'ktp_pemilik'],
+        ttdPenyelia: ['ttdPenyelia', 'ttd_penyelia'],
+        ktpPenyelia: ['ktpPenyelia', 'ktp_penyelia']
+      };
+      const keysToUpdate = legalSingleMap[field] || [field];
+
       setLegalData(prev => {
-        const updated = { ...prev, [field]: filename };
+        const updated = { ...prev };
+        keysToUpdate.forEach(k => {
+          updated[k] = filename;
+        });
         apiFetch('/api/legal', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
@@ -1186,7 +1210,17 @@ const StepDokumen = ({ legalData, setLegalData, handleGenericFileUpload, handleM
         updatedVal = '';
       }
 
-      const updated = { ...legalData, [field]: updatedVal };
+      const legalSingleMap = {
+        ttdPemilik: ['ttdPemilik', 'ttd_pemilik'],
+        ktpPemilik: ['ktpPemilik', 'ktp_pemilik'],
+        ttdPenyelia: ['ttdPenyelia', 'ttd_penyelia'],
+        ktpPenyelia: ['ktpPenyelia', 'ktp_penyelia']
+      };
+      const keysToUpdate = isMulti ? [field] : (legalSingleMap[field] || [field]);
+      const updated = { ...legalData };
+      keysToUpdate.forEach(k => {
+        updated[k] = updatedVal;
+      });
       setLegalData(updated);
 
       await apiFetch('/api/legal', {
@@ -2349,7 +2383,17 @@ const StepProsesProduksi = ({ productionData, setProductionData, handleGenericFi
 
     setDeletingFile(filename);
     try {
-      const updated = { ...productionData, [field]: '' };
+      const fieldMapping = {
+        alurProses: ['alurProses', 'alur_proses'],
+        layoutRuang: ['layoutRuang', 'layout_ruang'],
+        bebasBabi: ['bebasBabi', 'bebas_babi']
+      };
+      const keysToClear = fieldMapping[field] || [field];
+      const updated = { ...productionData };
+      keysToClear.forEach(k => {
+        updated[k] = '';
+      });
+      // Optimistic update so UI card immediately switches to empty dropzone
       setProductionData(updated);
 
       await apiFetch('/api/production', {
@@ -2376,8 +2420,18 @@ const StepProsesProduksi = ({ productionData, setProductionData, handleGenericFi
   const handleUploadSingle = async (e, field) => {
     const filename = await handleGenericFileUpload(e, field, setProductionData);
     if (filename) {
+      const fieldMapping = {
+        alurProses: ['alurProses', 'alur_proses'],
+        layoutRuang: ['layoutRuang', 'layout_ruang'],
+        bebasBabi: ['bebasBabi', 'bebas_babi']
+      };
+      const keysToSet = fieldMapping[field] || [field];
+
       setProductionData(prev => {
-        const updated = { ...prev, [field]: filename };
+        const updated = { ...prev };
+        keysToSet.forEach(k => {
+          updated[k] = filename;
+        });
         apiFetch('/api/production', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },

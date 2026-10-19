@@ -1274,8 +1274,11 @@ app.post('/api/production', authMiddleware, async (req, res) => {
   const { alurProses, layoutRuang, bebasBabi } = req.body;
   const existing = await db.prepare('SELECT id FROM production_data WHERE company_id=?').get(company.id);
   if (existing) {
+    const newAlur = alurProses !== undefined ? alurProses : (existing.alur_proses || '');
+    const newLayout = layoutRuang !== undefined ? layoutRuang : (existing.layout_ruang || '');
+    const newBabi = bebasBabi !== undefined ? bebasBabi : (existing.bebas_babi || '');
     await db.prepare(`UPDATE production_data SET alur_proses=?, layout_ruang=?, bebas_babi=?, updated_at=datetime('now') WHERE company_id=?`)
-      .run(alurProses||existing.alur_proses, layoutRuang||existing.layout_ruang, bebasBabi||existing.bebas_babi, company.id);
+      .run(newAlur, newLayout, newBabi, company.id);
   } else {
     await db.prepare(`INSERT INTO production_data (company_id, alur_proses, layout_ruang, bebas_babi) VALUES (?,?,?,?)`)
       .run(company.id, alurProses||'', layoutRuang||'', bebasBabi||'');

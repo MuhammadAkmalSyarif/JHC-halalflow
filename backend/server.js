@@ -1226,7 +1226,7 @@ app.delete('/api/upload/:filename', authMiddleware, async (req, res) => {
 
   // Hapus dari tabel uploaded_files jika ada
   try {
-    await db.prepare('DELETE FROM uploaded_files WHERE stored_name = ?').run(safeFilename);
+    await db.prepare('DELETE FROM uploaded_files WHERE stored_name = ? OR stored_name = ? OR original_name = ?').run(safeFilename, req.params.filename, safeFilename);
   } catch (err) {
     console.error('Gagal menghapus log uploaded_files:', err);
   }
@@ -1236,11 +1236,21 @@ app.delete('/api/upload/:filename', authMiddleware, async (req, res) => {
     const userId = req.user.id;
     const company = await db.prepare('SELECT id FROM companies WHERE user_id=?').get(userId);
     if (company) {
-      const cleanList = (val) => {
-        if (!val) return val;
-        return val.split(',').map(s => s.trim()).filter(s => s && s !== safeFilename).join(',');
+      const isMatch = (val) => {
+        if (!val) return false;
+        const s = String(val).trim();
+        const base = path.basename(s);
+        return s === safeFilename || base === safeFilename || s === req.params.filename || base === req.params.filename;
       };
-      const cleanSingle = (val) => (val === safeFilename ? '' : val);
+
+      const cleanList = (val) => {
+        if (!val) return '';
+        return val.split(',')
+          .map(s => s.trim())
+          .filter(s => s && !isMatch(s))
+          .join(',');
+      };
+      const cleanSingle = (val) => (isMatch(val) ? '' : (val || ''));
 
       const evRow = await db.prepare('SELECT * FROM evidence_data WHERE company_id=?').get(company.id);
       if (evRow) {
@@ -1755,8 +1765,8 @@ app.get('/api/production', authMiddleware, async (req, res) => {
   let layoutRuang = row?.layout_ruang || row?.layoutRuang || row?.layoutruang || '';
   let bebasBabi = row?.bebas_babi || row?.bebasBabi || row?.bebasbabi || '';
 
-  // Fallback: search uploaded_files if any field is empty
-  if (!alurProses || !layoutRuang || !bebasBabi) {
+  // Fallback: search uploaded_files ONLY if no production_data record exists at all for this company
+  if (!row) {
     try {
       const uploaded = await db.prepare('SELECT stored_name, original_name, document_type FROM uploaded_files WHERE company_id=? ORDER BY id DESC').all(company.id);
       for (const f of uploaded) {
@@ -1773,13 +1783,8 @@ app.get('/api/production', authMiddleware, async (req, res) => {
         }
       }
       if (alurProses || layoutRuang || bebasBabi) {
-        if (row) {
-          await db.prepare("UPDATE production_data SET alur_proses=coalesce(nullif(alur_proses,''), ?), layout_ruang=coalesce(nullif(layout_ruang,''), ?), bebas_babi=coalesce(nullif(bebas_babi,''), ?), updated_at=datetime('now') WHERE company_id=?")
-            .run(alurProses, layoutRuang, bebasBabi, company.id);
-        } else {
-          await db.prepare('INSERT INTO production_data (company_id, alur_proses, layout_ruang, bebas_babi) VALUES (?,?,?,?)')
-            .run(company.id, alurProses, layoutRuang, bebasBabi);
-        }
+        await db.prepare('INSERT INTO production_data (company_id, alur_proses, layout_ruang, bebas_babi) VALUES (?,?,?,?)')
+          .run(company.id, alurProses, layoutRuang, bebasBabi);
       }
     } catch(err) {
       console.warn('Production fallback lookup warning:', err.message);
@@ -1797,9 +1802,20 @@ app.post('/api/production', authMiddleware, async (req, res) => {
   const userId = req.user.id;
   const company = await db.prepare('SELECT id FROM companies WHERE user_id=?').get(userId);
   if (!company) return res.status(404).json({ error: 'Perusahaan tidak ditemukan' });
-  const alurProses = req.body.alurProses !== undefined ? req.body.alurProses : req.body.alur_proses;
-  const layoutRuang = req.body.layoutRuang !== undefined ? req.body.layoutRuang : req.body.layout_ruang;
-  const bebasBabi = req.body.bebasBabi !== undefined ? req.body.bebasBabi : req.body.bebas_babi;
+
+  const resolveVal = (camel, snake) => {
+    if (camel !== undefined && snake !== undefined) {
+      if (camel === '' || snake === '') return '';
+      return camel;
+    }
+    if (camel !== undefined) return camel;
+    if (snake !== undefined) return snake;
+    return undefined;
+  };
+
+  const alurProses = resolveVal(req.body.alurProses, req.body.alur_proses);
+  const layoutRuang = resolveVal(req.body.layoutRuang, req.body.layout_ruang);
+  const bebasBabi = resolveVal(req.body.bebasBabi, req.body.bebas_babi);
 
   const existing = await db.prepare('SELECT * FROM production_data WHERE company_id=?').get(company.id);
   if (existing) {
@@ -1807,13 +1823,12 @@ app.post('/api/production', authMiddleware, async (req, res) => {
     const prevLayout = existing.layout_ruang || existing.layoutRuang || existing.layoutruang || '';
     const prevBabi = existing.bebas_babi || existing.bebasBabi || existing.bebasbabi || '';
 
+    const newAlur = alurProses !== undefined ? alurProses : prevAlur;
+    const newLayout = layoutRuang !== undefined ? layoutRuang : prevLayout;
+    const newBabi = bebasBabi !== undefined ? bebasBabi : prevBabi;
+
     await db.prepare(`UPDATE production_data SET alur_proses=?, layout_ruang=?, bebas_babi=?, updated_at=datetime('now') WHERE company_id=?`)
-      .run(
-        alurProses !== undefined ? alurProses : prevAlur,
-        layoutRuang !== undefined ? layoutRuang : prevLayout,
-        bebasBabi !== undefined ? bebasBabi : prevBabi,
-        company.id
-      );
+      .run(newAlur, newLayout, newBabi, company.id);
   } else {
     await db.prepare(`INSERT INTO production_data (company_id, alur_proses, layout_ruang, bebas_babi) VALUES (?,?,?,?)`)
       .run(company.id, alurProses||'', layoutRuang||'', bebasBabi||'');
@@ -3294,8 +3309,8 @@ app.get('/api/admin/companies/:id/production', adminAuthMiddleware, async (req, 
     let layoutRuang = row?.layout_ruang || row?.layoutRuang || row?.layoutruang || '';
     let bebasBabi = row?.bebas_babi || row?.bebasBabi || row?.bebasbabi || '';
 
-    // Fallback: check uploaded_files table if any field is empty
-    if (!alurProses || !layoutRuang || !bebasBabi) {
+    // Fallback: check uploaded_files table only if row does not exist at all
+    if (!row) {
       try {
         const uploaded = await db.prepare('SELECT stored_name, original_name, document_type FROM uploaded_files WHERE company_id=? ORDER BY id DESC').all(companyId);
         for (const f of uploaded) {
@@ -3313,13 +3328,8 @@ app.get('/api/admin/companies/:id/production', adminAuthMiddleware, async (req, 
         }
         // Auto-heal production_data if any file was found
         if (alurProses || layoutRuang || bebasBabi) {
-          if (row) {
-            await db.prepare("UPDATE production_data SET alur_proses=coalesce(nullif(alur_proses,''), ?), layout_ruang=coalesce(nullif(layout_ruang,''), ?), bebas_babi=coalesce(nullif(bebas_babi,''), ?), updated_at=datetime('now') WHERE company_id=?")
-              .run(alurProses, layoutRuang, bebasBabi, companyId);
-          } else {
-            await db.prepare('INSERT INTO production_data (company_id, alur_proses, layout_ruang, bebas_babi) VALUES (?,?,?,?)')
-              .run(companyId, alurProses, layoutRuang, bebasBabi);
-          }
+          await db.prepare('INSERT INTO production_data (company_id, alur_proses, layout_ruang, bebas_babi) VALUES (?,?,?,?)')
+            .run(companyId, alurProses, layoutRuang, bebasBabi);
         }
       } catch(lookupErr) {
         console.warn('Production admin fallback lookup warning:', lookupErr.message);
