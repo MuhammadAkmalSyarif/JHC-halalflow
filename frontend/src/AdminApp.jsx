@@ -2079,7 +2079,7 @@ function CompanyDetailPage({ companyId, onBack }) {
                 { label: '2. Bukti Foto Audit Internal', key: 'auditInternalFoto' },
                 { label: '3. Daftar Hadir Sosialisasi Halal', key: 'sosialisasiAbsen' },
                 { label: '4. Daftar Hadir Audit Internal', key: 'auditInternalAbsen' },
-                { label: '5. Sampel Catatan Pembelian Bahan', key: 'pembelianBahan' },
+                { label: '5. Catatan Pembelian Bahan', key: 'pembelianBahan' },
                 { label: '6. Catatan Penyimpanan Bahan', key: 'penyimpananBahan' },
                 { label: '7. Catatan Hasil Produksi', key: 'hasilProduksi' },
                 { label: '8. Bukti Distribusi/Penjualan', key: 'distribusiProduk' },

@@ -2652,7 +2652,7 @@ const StepUploadEvidence = ({ evidenceData, setEvidenceData, handleGenericFileUp
         </div>
 
         <div className="p-4 border rounded-xl bg-slate-50">
-          <h4 className="font-semibold text-sm text-slate-800 mb-1">5. Sampel Catatan Pembelian Bahan</h4>
+          <h4 className="font-semibold text-sm text-slate-800 mb-1">5. Catatan Pembelian Bahan</h4>
           <p className="text-xs text-slate-400 mb-2">Format: PDF, Word, atau Gambar (JPG, PNG)</p>
           <input type="file" name="pembelianBahan" accept=".pdf,.doc,.docx,image/*,.jpg,.jpeg,.png" onChange={(e) => handleUploadSingle(e, 'pembelianBahan')} className="block w-full text-xs text-slate-500 file:cursor-pointer file:mr-3 file:m-1 file:py-2 file:px-4 file:rounded-md file:border-0 file:font-bold file:bg-emerald-600 file:text-white hover:file:bg-emerald-700 file:transition-colors border border-slate-200 rounded-lg bg-white cursor-pointer hover:border-emerald-300 transition-colors shadow-2xs focus:outline-none" />
           {evidenceData.pembelianBahan && (
