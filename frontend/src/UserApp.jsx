@@ -1,7 +1,14 @@
 import React, { useState, useEffect } from 'react';
 import * as XLSX from 'xlsx';
 import { showConfirm, showAlert, showToast } from './utils/swalHelpers';
-import { UploadedFileList, UploadedSingleFileCard } from './components/FileDisplay';
+import {
+  UploadedFileList,
+  UploadedSingleFileCard,
+  ImagePreviewModal,
+  getCleanFileName,
+  getFullFileUrl,
+  getFileCategory
+} from './components/FileDisplay';
 
 // SVG Icons helper component
 const Icons = {
@@ -31,7 +38,11 @@ const Icons = {
   Menu: (props) => <svg {...props} fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M4 6h16M4 12h16M4 18h16"/></svg>,
   CheckCircle: (props) => <svg {...props} fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>,
   AlertCircle: (props) => <svg {...props} fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>,
-  Send: (props) => <svg {...props} fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8"/></svg>
+  Send: (props) => <svg {...props} fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8"/></svg>,
+  Eye: (props) => <svg {...props} fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"/><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z"/></svg>,
+  Refresh: (props) => <svg {...props} fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/></svg>,
+  ZoomIn: (props) => <svg {...props} fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0zM10 7v6m3-3H7"/></svg>,
+  FilePdf: (props) => <svg {...props} fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M7 21h10a2 2 0 002-2V9.414a1 1 0 00-.293-.707l-5.414-5.414A1 1 0 0012.586 3H7a2 2 0 00-2 2v14a2 2 0 002 2z"/><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 13h6m-6 4h4M9 9h2"/></svg>
 };
 
 const Card = ({ children, className = "" }) => (
@@ -2299,10 +2310,38 @@ const StepUploadProduk = ({ products, setProducts, materials, productsSubmitted,
 const StepProsesProduksi = ({ productionData, setProductionData, handleGenericFileUpload }) => {
   const [successMsg, setSuccessMsg] = useState('');
   const [deletingFile, setDeletingFile] = useState('');
+  const [previewImage, setPreviewImage] = useState(null);
 
   const currentAlur = productionData?.alurProses || productionData?.alur_proses || '';
   const currentLayout = productionData?.layoutRuang || productionData?.layout_ruang || '';
   const currentBebasBabi = productionData?.bebasBabi || productionData?.bebas_babi || '';
+
+  const productionCards = [
+    {
+      key: 'alurProses',
+      label: '1. Alur Proses Produksi',
+      desc: 'Format: .jpeg / .png / Gambar',
+      accept: 'image/*,.jpeg,.jpg,.png,.jfif',
+      isImage: true,
+      file: currentAlur
+    },
+    {
+      key: 'layoutRuang',
+      label: '2. Layout Ruang Produksi',
+      desc: 'Format: .jpeg / .png / Denah Ruang',
+      accept: 'image/*,.jpeg,.jpg,.png,.jfif',
+      isImage: true,
+      file: currentLayout
+    },
+    {
+      key: 'bebasBabi',
+      label: '3. Surat Pernyataan Bebas Babi Bermaterai',
+      desc: 'Format: .pdf',
+      accept: '.pdf,application/pdf',
+      isImage: false,
+      file: currentBebasBabi
+    }
+  ];
 
   const handleDeleteProductionFile = async (field, filename) => {
     const confirmDelete = await showConfirm(`Apakah Anda yakin ingin menghapus berkas ini?`);
@@ -2388,54 +2427,159 @@ const StepProsesProduksi = ({ productionData, setProductionData, handleGenericFi
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-        <div className="p-5 border rounded-2xl bg-slate-50 flex flex-col justify-between hover:border-emerald-200 transition-colors">
-          <div>
-            <h4 className="font-bold text-sm text-slate-800 mb-1">1. Alur Proses Produksi</h4>
-            <p className="text-xs text-slate-500 mb-4">Format: .jpeg / .png / Gambar</p>
-            <input type="file" name="alurProses" accept="image/*,.jpeg,.jpg,.png,.jfif" onChange={(e) => handleUploadSingle(e, 'alurProses')} className="w-full text-xs text-slate-500 file:mr-2 file:py-1.5 file:px-3 file:rounded-lg file:border-0 file:bg-emerald-50 file:text-emerald-700" />
-          </div>
-          {currentAlur && (
-            <UploadedSingleFileCard
-              file={currentAlur}
-              label="Alur Proses Produksi"
-              onDelete={(f) => handleDeleteProductionFile('alurProses', f)}
-              isDeleting={deletingFile === currentAlur}
-            />
-          )}
-        </div>
+        {productionCards.map((card) => {
+          const rawFile = (card.file || '').trim();
+          const hasFile = Boolean(rawFile);
+          const cleanName = getCleanFileName(rawFile);
+          const fileUrl = getFullFileUrl(`/uploads/${rawFile}`);
+          const isDeleting = deletingFile === rawFile;
 
-        <div className="p-5 border rounded-2xl bg-slate-50 flex flex-col justify-between hover:border-emerald-200 transition-colors">
-          <div>
-            <h4 className="font-bold text-sm text-slate-800 mb-1">2. Layout Ruang Produksi</h4>
-            <p className="text-xs text-slate-500 mb-4">Format: .jpeg / .png / Denah Ruang</p>
-            <input type="file" name="layoutRuang" accept="image/*,.jpeg,.jpg,.png,.jfif" onChange={(e) => handleUploadSingle(e, 'layoutRuang')} className="w-full text-xs text-slate-500 file:mr-2 file:py-1.5 file:px-3 file:rounded-lg file:border-0 file:bg-emerald-50 file:text-emerald-700" />
-          </div>
-          {currentLayout && (
-            <UploadedSingleFileCard
-              file={currentLayout}
-              label="Layout Ruang Produksi"
-              onDelete={(f) => handleDeleteProductionFile('layoutRuang', f)}
-              isDeleting={deletingFile === currentLayout}
-            />
-          )}
-        </div>
+          return (
+            <div
+              key={card.key}
+              className={`p-5 border rounded-2xl flex flex-col justify-between transition-all duration-200 ${
+                hasFile
+                  ? 'bg-linear-to-b from-emerald-50/40 via-white to-white border-emerald-200 shadow-2xs hover:shadow-xs'
+                  : 'bg-slate-50/80 border-slate-200 hover:border-emerald-300'
+              }`}
+            >
+              <div>
+                {/* Header */}
+                <div className="flex items-start justify-between gap-2 mb-1">
+                  <h4 className="font-bold text-sm text-slate-800 leading-snug">
+                    {card.label}
+                  </h4>
+                  {hasFile ? (
+                    <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-emerald-100 text-emerald-800 border border-emerald-200 shrink-0">
+                      <Icons.CheckCircle className="w-3 h-3 text-emerald-600" /> Siap
+                    </span>
+                  ) : (
+                    <span className="text-[10px] font-semibold text-slate-400 bg-slate-100 px-2 py-0.5 rounded-full border border-slate-200 shrink-0">
+                      Belum Ada
+                    </span>
+                  )}
+                </div>
+                <p className="text-xs text-slate-500 mb-4">{card.desc}</p>
 
-        <div className="p-5 border rounded-2xl bg-slate-50 flex flex-col justify-between hover:border-emerald-200 transition-colors">
-          <div>
-            <h4 className="font-bold text-sm text-slate-800 mb-1">3. Surat Pernyataan Bebas Babi Bermaterai</h4>
-            <p className="text-xs text-slate-500 mb-4">Format: .pdf</p>
-            <input type="file" name="bebasBabi" accept=".pdf,application/pdf" onChange={(e) => handleUploadSingle(e, 'bebasBabi')} className="w-full text-xs text-slate-500 file:mr-2 file:py-1.5 file:px-3 file:rounded-lg file:border-0 file:bg-emerald-50 file:text-emerald-700" />
-          </div>
-          {currentBebasBabi && (
-            <UploadedSingleFileCard
-              file={currentBebasBabi}
-              label="Pernyataan Bebas Babi"
-              onDelete={(f) => handleDeleteProductionFile('bebasBabi', f)}
-              isDeleting={deletingFile === currentBebasBabi}
-            />
-          )}
-        </div>
+                {/* Uploaded state preview */}
+                {hasFile ? (
+                  <div className="space-y-3">
+                    {/* Visual Preview */}
+                    {card.isImage ? (
+                      <div
+                        onClick={() => setPreviewImage({ url: fileUrl, name: cleanName })}
+                        className="relative h-36 w-full rounded-xl overflow-hidden bg-slate-100/80 border border-emerald-100 group cursor-pointer shadow-2xs hover:border-emerald-400 transition-all flex items-center justify-center"
+                        title="Klik untuk memperbesar gambar"
+                      >
+                        <img
+                          src={fileUrl}
+                          alt={cleanName}
+                          className="w-full h-full object-contain p-2 group-hover:scale-105 transition-transform duration-200"
+                        />
+                        <div className="absolute inset-0 bg-slate-900/40 opacity-0 group-hover:opacity-100 flex items-center justify-center gap-1.5 text-white text-xs font-bold transition-opacity backdrop-blur-2xs">
+                          <Icons.ZoomIn className="w-4 h-4 drop-shadow" /> Perbesar
+                        </div>
+                      </div>
+                    ) : (
+                      <div className="h-36 w-full rounded-xl bg-linear-to-b from-rose-50/70 to-rose-100/40 border border-rose-200/90 flex flex-col items-center justify-center p-3 text-center shadow-2xs">
+                        <div className="w-12 h-12 rounded-xl bg-white shadow-2xs border border-rose-200 flex items-center justify-center text-rose-600 mb-2">
+                          <Icons.FilePdf className="w-7 h-7" />
+                        </div>
+                        <span className="text-[10px] font-black uppercase tracking-wider text-rose-700 bg-rose-100/90 px-2.5 py-0.5 rounded-md border border-rose-200">
+                          DOKUMEN PDF
+                        </span>
+                      </div>
+                    )}
+
+                    {/* File Info */}
+                    <div className="bg-white p-2.5 rounded-xl border border-slate-200 shadow-2xs">
+                      <p className="text-xs font-bold text-slate-800 truncate" title={rawFile}>
+                        {cleanName}
+                      </p>
+                      <div className="flex items-center justify-between text-[10px] mt-1 pt-1 border-t border-slate-100">
+                        <span className="text-emerald-700 font-semibold flex items-center gap-1">
+                          <span className="w-1.5 h-1.5 rounded-full bg-emerald-500"></span>
+                          ✓ Terunggah
+                        </span>
+                        <span className="font-mono uppercase text-slate-400">
+                          {card.isImage ? 'GAMBAR' : 'PDF'}
+                        </span>
+                      </div>
+                    </div>
+                  </div>
+                ) : (
+                  /* Empty state: Dropzone */
+                  <label className="flex flex-col items-center justify-center border-2 border-dashed border-slate-300 hover:border-emerald-500 bg-white hover:bg-emerald-50/30 rounded-2xl p-6 text-center cursor-pointer transition-all group min-h-45">
+                    <input
+                      type="file"
+                      name={card.key}
+                      accept={card.accept}
+                      onChange={(e) => handleUploadSingle(e, card.key)}
+                      className="hidden"
+                    />
+                    <div className="w-12 h-12 rounded-2xl bg-emerald-50 group-hover:bg-emerald-100 border border-emerald-100 text-emerald-600 flex items-center justify-center mb-3 group-hover:scale-105 transition-all shadow-2xs">
+                      <Icons.Upload className="w-6 h-6" />
+                    </div>
+                    <span className="text-xs font-bold text-slate-700 group-hover:text-emerald-700 transition-colors">
+                      Pilih Berkas
+                    </span>
+                    <span className="text-[11px] text-slate-400 mt-0.5">
+                      Klik untuk mengunggah
+                    </span>
+                    <span className="mt-3 inline-flex items-center gap-1 px-3 py-1 bg-emerald-50 group-hover:bg-emerald-600 text-emerald-700 group-hover:text-white rounded-lg text-[11px] font-bold transition-colors">
+                      Unggah File
+                    </span>
+                  </label>
+                )}
+              </div>
+
+              {/* Action buttons (Only when file is uploaded) */}
+              {hasFile && (
+                <div className="pt-3 mt-4 border-t border-emerald-100/80 space-y-2">
+                  <div className="grid grid-cols-2 gap-2">
+                    <a
+                      href={fileUrl}
+                      target="_blank"
+                      rel="noreferrer"
+                      className="inline-flex items-center justify-center gap-1 px-2.5 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-bold transition-colors shadow-2xs"
+                      title="Buka berkas di tab baru"
+                    >
+                      <Icons.Eye className="w-3.5 h-3.5" /> Buka ↗
+                    </a>
+                    <label className="inline-flex items-center justify-center gap-1 px-2.5 py-2 bg-white hover:bg-slate-50 text-slate-700 border border-slate-200 hover:border-slate-300 rounded-xl text-xs font-bold transition-colors cursor-pointer shadow-2xs">
+                      <Icons.Refresh className="w-3.5 h-3.5 text-slate-500" /> Ganti
+                      <input
+                        type="file"
+                        name={card.key}
+                        accept={card.accept}
+                        onChange={(e) => handleUploadSingle(e, card.key)}
+                        className="hidden"
+                      />
+                    </label>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => handleDeleteProductionFile(card.key, rawFile)}
+                    disabled={isDeleting}
+                    className="w-full inline-flex items-center justify-center gap-1 px-2.5 py-1.5 text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded-lg text-xs font-semibold transition-colors disabled:opacity-50"
+                  >
+                    <Icons.Trash className="w-3.5 h-3.5" />
+                    <span>{isDeleting ? 'Menghapus...' : 'Hapus Berkas'}</span>
+                  </button>
+                </div>
+              )}
+            </div>
+          );
+        })}
       </div>
+
+      {previewImage && (
+        <ImagePreviewModal
+          src={previewImage.url}
+          filename={previewImage.name}
+          onClose={() => setPreviewImage(null)}
+        />
+      )}
 
       <div className="flex justify-end items-center gap-4 pt-4 border-t">
         {successMsg && <span className="text-emerald-600 font-semibold text-sm">{successMsg}</span>}

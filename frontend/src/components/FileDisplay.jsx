@@ -257,7 +257,7 @@ export const UploadedSingleFileCard = ({
           </div>
         )}
 
-        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+        <div className="space-y-3">
           <div className="flex items-center gap-3 min-w-0">
             <FileTypeVisual
               category={category}
@@ -291,12 +291,12 @@ export const UploadedSingleFileCard = ({
             </div>
           </div>
 
-          <div className="flex items-center gap-2 self-end sm:self-center shrink-0">
+          <div className="flex items-center justify-between gap-2 pt-2.5 border-t border-emerald-100/80">
             <a
               href={fileUrl}
               target="_blank"
               rel="noreferrer"
-              className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-white hover:bg-emerald-50 text-emerald-700 hover:text-emerald-800 border border-emerald-200 hover:border-emerald-300 rounded-xl text-xs font-bold transition-all shadow-2xs"
+              className="flex-1 inline-flex items-center justify-center gap-1.5 px-3 py-1.5 bg-white hover:bg-emerald-50 text-emerald-700 hover:text-emerald-800 border border-emerald-200 hover:border-emerald-300 rounded-xl text-xs font-bold transition-all shadow-2xs"
               title="Buka berkas di tab baru"
             >
               <Icons.Eye className="w-3.5 h-3.5" /> Buka Berkas ↗
@@ -307,11 +307,11 @@ export const UploadedSingleFileCard = ({
                 type="button"
                 onClick={() => onDelete(rawFile)}
                 disabled={isDeleting}
-                className="inline-flex items-center gap-1 px-2.5 py-1.5 text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded-xl text-xs font-semibold transition-colors disabled:opacity-50"
+                className="inline-flex items-center gap-1 px-2.5 py-1.5 text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded-xl text-xs font-semibold transition-colors disabled:opacity-50 shrink-0"
                 title="Hapus berkas ini"
               >
                 <Icons.Trash className="w-3.5 h-3.5" />
-                <span className="hidden sm:inline">{isDeleting ? '...' : 'Hapus'}</span>
+                <span>{isDeleting ? '...' : 'Hapus'}</span>
               </button>
             )}
           </div>
