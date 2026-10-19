@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import * as XLSX from 'xlsx';
 import { showConfirm, showAlert, showToast } from './utils/swalHelpers';
+import { getCleanFileName, getFileCategory } from './components/FileDisplay';
 
 // =============================================
 // ADMIN API BASE & AUTH HELPER
@@ -984,15 +985,24 @@ function ApplicationsPage({ onSelectCompany }) {
                                   {files.length === 0 && <span className="text-slate-400 italic">Belum diupload</span>}
                                 </div>
                                 {files.length > 0 && (
-                                  <div className="flex flex-col gap-1">
-                                    {files.map((f, fi) => (
-                                      <div key={fi} className="flex items-center justify-between gap-2 p-1.5 bg-white rounded-lg border border-emerald-100">
-                                        <span className="text-[11px] text-slate-600 font-mono truncate flex-1" title={f}>{f}</span>
-                                        <a href={getFullUrl(`/uploads/${f}`)} target="_blank" rel="noreferrer" className="text-emerald-600 font-bold hover:underline shrink-0 flex items-center gap-1 text-[11px]">
-                                          Lihat ↗
-                                        </a>
-                                      </div>
-                                    ))}
+                                  <div className="flex flex-col gap-1.5">
+                                    {files.map((f, fi) => {
+                                      const clean = getCleanFileName(f);
+                                      const cat = getFileCategory(f);
+                                      return (
+                                        <div key={fi} className="flex items-center justify-between gap-2 p-2 bg-white rounded-lg border border-emerald-100 hover:border-emerald-300 transition-colors">
+                                          <div className="flex items-center gap-2 min-w-0 flex-1">
+                                            <span className={`text-[9px] font-black uppercase px-1.5 py-0.5 rounded ${cat === 'pdf' ? 'bg-rose-100 text-rose-700' : cat === 'word' ? 'bg-sky-100 text-sky-700' : cat === 'image' ? 'bg-violet-100 text-violet-700' : 'bg-slate-100 text-slate-700'}`}>
+                                              {cat}
+                                            </span>
+                                            <span className="text-[11px] text-slate-700 font-medium truncate" title={f}>{clean}</span>
+                                          </div>
+                                          <a href={getFullUrl(`/uploads/${f}`)} target="_blank" rel="noreferrer" className="text-emerald-700 hover:text-emerald-900 font-bold hover:underline shrink-0 flex items-center gap-1 text-[11px] bg-emerald-50 hover:bg-emerald-100 px-2.5 py-1 rounded-md transition-colors">
+                                            <Icons.Eye className="w-3 h-3" /> Buka ↗
+                                          </a>
+                                        </div>
+                                      );
+                                    })}
                                   </div>
                                 )}
                               </div>
@@ -1112,19 +1122,28 @@ function ApplicationsPage({ onSelectCompany }) {
                             </div>
                             {files.length > 0 && (
                               <div className="flex flex-col gap-1.5 pt-1">
-                                {files.map((f, idx) => (
-                                  <div key={idx} className="flex items-center justify-between gap-2 p-1.5 bg-white rounded-lg border border-emerald-100 text-[11px]">
-                                    <span className="text-slate-600 font-mono truncate flex-1" title={f}>{idx + 1}. {f}</span>
-                                    <a
-                                      href={getFullUrl(`/uploads/${f}`)}
-                                      target="_blank"
-                                      rel="noreferrer"
-                                      className="text-emerald-700 hover:text-emerald-900 font-bold hover:underline shrink-0 flex items-center gap-1"
-                                    >
-                                      <Icons.Eye className="w-3 h-3"/> Buka ↗
-                                    </a>
-                                  </div>
-                                ))}
+                                {files.map((f, idx) => {
+                                  const clean = getCleanFileName(f);
+                                  const cat = getFileCategory(f);
+                                  return (
+                                    <div key={idx} className="flex items-center justify-between gap-2 p-2 bg-white rounded-lg border border-emerald-100 hover:border-emerald-300 text-[11px] transition-colors">
+                                      <div className="flex items-center gap-2 min-w-0 flex-1">
+                                        <span className={`text-[9px] font-black uppercase px-1.5 py-0.5 rounded ${cat === 'pdf' ? 'bg-rose-100 text-rose-700' : cat === 'word' ? 'bg-sky-100 text-sky-700' : cat === 'image' ? 'bg-violet-100 text-violet-700' : 'bg-slate-100 text-slate-700'}`}>
+                                          {cat}
+                                        </span>
+                                        <span className="text-slate-700 font-medium truncate" title={f}>{idx + 1}. {clean}</span>
+                                      </div>
+                                      <a
+                                        href={getFullUrl(`/uploads/${f}`)}
+                                        target="_blank"
+                                        rel="noreferrer"
+                                        className="text-emerald-700 hover:text-emerald-900 font-bold hover:underline shrink-0 flex items-center gap-1 bg-emerald-50 hover:bg-emerald-100 px-2.5 py-1 rounded-md transition-colors"
+                                      >
+                                        <Icons.Eye className="w-3 h-3"/> Buka ↗
+                                      </a>
+                                    </div>
+                                  );
+                                })}
                               </div>
                             )}
                           </div>
@@ -1890,21 +1909,30 @@ function CompanyDetailPage({ companyId, onBack }) {
                     </div>
                     {hasFile && (
                       <div className="space-y-1.5 pl-6">
-                        {files.map((file, idx) => (
-                          <div key={idx} className="flex items-center justify-between gap-2 p-2 bg-white rounded-lg border border-emerald-100">
-                            <span className="text-[11px] text-slate-600 font-mono truncate flex-1" title={file}>
-                              {idx + 1}. {file}
-                            </span>
-                            <a
-                              href={getFullUrl(`/uploads/${file}`)}
-                              target="_blank"
-                              rel="noopener noreferrer"
-                              className="inline-flex items-center gap-1 px-2.5 py-1 bg-emerald-600 hover:bg-emerald-700 text-white text-[11px] font-bold rounded-md transition-colors shadow-2xs whitespace-nowrap"
-                            >
-                              <Icons.Eye className="w-3 h-3"/> Lihat File
-                            </a>
-                          </div>
-                        ))}
+                        {files.map((file, idx) => {
+                          const clean = getCleanFileName(file);
+                          const cat = getFileCategory(file);
+                          return (
+                            <div key={idx} className="flex items-center justify-between gap-2 p-2 bg-white rounded-lg border border-emerald-100 hover:border-emerald-300 transition-colors">
+                              <div className="flex items-center gap-2 min-w-0 flex-1">
+                                <span className={`text-[9px] font-black uppercase px-1.5 py-0.5 rounded ${cat === 'pdf' ? 'bg-rose-100 text-rose-700' : cat === 'word' ? 'bg-sky-100 text-sky-700' : cat === 'image' ? 'bg-violet-100 text-violet-700' : 'bg-slate-100 text-slate-700'}`}>
+                                  {cat}
+                                </span>
+                                <span className="text-[11px] text-slate-700 font-medium truncate" title={file}>
+                                  {idx + 1}. {clean}
+                                </span>
+                              </div>
+                              <a
+                                href={getFullUrl(`/uploads/${file}`)}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                className="inline-flex items-center gap-1 px-2.5 py-1 bg-emerald-600 hover:bg-emerald-700 text-white text-[11px] font-bold rounded-md transition-colors shadow-2xs whitespace-nowrap"
+                              >
+                                <Icons.Eye className="w-3 h-3"/> Lihat Berkas
+                              </a>
+                            </div>
+                          );
+                        })}
                       </div>
                     )}
                   </div>
@@ -2041,15 +2069,20 @@ function CompanyDetailPage({ companyId, onBack }) {
                     <h4 className="font-bold text-sm text-slate-800 mb-1">{label}</h4>
                     <p className="text-xs text-slate-500 mb-4">{desc}</p>
                     {filename ? (
-                      <div>
-                        <p className="text-xs text-slate-500 font-mono mb-2 truncate" title={filename}>{filename}</p>
+                      <div className="space-y-2">
+                        <div className="flex items-center gap-2">
+                          <span className={`text-[9px] font-black uppercase px-1.5 py-0.5 rounded ${getFileCategory(filename) === 'pdf' ? 'bg-rose-100 text-rose-700' : 'bg-violet-100 text-violet-700'}`}>
+                            {getFileCategory(filename)}
+                          </span>
+                          <p className="text-xs text-slate-700 font-semibold truncate flex-1" title={filename}>{getCleanFileName(filename)}</p>
+                        </div>
                         <a
                           href={getFullUrl(`/uploads/${filename}`)}
                           target="_blank"
                           rel="noopener noreferrer"
                           className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold rounded-lg transition-colors shadow-sm"
                         >
-                          <Icons.Eye className="w-3.5 h-3.5"/> Lihat File ↗
+                          <Icons.Eye className="w-3.5 h-3.5"/> Buka Berkas ↗
                         </a>
                       </div>
                     ) : (
@@ -2106,21 +2139,30 @@ function CompanyDetailPage({ companyId, onBack }) {
 
                     {hasFiles && (
                       <div className="space-y-1.5 mt-1">
-                        {files.map((file, idx) => (
-                          <div key={idx} className="flex items-center justify-between gap-2 p-2 bg-white rounded-lg border border-emerald-100">
-                            <span className="text-[11px] text-slate-600 font-mono truncate flex-1" title={file}>
-                              {idx + 1}. {file}
-                            </span>
-                            <a
-                              href={getFullUrl(`/uploads/${file}`)}
-                              target="_blank"
-                              rel="noopener noreferrer"
-                              className="inline-flex items-center gap-1 px-2.5 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white text-[10px] font-bold rounded-md transition-colors shadow-2xs whitespace-nowrap shrink-0"
-                            >
-                              <Icons.Eye className="w-3 h-3"/> Lihat File {files.length > 1 ? `#${idx + 1}` : ''}
-                            </a>
-                          </div>
-                        ))}
+                        {files.map((file, idx) => {
+                          const clean = getCleanFileName(file);
+                          const cat = getFileCategory(file);
+                          return (
+                            <div key={idx} className="flex items-center justify-between gap-2 p-2 bg-white rounded-lg border border-emerald-100 hover:border-emerald-300 transition-colors">
+                              <div className="flex items-center gap-2 min-w-0 flex-1">
+                                <span className={`text-[9px] font-black uppercase px-1.5 py-0.5 rounded ${cat === 'pdf' ? 'bg-rose-100 text-rose-700' : cat === 'word' ? 'bg-sky-100 text-sky-700' : cat === 'image' ? 'bg-violet-100 text-violet-700' : 'bg-slate-100 text-slate-700'}`}>
+                                  {cat}
+                                </span>
+                                <span className="text-[11px] text-slate-700 font-medium truncate" title={file}>
+                                  {idx + 1}. {clean}
+                                </span>
+                              </div>
+                              <a
+                                href={getFullUrl(`/uploads/${file}`)}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                className="inline-flex items-center gap-1 px-2.5 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white text-[10px] font-bold rounded-md transition-colors shadow-2xs whitespace-nowrap shrink-0"
+                              >
+                                <Icons.Eye className="w-3 h-3"/> Lihat Berkas
+                              </a>
+                            </div>
+                          );
+                        })}
                       </div>
                     )}
                   </div>

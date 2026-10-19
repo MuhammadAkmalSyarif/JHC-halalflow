@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import * as XLSX from 'xlsx';
 import { showConfirm, showAlert, showToast } from './utils/swalHelpers';
+import { UploadedFileList, UploadedSingleFileCard } from './components/FileDisplay';
 
 // SVG Icons helper component
 const Icons = {
@@ -1155,6 +1156,49 @@ const StepDokumen = ({ legalData, setLegalData, handleGenericFileUpload, handleM
     });
   };
 
+  const [deletingFile, setDeletingFile] = useState('');
+
+  const handleDeleteLegalFile = async (field, filename, isMulti = true) => {
+    const confirmDelete = await showConfirm(`Apakah Anda yakin ingin menghapus berkas ini?`);
+    if (!confirmDelete) return;
+
+    setDeletingFile(filename);
+    try {
+      let updatedVal = '';
+      if (isMulti) {
+        const currentList = (legalData[field] || '')
+          .split(',')
+          .map(f => f.trim())
+          .filter(f => f && f !== filename);
+        updatedVal = currentList.join(',');
+      } else {
+        updatedVal = '';
+      }
+
+      const updated = { ...legalData, [field]: updatedVal };
+      setLegalData(updated);
+
+      await apiFetch('/api/legal', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(updated)
+      });
+
+      const token = localStorage.getItem('jhc_token');
+      await apiFetch(`/api/upload/${encodeURIComponent(filename)}`, {
+        method: 'DELETE',
+        headers: token ? { 'Authorization': `Bearer ${token}` } : {}
+      });
+
+      showToast('Berkas berhasil dihapus.');
+    } catch (err) {
+      console.error('Delete legal file error:', err);
+      showAlert('Terjadi kesalahan saat menghapus berkas.', 'error');
+    } finally {
+      setDeletingFile('');
+    }
+  };
+
   return (
     <Card className="p-8 max-w-4xl mx-auto space-y-6 animate-fade-in">
       <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
@@ -1189,50 +1233,54 @@ const StepDokumen = ({ legalData, setLegalData, handleGenericFileUpload, handleM
 
       <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
         <div className="space-y-4">
-          <div className="p-4 border rounded-xl bg-white shadow-xs">
+          <div className="p-4 border rounded-xl bg-white shadow-xs hover:border-emerald-200 transition-colors">
             <h4 className="font-semibold text-sm text-slate-800 mb-1">1. Permohonan Pendaftaran Sertifikasi Halal</h4>
             <p className="text-xs text-slate-400 mb-3">Format: .doc, .docx, .pdf — bisa pilih lebih dari 1 file</p>
             <input type="file" name="permohonan" accept=".pdf,.doc,.docx" multiple onChange={(e) => handleUploadMultiLegal(e, 'permohonan')} className="block w-full text-xs text-slate-500 file:cursor-pointer file:mr-3 file:m-1 file:py-2 file:px-4 file:rounded-md file:border-0 file:font-bold file:bg-emerald-600 file:text-white hover:file:bg-emerald-700 file:transition-colors border border-slate-200 rounded-lg bg-white cursor-pointer hover:border-emerald-300 transition-colors shadow-2xs focus:outline-none" />
-            {legalData.permohonan && legalData.permohonan.split(',').map((f, i) => (
-              <a key={i} href={`/uploads/${f.trim()}`} target="_blank" rel="noreferrer" className="text-xs text-emerald-600 font-medium mt-1 flex items-center gap-1 truncate w-full hover:underline" title={f.trim()}>
-                ✓ Terunggah: {f.trim()} (Klik untuk Lihat)
-              </a>
-            ))}
+            <UploadedFileList
+              filesString={legalData.permohonan}
+              onDelete={(f) => handleDeleteLegalFile('permohonan', f, true)}
+              deletingFile={deletingFile}
+              title="Surat Permohonan Terunggah"
+            />
           </div>
 
-          <div className="p-4 border rounded-xl bg-white shadow-xs">
+          <div className="p-4 border rounded-xl bg-white shadow-xs hover:border-emerald-200 transition-colors">
             <h4 className="font-semibold text-sm text-slate-800 mb-1">2. SK Penyelia Halal</h4>
             <p className="text-xs text-slate-400 mb-3">Format: .doc, .docx, .pdf — bisa pilih lebih dari 1 file</p>
             <input type="file" name="sk_penyelia" accept=".pdf,.doc,.docx" multiple onChange={(e) => handleUploadMultiLegal(e, 'sk_penyelia')} className="block w-full text-xs text-slate-500 file:cursor-pointer file:mr-3 file:m-1 file:py-2 file:px-4 file:rounded-md file:border-0 file:font-bold file:bg-emerald-600 file:text-white hover:file:bg-emerald-700 file:transition-colors border border-slate-200 rounded-lg bg-white cursor-pointer hover:border-emerald-300 transition-colors shadow-2xs focus:outline-none" />
-            {legalData.sk_penyelia && legalData.sk_penyelia.split(',').map((f, i) => (
-              <a key={i} href={`/uploads/${f.trim()}`} target="_blank" rel="noreferrer" className="text-xs text-emerald-600 font-medium mt-1 flex items-center gap-1 truncate w-full hover:underline" title={f.trim()}>
-                ✓ Terunggah: {f.trim()} (Klik untuk Lihat)
-              </a>
-            ))}
+            <UploadedFileList
+              filesString={legalData.sk_penyelia}
+              onDelete={(f) => handleDeleteLegalFile('sk_penyelia', f, true)}
+              deletingFile={deletingFile}
+              title="SK Penyelia Terunggah"
+            />
           </div>
         </div>
 
         <div className="space-y-4">
-          <div className="p-4 border rounded-xl bg-white shadow-xs">
+          <div className="p-4 border rounded-xl bg-white shadow-xs hover:border-emerald-200 transition-colors">
             <h4 className="font-semibold text-sm text-slate-800 mb-1">3. SK Manajemen Halal</h4>
             <p className="text-xs text-slate-400 mb-3">Format: .doc, .docx, .pdf — bisa pilih lebih dari 1 file</p>
             <input type="file" name="sk_manajemen" accept=".pdf,.doc,.docx" multiple onChange={(e) => handleUploadMultiLegal(e, 'sk_manajemen')} className="block w-full text-xs text-slate-500 file:cursor-pointer file:mr-3 file:m-1 file:py-2 file:px-4 file:rounded-md file:border-0 file:font-bold file:bg-emerald-600 file:text-white hover:file:bg-emerald-700 file:transition-colors border border-slate-200 rounded-lg bg-white cursor-pointer hover:border-emerald-300 transition-colors shadow-2xs focus:outline-none" />
-            {legalData.sk_manajemen && legalData.sk_manajemen.split(',').map((f, i) => (
-              <a key={i} href={`/uploads/${f.trim()}`} target="_blank" rel="noreferrer" className="text-xs text-emerald-600 font-medium mt-1 flex items-center gap-1 truncate w-full hover:underline" title={f.trim()}>
-                ✓ Terunggah: {f.trim()} (Klik untuk Lihat)
-              </a>
-            ))}
+            <UploadedFileList
+              filesString={legalData.sk_manajemen}
+              onDelete={(f) => handleDeleteLegalFile('sk_manajemen', f, true)}
+              deletingFile={deletingFile}
+              title="SK Manajemen Terunggah"
+            />
           </div>
 
-          <div className="p-4 border rounded-xl bg-white shadow-xs">
+          <div className="p-4 border rounded-xl bg-white shadow-xs hover:border-emerald-200 transition-colors">
             <h4 className="font-semibold text-sm text-slate-800 mb-1">4. Kebijakan Halal</h4>
             <p className="text-xs text-slate-400 mb-3">Format: .doc, .docx, .pdf — bisa pilih lebih dari 1 file</p>
             <input type="file" name="kebijakan" accept=".pdf,.doc,.docx" multiple onChange={(e) => handleUploadMultiLegal(e, 'kebijakan')} className="block w-full text-xs text-slate-500 file:cursor-pointer file:mr-3 file:m-1 file:py-2 file:px-4 file:rounded-md file:border-0 file:font-bold file:bg-emerald-600 file:text-white hover:file:bg-emerald-700 file:transition-colors border border-slate-200 rounded-lg bg-white cursor-pointer hover:border-emerald-300 transition-colors shadow-2xs focus:outline-none" />
-            {legalData.kebijakan && legalData.kebijakan.split(',').map((f, i) => (
-              <a key={i} href={`/uploads/${f.trim()}`} target="_blank" rel="noreferrer" className="text-xs text-emerald-600 font-medium mt-1 flex items-center gap-1 truncate w-full hover:underline" title={f.trim()}>
-                ✓ Terunggah: {f.trim()} (Klik untuk Lihat)
-              </a>
-            ))}
+            <UploadedFileList
+              filesString={legalData.kebijakan}
+              onDelete={(f) => handleDeleteLegalFile('kebijakan', f, true)}
+              deletingFile={deletingFile}
+              title="Kebijakan Halal Terunggah"
+            />
           </div>
         </div>
       </div>
@@ -1241,38 +1289,42 @@ const StepDokumen = ({ legalData, setLegalData, handleGenericFileUpload, handleM
         <div className="p-4 bg-slate-50 rounded-xl border">
           <h4 className="font-semibold text-sm text-slate-800 mb-2">Upload Tanda Tangan Pemilik Usaha</h4>
           <input type="file" name="ttdPemilik" accept="image/*" onChange={(e) => handleUploadSingleLegal(e, 'ttdPemilik')} className="block w-full text-xs text-slate-500 file:cursor-pointer file:mr-3 file:m-1 file:py-2 file:px-4 file:rounded-md file:border-0 file:font-bold file:bg-emerald-600 file:text-white hover:file:bg-emerald-700 file:transition-colors border border-slate-200 rounded-lg bg-white cursor-pointer hover:border-emerald-300 transition-colors shadow-2xs focus:outline-none mt-1" />
-          {legalData.ttdPemilik && (
-            <a href={`/uploads/${legalData.ttdPemilik}`} target="_blank" rel="noreferrer" className="text-xs text-emerald-600 mt-2 block truncate w-full hover:underline font-medium" title={legalData.ttdPemilik}>
-              ✓ TTD Pemilik Terunggah (Klik untuk Lihat)
-            </a>
-          )}
+          <UploadedSingleFileCard
+            file={legalData.ttdPemilik}
+            label="Tanda Tangan Pemilik Usaha"
+            onDelete={(f) => handleDeleteLegalFile('ttdPemilik', f, false)}
+            isDeleting={deletingFile === legalData.ttdPemilik}
+          />
         </div>
         <div className="p-4 bg-slate-50 rounded-xl border">
           <h4 className="font-semibold text-sm text-slate-800 mb-2">Upload KTP Pemilik / Penanggung Jawab</h4>
           <input type="file" name="ktpPemilik" accept="image/*,.pdf" onChange={(e) => handleUploadSingleLegal(e, 'ktpPemilik')} className="block w-full text-xs text-slate-500 file:cursor-pointer file:mr-3 file:m-1 file:py-2 file:px-4 file:rounded-md file:border-0 file:font-bold file:bg-emerald-600 file:text-white hover:file:bg-emerald-700 file:transition-colors border border-slate-200 rounded-lg bg-white cursor-pointer hover:border-emerald-300 transition-colors shadow-2xs focus:outline-none mt-1" />
-          {legalData.ktpPemilik && (
-            <a href={`/uploads/${legalData.ktpPemilik}`} target="_blank" rel="noreferrer" className="text-xs text-emerald-600 mt-2 block truncate w-full hover:underline font-medium" title={legalData.ktpPemilik}>
-              ✓ KTP Pemilik Terunggah (Klik untuk Lihat)
-            </a>
-          )}
+          <UploadedSingleFileCard
+            file={legalData.ktpPemilik}
+            label="KTP Pemilik / Penanggung Jawab"
+            onDelete={(f) => handleDeleteLegalFile('ktpPemilik', f, false)}
+            isDeleting={deletingFile === legalData.ktpPemilik}
+          />
         </div>
         <div className="p-4 bg-slate-50 rounded-xl border">
           <h4 className="font-semibold text-sm text-slate-800 mb-2">Upload Tanda Tangan Penyelia Halal</h4>
           <input type="file" name="ttdPenyelia" accept="image/*" onChange={(e) => handleUploadSingleLegal(e, 'ttdPenyelia')} className="block w-full text-xs text-slate-500 file:cursor-pointer file:mr-3 file:m-1 file:py-2 file:px-4 file:rounded-md file:border-0 file:font-bold file:bg-emerald-600 file:text-white hover:file:bg-emerald-700 file:transition-colors border border-slate-200 rounded-lg bg-white cursor-pointer hover:border-emerald-300 transition-colors shadow-2xs focus:outline-none mt-1" />
-          {legalData.ttdPenyelia && (
-            <a href={`/uploads/${legalData.ttdPenyelia}`} target="_blank" rel="noreferrer" className="text-xs text-emerald-600 mt-2 block truncate w-full hover:underline font-medium" title={legalData.ttdPenyelia}>
-              ✓ TTD Penyelia Terunggah (Klik untuk Lihat)
-            </a>
-          )}
+          <UploadedSingleFileCard
+            file={legalData.ttdPenyelia}
+            label="Tanda Tangan Penyelia Halal"
+            onDelete={(f) => handleDeleteLegalFile('ttdPenyelia', f, false)}
+            isDeleting={deletingFile === legalData.ttdPenyelia}
+          />
         </div>
         <div className="p-4 bg-slate-50 rounded-xl border">
           <h4 className="font-semibold text-sm text-slate-800 mb-2">Upload KTP Penyelia Halal</h4>
           <input type="file" name="ktpPenyelia" accept="image/*,.pdf" onChange={(e) => handleUploadSingleLegal(e, 'ktpPenyelia')} className="block w-full text-xs text-slate-500 file:cursor-pointer file:mr-3 file:m-1 file:py-2 file:px-4 file:rounded-md file:border-0 file:font-bold file:bg-emerald-600 file:text-white hover:file:bg-emerald-700 file:transition-colors border border-slate-200 rounded-lg bg-white cursor-pointer hover:border-emerald-300 transition-colors shadow-2xs focus:outline-none mt-1" />
-          {legalData.ktpPenyelia && (
-            <a href={`/uploads/${legalData.ktpPenyelia}`} target="_blank" rel="noreferrer" className="text-xs text-emerald-600 mt-2 block truncate w-full hover:underline font-medium" title={legalData.ktpPenyelia}>
-              ✓ KTP Penyelia Terunggah (Klik untuk Lihat)
-            </a>
-          )}
+          <UploadedSingleFileCard
+            file={legalData.ktpPenyelia}
+            label="KTP Penyelia Halal"
+            onDelete={(f) => handleDeleteLegalFile('ktpPenyelia', f, false)}
+            isDeleting={deletingFile === legalData.ktpPenyelia}
+          />
         </div>
       </div>
 
@@ -2246,10 +2298,41 @@ const StepUploadProduk = ({ products, setProducts, materials, productsSubmitted,
 
 const StepProsesProduksi = ({ productionData, setProductionData, handleGenericFileUpload }) => {
   const [successMsg, setSuccessMsg] = useState('');
+  const [deletingFile, setDeletingFile] = useState('');
 
   const currentAlur = productionData?.alurProses || productionData?.alur_proses || '';
   const currentLayout = productionData?.layoutRuang || productionData?.layout_ruang || '';
   const currentBebasBabi = productionData?.bebasBabi || productionData?.bebas_babi || '';
+
+  const handleDeleteProductionFile = async (field, filename) => {
+    const confirmDelete = await showConfirm(`Apakah Anda yakin ingin menghapus berkas ini?`);
+    if (!confirmDelete) return;
+
+    setDeletingFile(filename);
+    try {
+      const updated = { ...productionData, [field]: '' };
+      setProductionData(updated);
+
+      await apiFetch('/api/production', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(updated)
+      });
+
+      const token = localStorage.getItem('jhc_token');
+      await apiFetch(`/api/upload/${encodeURIComponent(filename)}`, {
+        method: 'DELETE',
+        headers: token ? { 'Authorization': `Bearer ${token}` } : {}
+      });
+
+      showToast('Berkas berhasil dihapus.');
+    } catch (err) {
+      console.error('Delete production file error:', err);
+      showAlert('Terjadi kesalahan saat menghapus berkas.', 'error');
+    } finally {
+      setDeletingFile('');
+    }
+  };
 
   const handleUploadSingle = async (e, field) => {
     const filename = await handleGenericFileUpload(e, field, setProductionData);
@@ -2305,42 +2388,51 @@ const StepProsesProduksi = ({ productionData, setProductionData, handleGenericFi
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-        <div className="p-5 border rounded-2xl bg-slate-50 flex flex-col justify-between">
+        <div className="p-5 border rounded-2xl bg-slate-50 flex flex-col justify-between hover:border-emerald-200 transition-colors">
           <div>
             <h4 className="font-bold text-sm text-slate-800 mb-1">1. Alur Proses Produksi</h4>
             <p className="text-xs text-slate-500 mb-4">Format: .jpeg / .png / Gambar</p>
             <input type="file" name="alurProses" accept="image/*,.jpeg,.jpg,.png,.jfif" onChange={(e) => handleUploadSingle(e, 'alurProses')} className="w-full text-xs text-slate-500 file:mr-2 file:py-1.5 file:px-3 file:rounded-lg file:border-0 file:bg-emerald-50 file:text-emerald-700" />
           </div>
           {currentAlur && (
-            <a href={getFullUrl(`/uploads/${currentAlur}`)} target="_blank" rel="noreferrer" className="text-xs text-emerald-600 font-semibold mt-3 block truncate w-full hover:underline" title={currentAlur}>
-              ✓ {currentAlur} (Klik untuk Lihat)
-            </a>
+            <UploadedSingleFileCard
+              file={currentAlur}
+              label="Alur Proses Produksi"
+              onDelete={(f) => handleDeleteProductionFile('alurProses', f)}
+              isDeleting={deletingFile === currentAlur}
+            />
           )}
         </div>
 
-        <div className="p-5 border rounded-2xl bg-slate-50 flex flex-col justify-between">
+        <div className="p-5 border rounded-2xl bg-slate-50 flex flex-col justify-between hover:border-emerald-200 transition-colors">
           <div>
             <h4 className="font-bold text-sm text-slate-800 mb-1">2. Layout Ruang Produksi</h4>
             <p className="text-xs text-slate-500 mb-4">Format: .jpeg / .png / Denah Ruang</p>
             <input type="file" name="layoutRuang" accept="image/*,.jpeg,.jpg,.png,.jfif" onChange={(e) => handleUploadSingle(e, 'layoutRuang')} className="w-full text-xs text-slate-500 file:mr-2 file:py-1.5 file:px-3 file:rounded-lg file:border-0 file:bg-emerald-50 file:text-emerald-700" />
           </div>
           {currentLayout && (
-            <a href={getFullUrl(`/uploads/${currentLayout}`)} target="_blank" rel="noreferrer" className="text-xs text-emerald-600 font-semibold mt-3 block truncate w-full hover:underline" title={currentLayout}>
-              ✓ {currentLayout} (Klik untuk Lihat)
-            </a>
+            <UploadedSingleFileCard
+              file={currentLayout}
+              label="Layout Ruang Produksi"
+              onDelete={(f) => handleDeleteProductionFile('layoutRuang', f)}
+              isDeleting={deletingFile === currentLayout}
+            />
           )}
         </div>
 
-        <div className="p-5 border rounded-2xl bg-slate-50 flex flex-col justify-between">
+        <div className="p-5 border rounded-2xl bg-slate-50 flex flex-col justify-between hover:border-emerald-200 transition-colors">
           <div>
             <h4 className="font-bold text-sm text-slate-800 mb-1">3. Surat Pernyataan Bebas Babi Bermaterai</h4>
             <p className="text-xs text-slate-500 mb-4">Format: .pdf</p>
             <input type="file" name="bebasBabi" accept=".pdf,application/pdf" onChange={(e) => handleUploadSingle(e, 'bebasBabi')} className="w-full text-xs text-slate-500 file:mr-2 file:py-1.5 file:px-3 file:rounded-lg file:border-0 file:bg-emerald-50 file:text-emerald-700" />
           </div>
           {currentBebasBabi && (
-            <a href={getFullUrl(`/uploads/${currentBebasBabi}`)} target="_blank" rel="noreferrer" className="text-xs text-emerald-600 font-semibold mt-3 block truncate w-full hover:underline" title={currentBebasBabi}>
-              ✓ {currentBebasBabi} (Klik untuk Lihat)
-            </a>
+            <UploadedSingleFileCard
+              file={currentBebasBabi}
+              label="Pernyataan Bebas Babi"
+              onDelete={(f) => handleDeleteProductionFile('bebasBabi', f)}
+              isDeleting={deletingFile === currentBebasBabi}
+            />
           )}
         </div>
       </div>
@@ -2531,244 +2623,102 @@ const StepUploadEvidence = ({ evidenceData, setEvidenceData, handleGenericFileUp
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-        <div className="p-4 border rounded-xl bg-slate-50">
+        <div className="p-4 border rounded-xl bg-slate-50 hover:border-emerald-200 transition-colors">
           <h4 className="font-semibold text-sm text-slate-800 mb-1">1. Bukti Foto Sosialisasi/Training Halal</h4>
           <p className="text-xs text-slate-400 mb-2">Format: Gambar (JPG, PNG) — bisa upload lebih dari 1 foto</p>
           <input type="file" multiple name="sosialisasiFoto" accept="image/*" onChange={(e) => handleUploadMulti(e, 'sosialisasiFoto')} className="block w-full text-xs text-slate-500 file:cursor-pointer file:mr-3 file:m-1 file:py-2 file:px-4 file:rounded-md file:border-0 file:font-bold file:bg-emerald-600 file:text-white hover:file:bg-emerald-700 file:transition-colors border border-slate-200 rounded-lg bg-white cursor-pointer hover:border-emerald-300 transition-colors shadow-2xs focus:outline-none" />
-          {evidenceData.sosialisasiFoto && (
-            <div className="mt-3 space-y-1.5">
-              {evidenceData.sosialisasiFoto.split(',').map((f, i) => {
-                const fname = f.trim();
-                if (!fname) return null;
-                return (
-                  <div key={i} className="flex items-center justify-between gap-2 p-2 bg-white rounded-lg border border-slate-200 shadow-2xs hover:border-slate-300 transition-colors">
-                    <a href={`/uploads/${fname}`} target="_blank" rel="noreferrer" className="text-xs text-emerald-600 font-semibold truncate flex-1 hover:underline" title={fname}>
-                      ✓ {fname} (Klik untuk Lihat)
-                    </a>
-                    <button
-                      type="button"
-                      onClick={() => handleDeleteFile('sosialisasiFoto', fname)}
-                      disabled={deletingFile === fname}
-                      className="text-slate-400 hover:text-red-600 hover:bg-red-50 px-2 py-1 rounded transition-colors text-xs font-bold leading-none shrink-0"
-                      title="Hapus foto ini"
-                    >
-                      {deletingFile === fname ? '...' : '✕'}
-                    </button>
-                  </div>
-                );
-              })}
-            </div>
-          )}
+          <UploadedFileList
+            filesString={evidenceData.sosialisasiFoto}
+            onDelete={(f) => handleDeleteFile('sosialisasiFoto', f)}
+            deletingFile={deletingFile}
+            title="Foto Sosialisasi"
+            isImageGroup
+          />
         </div>
 
-        <div className="p-4 border rounded-xl bg-slate-50">
+        <div className="p-4 border rounded-xl bg-slate-50 hover:border-emerald-200 transition-colors">
           <h4 className="font-semibold text-sm text-slate-800 mb-1">2. Bukti Foto Audit Internal</h4>
           <p className="text-xs text-slate-400 mb-2">Format: Gambar (JPG, PNG) — bisa upload lebih dari 1 foto</p>
           <input type="file" multiple name="auditInternalFoto" accept="image/*" onChange={(e) => handleUploadMulti(e, 'auditInternalFoto')} className="block w-full text-xs text-slate-500 file:cursor-pointer file:mr-3 file:m-1 file:py-2 file:px-4 file:rounded-md file:border-0 file:font-bold file:bg-emerald-600 file:text-white hover:file:bg-emerald-700 file:transition-colors border border-slate-200 rounded-lg bg-white cursor-pointer hover:border-emerald-300 transition-colors shadow-2xs focus:outline-none" />
-          {evidenceData.auditInternalFoto && (
-            <div className="mt-3 space-y-1.5">
-              {evidenceData.auditInternalFoto.split(',').map((f, i) => {
-                const fname = f.trim();
-                if (!fname) return null;
-                return (
-                  <div key={i} className="flex items-center justify-between gap-2 p-2 bg-white rounded-lg border border-slate-200 shadow-2xs hover:border-slate-300 transition-colors">
-                    <a href={`/uploads/${fname}`} target="_blank" rel="noreferrer" className="text-xs text-emerald-600 font-semibold truncate flex-1 hover:underline" title={fname}>
-                      ✓ {fname} (Klik untuk Lihat)
-                    </a>
-                    <button
-                      type="button"
-                      onClick={() => handleDeleteFile('auditInternalFoto', fname)}
-                      disabled={deletingFile === fname}
-                      className="text-slate-400 hover:text-red-600 hover:bg-red-50 px-2 py-1 rounded transition-colors text-xs font-bold leading-none shrink-0"
-                      title="Hapus foto ini"
-                    >
-                      {deletingFile === fname ? '...' : '✕'}
-                    </button>
-                  </div>
-                );
-              })}
-            </div>
-          )}
+          <UploadedFileList
+            filesString={evidenceData.auditInternalFoto}
+            onDelete={(f) => handleDeleteFile('auditInternalFoto', f)}
+            deletingFile={deletingFile}
+            title="Foto Audit Internal"
+            isImageGroup
+          />
         </div>
 
-        <div className="p-4 border rounded-xl bg-slate-50">
+        <div className="p-4 border rounded-xl bg-slate-50 hover:border-emerald-200 transition-colors">
           <h4 className="font-semibold text-sm text-slate-800 mb-1">3. Upload Daftar Hadir Sosialisasi Halal</h4>
           <p className="text-xs text-slate-400 mb-2">Format: PDF, Word, atau Gambar (JPG, PNG)</p>
           <input type="file" name="sosialisasiAbsen" accept=".pdf,.doc,.docx,image/*,.jpg,.jpeg,.png" onChange={(e) => handleUploadSingle(e, 'sosialisasiAbsen')} className="block w-full text-xs text-slate-500 file:cursor-pointer file:mr-3 file:m-1 file:py-2 file:px-4 file:rounded-md file:border-0 file:font-bold file:bg-emerald-600 file:text-white hover:file:bg-emerald-700 file:transition-colors border border-slate-200 rounded-lg bg-white cursor-pointer hover:border-emerald-300 transition-colors shadow-2xs focus:outline-none" />
-          {evidenceData.sosialisasiAbsen && (
-            <div className="mt-3 space-y-1.5">
-              {evidenceData.sosialisasiAbsen.split(',').map((f, i) => {
-                const fname = f.trim();
-                if (!fname) return null;
-                return (
-                  <div key={i} className="flex items-center justify-between gap-2 p-2 bg-white rounded-lg border border-slate-200 shadow-2xs hover:border-slate-300 transition-colors">
-                    <a href={`/uploads/${fname}`} target="_blank" rel="noreferrer" className="text-xs text-emerald-600 font-semibold truncate flex-1 hover:underline" title={fname}>
-                      ✓ {fname} (Klik untuk Lihat)
-                    </a>
-                    <button
-                      type="button"
-                      onClick={() => handleDeleteFile('sosialisasiAbsen', fname)}
-                      disabled={deletingFile === fname}
-                      className="text-slate-400 hover:text-red-600 hover:bg-red-50 px-2 py-1 rounded transition-colors text-xs font-bold leading-none shrink-0"
-                      title="Hapus berkas ini"
-                    >
-                      {deletingFile === fname ? '...' : '✕'}
-                    </button>
-                  </div>
-                );
-              })}
-            </div>
-          )}
+          <UploadedFileList
+            filesString={evidenceData.sosialisasiAbsen}
+            onDelete={(f) => handleDeleteFile('sosialisasiAbsen', f)}
+            deletingFile={deletingFile}
+            title="Daftar Hadir Sosialisasi"
+          />
         </div>
 
-        <div className="p-4 border rounded-xl bg-slate-50">
+        <div className="p-4 border rounded-xl bg-slate-50 hover:border-emerald-200 transition-colors">
           <h4 className="font-semibold text-sm text-slate-800 mb-1">4. Upload Daftar Hadir Audit Internal</h4>
           <p className="text-xs text-slate-400 mb-2">Format: PDF, Word, atau Gambar (JPG, PNG)</p>
           <input type="file" name="auditInternalAbsen" accept=".pdf,.doc,.docx,image/*,.jpg,.jpeg,.png" onChange={(e) => handleUploadSingle(e, 'auditInternalAbsen')} className="block w-full text-xs text-slate-500 file:cursor-pointer file:mr-3 file:m-1 file:py-2 file:px-4 file:rounded-md file:border-0 file:font-bold file:bg-emerald-600 file:text-white hover:file:bg-emerald-700 file:transition-colors border border-slate-200 rounded-lg bg-white cursor-pointer hover:border-emerald-300 transition-colors shadow-2xs focus:outline-none" />
-          {evidenceData.auditInternalAbsen && (
-            <div className="mt-3 space-y-1.5">
-              {evidenceData.auditInternalAbsen.split(',').map((f, i) => {
-                const fname = f.trim();
-                if (!fname) return null;
-                return (
-                  <div key={i} className="flex items-center justify-between gap-2 p-2 bg-white rounded-lg border border-slate-200 shadow-2xs hover:border-slate-300 transition-colors">
-                    <a href={`/uploads/${fname}`} target="_blank" rel="noreferrer" className="text-xs text-emerald-600 font-semibold truncate flex-1 hover:underline" title={fname}>
-                      ✓ {fname} (Klik untuk Lihat)
-                    </a>
-                    <button
-                      type="button"
-                      onClick={() => handleDeleteFile('auditInternalAbsen', fname)}
-                      disabled={deletingFile === fname}
-                      className="text-slate-400 hover:text-red-600 hover:bg-red-50 px-2 py-1 rounded transition-colors text-xs font-bold leading-none shrink-0"
-                      title="Hapus berkas ini"
-                    >
-                      {deletingFile === fname ? '...' : '✕'}
-                    </button>
-                  </div>
-                );
-              })}
-            </div>
-          )}
+          <UploadedFileList
+            filesString={evidenceData.auditInternalAbsen}
+            onDelete={(f) => handleDeleteFile('auditInternalAbsen', f)}
+            deletingFile={deletingFile}
+            title="Daftar Hadir Audit Internal"
+          />
         </div>
 
-        <div className="p-4 border rounded-xl bg-slate-50">
+        <div className="p-4 border rounded-xl bg-slate-50 hover:border-emerald-200 transition-colors">
           <h4 className="font-semibold text-sm text-slate-800 mb-1">5. Catatan Pembelian Bahan</h4>
           <p className="text-xs text-slate-400 mb-2">Format: PDF, Word, atau Gambar (JPG, PNG)</p>
           <input type="file" name="pembelianBahan" accept=".pdf,.doc,.docx,image/*,.jpg,.jpeg,.png" onChange={(e) => handleUploadSingle(e, 'pembelianBahan')} className="block w-full text-xs text-slate-500 file:cursor-pointer file:mr-3 file:m-1 file:py-2 file:px-4 file:rounded-md file:border-0 file:font-bold file:bg-emerald-600 file:text-white hover:file:bg-emerald-700 file:transition-colors border border-slate-200 rounded-lg bg-white cursor-pointer hover:border-emerald-300 transition-colors shadow-2xs focus:outline-none" />
-          {evidenceData.pembelianBahan && (
-            <div className="mt-3 space-y-1.5">
-              {evidenceData.pembelianBahan.split(',').map((f, i) => {
-                const fname = f.trim();
-                if (!fname) return null;
-                return (
-                  <div key={i} className="flex items-center justify-between gap-2 p-2 bg-white rounded-lg border border-slate-200 shadow-2xs hover:border-slate-300 transition-colors">
-                    <a href={`/uploads/${fname}`} target="_blank" rel="noreferrer" className="text-xs text-emerald-600 font-semibold truncate flex-1 hover:underline" title={fname}>
-                      ✓ {fname} (Klik untuk Lihat)
-                    </a>
-                    <button
-                      type="button"
-                      onClick={() => handleDeleteFile('pembelianBahan', fname)}
-                      disabled={deletingFile === fname}
-                      className="text-slate-400 hover:text-red-600 hover:bg-red-50 px-2 py-1 rounded transition-colors text-xs font-bold leading-none shrink-0"
-                      title="Hapus berkas ini"
-                    >
-                      {deletingFile === fname ? '...' : '✕'}
-                    </button>
-                  </div>
-                );
-              })}
-            </div>
-          )}
+          <UploadedFileList
+            filesString={evidenceData.pembelianBahan}
+            onDelete={(f) => handleDeleteFile('pembelianBahan', f)}
+            deletingFile={deletingFile}
+            title="Catatan Pembelian Bahan"
+          />
         </div>
 
-        <div className="p-4 border rounded-xl bg-slate-50">
+        <div className="p-4 border rounded-xl bg-slate-50 hover:border-emerald-200 transition-colors">
           <h4 className="font-semibold text-sm text-slate-800 mb-1">6. Catatan Penyimpanan Bahan</h4>
           <p className="text-xs text-slate-400 mb-2">Format: PDF, Word, atau Gambar (JPG, PNG)</p>
           <input type="file" name="penyimpananBahan" accept=".pdf,.doc,.docx,image/*,.jpg,.jpeg,.png" onChange={(e) => handleUploadSingle(e, 'penyimpananBahan')} className="block w-full text-xs text-slate-500 file:cursor-pointer file:mr-3 file:m-1 file:py-2 file:px-4 file:rounded-md file:border-0 file:font-bold file:bg-emerald-600 file:text-white hover:file:bg-emerald-700 file:transition-colors border border-slate-200 rounded-lg bg-white cursor-pointer hover:border-emerald-300 transition-colors shadow-2xs focus:outline-none" />
-          {evidenceData.penyimpananBahan && (
-            <div className="mt-3 space-y-1.5">
-              {evidenceData.penyimpananBahan.split(',').map((f, i) => {
-                const fname = f.trim();
-                if (!fname) return null;
-                return (
-                  <div key={i} className="flex items-center justify-between gap-2 p-2 bg-white rounded-lg border border-slate-200 shadow-2xs hover:border-slate-300 transition-colors">
-                    <a href={`/uploads/${fname}`} target="_blank" rel="noreferrer" className="text-xs text-emerald-600 font-semibold truncate flex-1 hover:underline" title={fname}>
-                      ✓ {fname} (Klik untuk Lihat)
-                    </a>
-                    <button
-                      type="button"
-                      onClick={() => handleDeleteFile('penyimpananBahan', fname)}
-                      disabled={deletingFile === fname}
-                      className="text-slate-400 hover:text-red-600 hover:bg-red-50 px-2 py-1 rounded transition-colors text-xs font-bold leading-none shrink-0"
-                      title="Hapus berkas ini"
-                    >
-                      {deletingFile === fname ? '...' : '✕'}
-                    </button>
-                  </div>
-                );
-              })}
-            </div>
-          )}
+          <UploadedFileList
+            filesString={evidenceData.penyimpananBahan}
+            onDelete={(f) => handleDeleteFile('penyimpananBahan', f)}
+            deletingFile={deletingFile}
+            title="Catatan Penyimpanan Bahan"
+          />
         </div>
 
-        <div className="p-4 border rounded-xl bg-slate-50">
+        <div className="p-4 border rounded-xl bg-slate-50 hover:border-emerald-200 transition-colors">
           <h4 className="font-semibold text-sm text-slate-800 mb-1">7. Catatan Hasil Produksi</h4>
           <p className="text-xs text-slate-400 mb-2">Format: PDF, Word, atau Gambar (JPG, PNG)</p>
           <input type="file" name="hasilProduksi" accept=".pdf,.doc,.docx,image/*,.jpg,.jpeg,.png" onChange={(e) => handleUploadSingle(e, 'hasilProduksi')} className="block w-full text-xs text-slate-500 file:cursor-pointer file:mr-3 file:m-1 file:py-2 file:px-4 file:rounded-md file:border-0 file:font-bold file:bg-emerald-600 file:text-white hover:file:bg-emerald-700 file:transition-colors border border-slate-200 rounded-lg bg-white cursor-pointer hover:border-emerald-300 transition-colors shadow-2xs focus:outline-none" />
-          {evidenceData.hasilProduksi && (
-            <div className="mt-3 space-y-1.5">
-              {evidenceData.hasilProduksi.split(',').map((f, i) => {
-                const fname = f.trim();
-                if (!fname) return null;
-                return (
-                  <div key={i} className="flex items-center justify-between gap-2 p-2 bg-white rounded-lg border border-slate-200 shadow-2xs hover:border-slate-300 transition-colors">
-                    <a href={`/uploads/${fname}`} target="_blank" rel="noreferrer" className="text-xs text-emerald-600 font-semibold truncate flex-1 hover:underline" title={fname}>
-                      ✓ {fname} (Klik untuk Lihat)
-                    </a>
-                    <button
-                      type="button"
-                      onClick={() => handleDeleteFile('hasilProduksi', fname)}
-                      disabled={deletingFile === fname}
-                      className="text-slate-400 hover:text-red-600 hover:bg-red-50 px-2 py-1 rounded transition-colors text-xs font-bold leading-none shrink-0"
-                      title="Hapus berkas ini"
-                    >
-                      {deletingFile === fname ? '...' : '✕'}
-                    </button>
-                  </div>
-                );
-              })}
-            </div>
-          )}
+          <UploadedFileList
+            filesString={evidenceData.hasilProduksi}
+            onDelete={(f) => handleDeleteFile('hasilProduksi', f)}
+            deletingFile={deletingFile}
+            title="Catatan Hasil Produksi"
+          />
         </div>
 
-        <div className="p-4 border rounded-xl bg-slate-50">
+        <div className="p-4 border rounded-xl bg-slate-50 hover:border-emerald-200 transition-colors">
           <h4 className="font-semibold text-sm text-slate-800 mb-1">8. Catatan Penjualan/Distribusi Produk</h4>
           <p className="text-xs text-slate-400 mb-2">Format: PDF, Word, atau Gambar (JPG, PNG)</p>
           <input type="file" name="distribusiProduk" accept=".pdf,.doc,.docx,image/*,.jpg,.jpeg,.png" onChange={(e) => handleUploadSingle(e, 'distribusiProduk')} className="block w-full text-xs text-slate-500 file:cursor-pointer file:mr-3 file:m-1 file:py-2 file:px-4 file:rounded-md file:border-0 file:font-bold file:bg-emerald-600 file:text-white hover:file:bg-emerald-700 file:transition-colors border border-slate-200 rounded-lg bg-white cursor-pointer hover:border-emerald-300 transition-colors shadow-2xs focus:outline-none" />
-          {evidenceData.distribusiProduk && (
-            <div className="mt-3 space-y-1.5">
-              {evidenceData.distribusiProduk.split(',').map((f, i) => {
-                const fname = f.trim();
-                if (!fname) return null;
-                return (
-                  <div key={i} className="flex items-center justify-between gap-2 p-2 bg-white rounded-lg border border-slate-200 shadow-2xs hover:border-slate-300 transition-colors">
-                    <a href={`/uploads/${fname}`} target="_blank" rel="noreferrer" className="text-xs text-emerald-600 font-semibold truncate flex-1 hover:underline" title={fname}>
-                      ✓ {fname} (Klik untuk Lihat)
-                    </a>
-                    <button
-                      type="button"
-                      onClick={() => handleDeleteFile('distribusiProduk', fname)}
-                      disabled={deletingFile === fname}
-                      className="text-slate-400 hover:text-red-600 hover:bg-red-50 px-2 py-1 rounded transition-colors text-xs font-bold leading-none shrink-0"
-                      title="Hapus berkas ini"
-                    >
-                      {deletingFile === fname ? '...' : '✕'}
-                    </button>
-                  </div>
-                );
-              })}
-            </div>
-          )}
+          <UploadedFileList
+            filesString={evidenceData.distribusiProduk}
+            onDelete={(f) => handleDeleteFile('distribusiProduk', f)}
+            deletingFile={deletingFile}
+            title="Catatan Penjualan / Distribusi"
+          />
         </div>
       </div>
 

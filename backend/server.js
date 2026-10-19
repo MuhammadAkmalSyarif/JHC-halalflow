@@ -1236,12 +1236,14 @@ app.delete('/api/upload/:filename', authMiddleware, async (req, res) => {
     const userId = req.user.id;
     const company = await db.prepare('SELECT id FROM companies WHERE user_id=?').get(userId);
     if (company) {
+      const cleanList = (val) => {
+        if (!val) return val;
+        return val.split(',').map(s => s.trim()).filter(s => s && s !== safeFilename).join(',');
+      };
+      const cleanSingle = (val) => (val === safeFilename ? '' : val);
+
       const evRow = await db.prepare('SELECT * FROM evidence_data WHERE company_id=?').get(company.id);
       if (evRow) {
-        const cleanList = (val) => {
-          if (!val) return val;
-          return val.split(',').map(s => s.trim()).filter(s => s && s !== safeFilename).join(',');
-        };
         const updatedSosialisasi = cleanList(evRow.sosialisasiFoto);
         const updatedAudit = cleanList(evRow.auditInternalFoto);
         const updatedSosialisasiAbsen = cleanList(evRow.sosialisasiAbsen);
@@ -1262,9 +1264,37 @@ app.delete('/api/upload/:filename', authMiddleware, async (req, res) => {
           company.id
         );
       }
+
+      const legRow = await db.prepare('SELECT * FROM legal_documents WHERE company_id=?').get(company.id);
+      if (legRow) {
+        await db.prepare(`
+          UPDATE legal_documents SET 
+            permohonan=?, sk_penyelia=?, sk_manajemen=?, kebijakan=?,
+            ttd_pemilik=?, ktp_pemilik=?, ttd_penyelia=?, ktp_penyelia=?,
+            updated_at=datetime('now')
+          WHERE company_id=?
+        `).run(
+          cleanList(legRow.permohonan), cleanList(legRow.sk_penyelia), cleanList(legRow.sk_manajemen), cleanList(legRow.kebijakan),
+          cleanSingle(legRow.ttd_pemilik), cleanSingle(legRow.ktp_pemilik), cleanSingle(legRow.ttd_penyelia), cleanSingle(legRow.ktp_penyelia),
+          company.id
+        );
+      }
+
+      const prodRow = await db.prepare('SELECT * FROM production_data WHERE company_id=?').get(company.id);
+      if (prodRow) {
+        await db.prepare(`
+          UPDATE production_data SET 
+            alur_proses=?, layout_ruang=?, bebas_babi=?,
+            updated_at=datetime('now')
+          WHERE company_id=?
+        `).run(
+          cleanSingle(prodRow.alur_proses), cleanSingle(prodRow.layout_ruang), cleanSingle(prodRow.bebas_babi),
+          company.id
+        );
+      }
     }
   } catch (err) {
-    console.error('Gagal membersihkan evidence_data:', err);
+    console.error('Gagal membersihkan data referensi file:', err);
   }
 
   res.json({ message: 'Berkas berhasil dihapus', filename: safeFilename });
