@@ -1244,8 +1244,23 @@ app.delete('/api/upload/:filename', authMiddleware, async (req, res) => {
         };
         const updatedSosialisasi = cleanList(evRow.sosialisasiFoto);
         const updatedAudit = cleanList(evRow.auditInternalFoto);
-        await db.prepare('UPDATE evidence_data SET sosialisasiFoto=?, auditInternalFoto=?, updated_at=datetime(\'now\') WHERE company_id=?')
-          .run(updatedSosialisasi, updatedAudit, company.id);
+        const updatedSosialisasiAbsen = cleanList(evRow.sosialisasiAbsen);
+        const updatedAuditAbsen = cleanList(evRow.auditInternalAbsen);
+        const updatedPembelian = cleanList(evRow.pembelianBahan);
+        const updatedPenyimpanan = cleanList(evRow.penyimpananBahan);
+        const updatedHasil = cleanList(evRow.hasilProduksi);
+        const updatedDistribusi = cleanList(evRow.distribusiProduk);
+        await db.prepare(`
+          UPDATE evidence_data SET 
+            sosialisasiFoto=?, auditInternalFoto=?, sosialisasiAbsen=?, auditInternalAbsen=?,
+            pembelianBahan=?, penyimpananBahan=?, hasilProduksi=?, distribusiProduk=?,
+            updated_at=datetime('now') 
+          WHERE company_id=?
+        `).run(
+          updatedSosialisasi, updatedAudit, updatedSosialisasiAbsen, updatedAuditAbsen,
+          updatedPembelian, updatedPenyimpanan, updatedHasil, updatedDistribusi,
+          company.id
+        );
       }
     }
   } catch (err) {

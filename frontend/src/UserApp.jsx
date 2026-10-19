@@ -2446,7 +2446,7 @@ const StepUploadEvidence = ({ evidenceData, setEvidenceData, handleGenericFileUp
   };
 
   const handleDeleteFile = async (field, filename) => {
-    const confirmDelete = await showConfirm(`Apakah Anda yakin ingin menghapus foto "${filename}"?`);
+    const confirmDelete = await showConfirm(`Apakah Anda yakin ingin menghapus berkas "${filename}"?`);
     if (!confirmDelete) return;
 
     // Optimistic UI Update
@@ -2462,7 +2462,7 @@ const StepUploadEvidence = ({ evidenceData, setEvidenceData, handleGenericFileUp
     };
 
     setEvidenceData(updatedData);
-    showToast('Foto berhasil dihapus.');
+    showToast('Berkas berhasil dihapus.');
 
     setDeletingFile(filename);
     try {
@@ -2593,61 +2593,181 @@ const StepUploadEvidence = ({ evidenceData, setEvidenceData, handleGenericFileUp
 
         <div className="p-4 border rounded-xl bg-slate-50">
           <h4 className="font-semibold text-sm text-slate-800 mb-1">3. Upload Daftar Hadir Sosialisasi Halal</h4>
-          <input type="file" name="sosialisasiAbsen" accept=".pdf,.doc,.docx" onChange={(e) => handleUploadSingle(e, 'sosialisasiAbsen')} className="block w-full text-xs text-slate-500 file:cursor-pointer file:mr-3 file:m-1 file:py-2 file:px-4 file:rounded-md file:border-0 file:font-bold file:bg-emerald-600 file:text-white hover:file:bg-emerald-700 file:transition-colors border border-slate-200 rounded-lg bg-white cursor-pointer hover:border-emerald-300 transition-colors shadow-2xs focus:outline-none mt-2" />
+          <p className="text-xs text-slate-400 mb-2">Format: PDF, Word, atau Gambar (JPG, PNG)</p>
+          <input type="file" name="sosialisasiAbsen" accept=".pdf,.doc,.docx,image/*,.jpg,.jpeg,.png" onChange={(e) => handleUploadSingle(e, 'sosialisasiAbsen')} className="block w-full text-xs text-slate-500 file:cursor-pointer file:mr-3 file:m-1 file:py-2 file:px-4 file:rounded-md file:border-0 file:font-bold file:bg-emerald-600 file:text-white hover:file:bg-emerald-700 file:transition-colors border border-slate-200 rounded-lg bg-white cursor-pointer hover:border-emerald-300 transition-colors shadow-2xs focus:outline-none" />
           {evidenceData.sosialisasiAbsen && (
-            <a href={`/uploads/${evidenceData.sosialisasiAbsen}`} target="_blank" rel="noreferrer" className="text-xs text-emerald-600 font-semibold mt-1 block truncate w-full hover:underline" title={evidenceData.sosialisasiAbsen}>
-              ✓ {evidenceData.sosialisasiAbsen} (Klik untuk Lihat)
-            </a>
+            <div className="mt-3 space-y-1.5">
+              {evidenceData.sosialisasiAbsen.split(',').map((f, i) => {
+                const fname = f.trim();
+                if (!fname) return null;
+                return (
+                  <div key={i} className="flex items-center justify-between gap-2 p-2 bg-white rounded-lg border border-slate-200 shadow-2xs hover:border-slate-300 transition-colors">
+                    <a href={`/uploads/${fname}`} target="_blank" rel="noreferrer" className="text-xs text-emerald-600 font-semibold truncate flex-1 hover:underline" title={fname}>
+                      ✓ {fname} (Klik untuk Lihat)
+                    </a>
+                    <button
+                      type="button"
+                      onClick={() => handleDeleteFile('sosialisasiAbsen', fname)}
+                      disabled={deletingFile === fname}
+                      className="text-slate-400 hover:text-red-600 hover:bg-red-50 px-2 py-1 rounded transition-colors text-xs font-bold leading-none shrink-0"
+                      title="Hapus berkas ini"
+                    >
+                      {deletingFile === fname ? '...' : '✕'}
+                    </button>
+                  </div>
+                );
+              })}
+            </div>
           )}
         </div>
 
         <div className="p-4 border rounded-xl bg-slate-50">
           <h4 className="font-semibold text-sm text-slate-800 mb-1">4. Upload Daftar Hadir Audit Internal</h4>
-          <input type="file" name="auditInternalAbsen" accept=".pdf,.doc,.docx" onChange={(e) => handleUploadSingle(e, 'auditInternalAbsen')} className="block w-full text-xs text-slate-500 file:cursor-pointer file:mr-3 file:m-1 file:py-2 file:px-4 file:rounded-md file:border-0 file:font-bold file:bg-emerald-600 file:text-white hover:file:bg-emerald-700 file:transition-colors border border-slate-200 rounded-lg bg-white cursor-pointer hover:border-emerald-300 transition-colors shadow-2xs focus:outline-none mt-2" />
+          <p className="text-xs text-slate-400 mb-2">Format: PDF, Word, atau Gambar (JPG, PNG)</p>
+          <input type="file" name="auditInternalAbsen" accept=".pdf,.doc,.docx,image/*,.jpg,.jpeg,.png" onChange={(e) => handleUploadSingle(e, 'auditInternalAbsen')} className="block w-full text-xs text-slate-500 file:cursor-pointer file:mr-3 file:m-1 file:py-2 file:px-4 file:rounded-md file:border-0 file:font-bold file:bg-emerald-600 file:text-white hover:file:bg-emerald-700 file:transition-colors border border-slate-200 rounded-lg bg-white cursor-pointer hover:border-emerald-300 transition-colors shadow-2xs focus:outline-none" />
           {evidenceData.auditInternalAbsen && (
-            <a href={`/uploads/${evidenceData.auditInternalAbsen}`} target="_blank" rel="noreferrer" className="text-xs text-emerald-600 font-semibold mt-1 block truncate w-full hover:underline" title={evidenceData.auditInternalAbsen}>
-              ✓ {evidenceData.auditInternalAbsen} (Klik untuk Lihat)
-            </a>
+            <div className="mt-3 space-y-1.5">
+              {evidenceData.auditInternalAbsen.split(',').map((f, i) => {
+                const fname = f.trim();
+                if (!fname) return null;
+                return (
+                  <div key={i} className="flex items-center justify-between gap-2 p-2 bg-white rounded-lg border border-slate-200 shadow-2xs hover:border-slate-300 transition-colors">
+                    <a href={`/uploads/${fname}`} target="_blank" rel="noreferrer" className="text-xs text-emerald-600 font-semibold truncate flex-1 hover:underline" title={fname}>
+                      ✓ {fname} (Klik untuk Lihat)
+                    </a>
+                    <button
+                      type="button"
+                      onClick={() => handleDeleteFile('auditInternalAbsen', fname)}
+                      disabled={deletingFile === fname}
+                      className="text-slate-400 hover:text-red-600 hover:bg-red-50 px-2 py-1 rounded transition-colors text-xs font-bold leading-none shrink-0"
+                      title="Hapus berkas ini"
+                    >
+                      {deletingFile === fname ? '...' : '✕'}
+                    </button>
+                  </div>
+                );
+              })}
+            </div>
           )}
         </div>
 
         <div className="p-4 border rounded-xl bg-slate-50">
           <h4 className="font-semibold text-sm text-slate-800 mb-1">5. Sampel Catatan Pembelian Bahan</h4>
-          <input type="file" name="pembelianBahan" accept=".pdf,.doc,.docx,image/*" onChange={(e) => handleUploadSingle(e, 'pembelianBahan')} className="block w-full text-xs text-slate-500 file:cursor-pointer file:mr-3 file:m-1 file:py-2 file:px-4 file:rounded-md file:border-0 file:font-bold file:bg-emerald-600 file:text-white hover:file:bg-emerald-700 file:transition-colors border border-slate-200 rounded-lg bg-white cursor-pointer hover:border-emerald-300 transition-colors shadow-2xs focus:outline-none mt-2" />
+          <p className="text-xs text-slate-400 mb-2">Format: PDF, Word, atau Gambar (JPG, PNG)</p>
+          <input type="file" name="pembelianBahan" accept=".pdf,.doc,.docx,image/*,.jpg,.jpeg,.png" onChange={(e) => handleUploadSingle(e, 'pembelianBahan')} className="block w-full text-xs text-slate-500 file:cursor-pointer file:mr-3 file:m-1 file:py-2 file:px-4 file:rounded-md file:border-0 file:font-bold file:bg-emerald-600 file:text-white hover:file:bg-emerald-700 file:transition-colors border border-slate-200 rounded-lg bg-white cursor-pointer hover:border-emerald-300 transition-colors shadow-2xs focus:outline-none" />
           {evidenceData.pembelianBahan && (
-            <a href={`/uploads/${evidenceData.pembelianBahan}`} target="_blank" rel="noreferrer" className="text-xs text-emerald-600 font-semibold mt-1 block truncate w-full hover:underline" title={evidenceData.pembelianBahan}>
-              ✓ {evidenceData.pembelianBahan} (Klik untuk Lihat)
-            </a>
+            <div className="mt-3 space-y-1.5">
+              {evidenceData.pembelianBahan.split(',').map((f, i) => {
+                const fname = f.trim();
+                if (!fname) return null;
+                return (
+                  <div key={i} className="flex items-center justify-between gap-2 p-2 bg-white rounded-lg border border-slate-200 shadow-2xs hover:border-slate-300 transition-colors">
+                    <a href={`/uploads/${fname}`} target="_blank" rel="noreferrer" className="text-xs text-emerald-600 font-semibold truncate flex-1 hover:underline" title={fname}>
+                      ✓ {fname} (Klik untuk Lihat)
+                    </a>
+                    <button
+                      type="button"
+                      onClick={() => handleDeleteFile('pembelianBahan', fname)}
+                      disabled={deletingFile === fname}
+                      className="text-slate-400 hover:text-red-600 hover:bg-red-50 px-2 py-1 rounded transition-colors text-xs font-bold leading-none shrink-0"
+                      title="Hapus berkas ini"
+                    >
+                      {deletingFile === fname ? '...' : '✕'}
+                    </button>
+                  </div>
+                );
+              })}
+            </div>
           )}
         </div>
 
         <div className="p-4 border rounded-xl bg-slate-50">
           <h4 className="font-semibold text-sm text-slate-800 mb-1">6. Catatan Penyimpanan Bahan</h4>
-          <input type="file" name="penyimpananBahan" accept=".pdf,.doc,.docx,image/*" onChange={(e) => handleUploadSingle(e, 'penyimpananBahan')} className="block w-full text-xs text-slate-500 file:cursor-pointer file:mr-3 file:m-1 file:py-2 file:px-4 file:rounded-md file:border-0 file:font-bold file:bg-emerald-600 file:text-white hover:file:bg-emerald-700 file:transition-colors border border-slate-200 rounded-lg bg-white cursor-pointer hover:border-emerald-300 transition-colors shadow-2xs focus:outline-none mt-2" />
+          <p className="text-xs text-slate-400 mb-2">Format: PDF, Word, atau Gambar (JPG, PNG)</p>
+          <input type="file" name="penyimpananBahan" accept=".pdf,.doc,.docx,image/*,.jpg,.jpeg,.png" onChange={(e) => handleUploadSingle(e, 'penyimpananBahan')} className="block w-full text-xs text-slate-500 file:cursor-pointer file:mr-3 file:m-1 file:py-2 file:px-4 file:rounded-md file:border-0 file:font-bold file:bg-emerald-600 file:text-white hover:file:bg-emerald-700 file:transition-colors border border-slate-200 rounded-lg bg-white cursor-pointer hover:border-emerald-300 transition-colors shadow-2xs focus:outline-none" />
           {evidenceData.penyimpananBahan && (
-            <a href={`/uploads/${evidenceData.penyimpananBahan}`} target="_blank" rel="noreferrer" className="text-xs text-emerald-600 font-semibold mt-1 block truncate w-full hover:underline" title={evidenceData.penyimpananBahan}>
-              ✓ {evidenceData.penyimpananBahan} (Klik untuk Lihat)
-            </a>
+            <div className="mt-3 space-y-1.5">
+              {evidenceData.penyimpananBahan.split(',').map((f, i) => {
+                const fname = f.trim();
+                if (!fname) return null;
+                return (
+                  <div key={i} className="flex items-center justify-between gap-2 p-2 bg-white rounded-lg border border-slate-200 shadow-2xs hover:border-slate-300 transition-colors">
+                    <a href={`/uploads/${fname}`} target="_blank" rel="noreferrer" className="text-xs text-emerald-600 font-semibold truncate flex-1 hover:underline" title={fname}>
+                      ✓ {fname} (Klik untuk Lihat)
+                    </a>
+                    <button
+                      type="button"
+                      onClick={() => handleDeleteFile('penyimpananBahan', fname)}
+                      disabled={deletingFile === fname}
+                      className="text-slate-400 hover:text-red-600 hover:bg-red-50 px-2 py-1 rounded transition-colors text-xs font-bold leading-none shrink-0"
+                      title="Hapus berkas ini"
+                    >
+                      {deletingFile === fname ? '...' : '✕'}
+                    </button>
+                  </div>
+                );
+              })}
+            </div>
           )}
         </div>
 
         <div className="p-4 border rounded-xl bg-slate-50">
           <h4 className="font-semibold text-sm text-slate-800 mb-1">7. Catatan Hasil Produksi</h4>
-          <input type="file" name="hasilProduksi" accept=".pdf,.doc,.docx,image/*" onChange={(e) => handleUploadSingle(e, 'hasilProduksi')} className="block w-full text-xs text-slate-500 file:cursor-pointer file:mr-3 file:m-1 file:py-2 file:px-4 file:rounded-md file:border-0 file:font-bold file:bg-emerald-600 file:text-white hover:file:bg-emerald-700 file:transition-colors border border-slate-200 rounded-lg bg-white cursor-pointer hover:border-emerald-300 transition-colors shadow-2xs focus:outline-none mt-2" />
+          <p className="text-xs text-slate-400 mb-2">Format: PDF, Word, atau Gambar (JPG, PNG)</p>
+          <input type="file" name="hasilProduksi" accept=".pdf,.doc,.docx,image/*,.jpg,.jpeg,.png" onChange={(e) => handleUploadSingle(e, 'hasilProduksi')} className="block w-full text-xs text-slate-500 file:cursor-pointer file:mr-3 file:m-1 file:py-2 file:px-4 file:rounded-md file:border-0 file:font-bold file:bg-emerald-600 file:text-white hover:file:bg-emerald-700 file:transition-colors border border-slate-200 rounded-lg bg-white cursor-pointer hover:border-emerald-300 transition-colors shadow-2xs focus:outline-none" />
           {evidenceData.hasilProduksi && (
-            <a href={`/uploads/${evidenceData.hasilProduksi}`} target="_blank" rel="noreferrer" className="text-xs text-emerald-600 font-semibold mt-1 block truncate w-full hover:underline" title={evidenceData.hasilProduksi}>
-              ✓ {evidenceData.hasilProduksi} (Klik untuk Lihat)
-            </a>
+            <div className="mt-3 space-y-1.5">
+              {evidenceData.hasilProduksi.split(',').map((f, i) => {
+                const fname = f.trim();
+                if (!fname) return null;
+                return (
+                  <div key={i} className="flex items-center justify-between gap-2 p-2 bg-white rounded-lg border border-slate-200 shadow-2xs hover:border-slate-300 transition-colors">
+                    <a href={`/uploads/${fname}`} target="_blank" rel="noreferrer" className="text-xs text-emerald-600 font-semibold truncate flex-1 hover:underline" title={fname}>
+                      ✓ {fname} (Klik untuk Lihat)
+                    </a>
+                    <button
+                      type="button"
+                      onClick={() => handleDeleteFile('hasilProduksi', fname)}
+                      disabled={deletingFile === fname}
+                      className="text-slate-400 hover:text-red-600 hover:bg-red-50 px-2 py-1 rounded transition-colors text-xs font-bold leading-none shrink-0"
+                      title="Hapus berkas ini"
+                    >
+                      {deletingFile === fname ? '...' : '✕'}
+                    </button>
+                  </div>
+                );
+              })}
+            </div>
           )}
         </div>
 
         <div className="p-4 border rounded-xl bg-slate-50">
           <h4 className="font-semibold text-sm text-slate-800 mb-1">8. Catatan Penjualan/Distribusi Produk</h4>
-          <input type="file" name="distribusiProduk" accept=".pdf,.doc,.docx,image/*" onChange={(e) => handleUploadSingle(e, 'distribusiProduk')} className="block w-full text-xs text-slate-500 file:cursor-pointer file:mr-3 file:m-1 file:py-2 file:px-4 file:rounded-md file:border-0 file:font-bold file:bg-emerald-600 file:text-white hover:file:bg-emerald-700 file:transition-colors border border-slate-200 rounded-lg bg-white cursor-pointer hover:border-emerald-300 transition-colors shadow-2xs focus:outline-none mt-2" />
+          <p className="text-xs text-slate-400 mb-2">Format: PDF, Word, atau Gambar (JPG, PNG)</p>
+          <input type="file" name="distribusiProduk" accept=".pdf,.doc,.docx,image/*,.jpg,.jpeg,.png" onChange={(e) => handleUploadSingle(e, 'distribusiProduk')} className="block w-full text-xs text-slate-500 file:cursor-pointer file:mr-3 file:m-1 file:py-2 file:px-4 file:rounded-md file:border-0 file:font-bold file:bg-emerald-600 file:text-white hover:file:bg-emerald-700 file:transition-colors border border-slate-200 rounded-lg bg-white cursor-pointer hover:border-emerald-300 transition-colors shadow-2xs focus:outline-none" />
           {evidenceData.distribusiProduk && (
-            <a href={`/uploads/${evidenceData.distribusiProduk}`} target="_blank" rel="noreferrer" className="text-xs text-emerald-600 font-semibold mt-1 block truncate w-full hover:underline" title={evidenceData.distribusiProduk}>
-              ✓ {evidenceData.distribusiProduk} (Klik untuk Lihat)
-            </a>
+            <div className="mt-3 space-y-1.5">
+              {evidenceData.distribusiProduk.split(',').map((f, i) => {
+                const fname = f.trim();
+                if (!fname) return null;
+                return (
+                  <div key={i} className="flex items-center justify-between gap-2 p-2 bg-white rounded-lg border border-slate-200 shadow-2xs hover:border-slate-300 transition-colors">
+                    <a href={`/uploads/${fname}`} target="_blank" rel="noreferrer" className="text-xs text-emerald-600 font-semibold truncate flex-1 hover:underline" title={fname}>
+                      ✓ {fname} (Klik untuk Lihat)
+                    </a>
+                    <button
+                      type="button"
+                      onClick={() => handleDeleteFile('distribusiProduk', fname)}
+                      disabled={deletingFile === fname}
+                      className="text-slate-400 hover:text-red-600 hover:bg-red-50 px-2 py-1 rounded transition-colors text-xs font-bold leading-none shrink-0"
+                      title="Hapus berkas ini"
+                    >
+                      {deletingFile === fname ? '...' : '✕'}
+                    </button>
+                  </div>
+                );
+              })}
+            </div>
           )}
         </div>
       </div>
