@@ -227,6 +227,36 @@ function uploadBufferToSupabase(fileBuffer, storedName, mimetype) {
   });
 }
 
+// Helper untuk menghapus file fisik lokal dan dari Supabase Storage
+async function deleteStoredFile(filename) {
+  if (!filename) return;
+  const safeFilename = path.basename(filename);
+  
+  // 1. Hapus dari uploads lokal jika ada
+  try {
+    const filePath = path.join(uploadsDir, safeFilename);
+    if (fs.existsSync(filePath)) {
+      fs.unlinkSync(filePath);
+    }
+  } catch (err) {
+    console.error('Gagal menghapus file lokal:', err.message);
+  }
+
+  // 2. Hapus dari Supabase Storage jika ada
+  try {
+    const sb = getSupabase ? getSupabase() : null;
+    if (sb) {
+      const { bucket } = getCleanSupabaseConfig ? getCleanSupabaseConfig() : { bucket: 'halal-flow-uploads' };
+      await sb.storage.from(bucket).remove([safeFilename]);
+      if (bucket !== 'halal-flow-uploads') {
+        await sb.storage.from('halal-flow-uploads').remove([safeFilename]);
+      }
+    }
+  } catch (err) {
+    console.warn('Gagal menghapus dari Supabase storage:', err.message);
+  }
+}
+
 app.get('/uploads/:filename', (req, res, next) => {
   let filename = req.params.filename;
   if (!filename) return next();
@@ -1207,40 +1237,44 @@ app.post('/api/upload', authMiddleware, async (req, res, next) => {
   }
 });
 
-// DELETE /api/upload/:filename
-app.delete('/api/upload/:filename', authMiddleware, async (req, res) => {
-  const safeFilename = path.basename(req.params.filename);
+// DELETE /api/upload/:filename or /api/upload?filename=...
+app.delete(['/api/upload/:filename', '/api/upload'], authMiddleware, async (req, res) => {
+  const rawFilename = req.params.filename || req.query.filename || (req.body && req.body.filename) || '';
+  const decoded = decodeURIComponent(rawFilename);
+  const safeFilename = path.basename(decoded);
   if (!safeFilename) {
     return res.status(400).json({ error: 'Nama berkas tidak valid' });
   }
 
-  // Hapus dari folder uploads
-  const filePath = path.join(uploadsDir, safeFilename);
-  if (fs.existsSync(filePath)) {
-    try {
-      fs.unlinkSync(filePath);
-    } catch (err) {
-      console.error('Gagal menghapus berkas fisik:', err);
-    }
-  }
+  // Hapus dari disk lokal dan Supabase Storage
+  await deleteStoredFile(safeFilename);
 
   // Hapus dari tabel uploaded_files jika ada
   try {
-    await db.prepare('DELETE FROM uploaded_files WHERE stored_name = ? OR stored_name = ? OR original_name = ?').run(safeFilename, req.params.filename, safeFilename);
+    await db.prepare('DELETE FROM uploaded_files WHERE stored_name = ? OR stored_name = ? OR original_name = ? OR original_name = ?')
+      .run(safeFilename, decoded, safeFilename, decoded);
   } catch (err) {
     console.error('Gagal menghapus log uploaded_files:', err);
   }
 
-  // Bersihkan referensi di evidence_data jika ada
+  // Bersihkan referensi di domain tables jika ada
   try {
     const userId = req.user.id;
-    const company = await db.prepare('SELECT id FROM companies WHERE user_id=?').get(userId);
+    let company = null;
+    const user = await db.prepare('SELECT id, company_id FROM users WHERE id=?').get(userId);
+    if (user && user.company_id) {
+      company = await db.prepare('SELECT id FROM companies WHERE id=?').get(user.company_id);
+    }
+    if (!company) {
+      company = await db.prepare('SELECT id FROM companies WHERE user_id=? ORDER BY id DESC LIMIT 1').get(userId);
+    }
+
     if (company) {
       const isMatch = (val) => {
         if (!val) return false;
         const s = String(val).trim();
         const base = path.basename(s);
-        return s === safeFilename || base === safeFilename || s === req.params.filename || base === req.params.filename;
+        return s === safeFilename || base === safeFilename || s === decoded || base === decoded || s === rawFilename || base === rawFilename;
       };
 
       const cleanList = (val) => {
@@ -1254,14 +1288,14 @@ app.delete('/api/upload/:filename', authMiddleware, async (req, res) => {
 
       const evRow = await db.prepare('SELECT * FROM evidence_data WHERE company_id=?').get(company.id);
       if (evRow) {
-        const updatedSosialisasi = cleanList(evRow.sosialisasiFoto);
-        const updatedAudit = cleanList(evRow.auditInternalFoto);
-        const updatedSosialisasiAbsen = cleanList(evRow.sosialisasiAbsen);
-        const updatedAuditAbsen = cleanList(evRow.auditInternalAbsen);
-        const updatedPembelian = cleanList(evRow.pembelianBahan);
-        const updatedPenyimpanan = cleanList(evRow.penyimpananBahan);
-        const updatedHasil = cleanList(evRow.hasilProduksi);
-        const updatedDistribusi = cleanList(evRow.distribusiProduk);
+        const updatedSosialisasi = cleanList(evRow.sosialisasiFoto || evRow.sosialisasifoto);
+        const updatedAudit = cleanList(evRow.auditInternalFoto || evRow.auditinternalfoto);
+        const updatedSosialisasiAbsen = cleanList(evRow.sosialisasiAbsen || evRow.sosialisasiabsen);
+        const updatedAuditAbsen = cleanList(evRow.auditInternalAbsen || evRow.auditinternalabsen);
+        const updatedPembelian = cleanList(evRow.pembelianBahan || evRow.pembelianbahan);
+        const updatedPenyimpanan = cleanList(evRow.penyimpananBahan || evRow.penyimpananbahan);
+        const updatedHasil = cleanList(evRow.hasilProduksi || evRow.hasilproduksi);
+        const updatedDistribusi = cleanList(evRow.distribusiProduk || evRow.distribusiproduk);
         await db.prepare(`
           UPDATE evidence_data SET 
             sosialisasiFoto=?, auditInternalFoto=?, sosialisasiAbsen=?, auditInternalAbsen=?,
@@ -1298,7 +1332,9 @@ app.delete('/api/upload/:filename', authMiddleware, async (req, res) => {
             updated_at=datetime('now')
           WHERE company_id=?
         `).run(
-          cleanSingle(prodRow.alur_proses), cleanSingle(prodRow.layout_ruang), cleanSingle(prodRow.bebas_babi),
+          cleanSingle(prodRow.alur_proses || prodRow.alurProses),
+          cleanSingle(prodRow.layout_ruang || prodRow.layoutRuang),
+          cleanSingle(prodRow.bebas_babi || prodRow.bebasBabi),
           company.id
         );
       }
@@ -1756,40 +1792,21 @@ app.post('/api/products/submit', authMiddleware, async (req, res) => {
 // GET /api/production
 app.get('/api/production', authMiddleware, async (req, res) => {
   const userId = req.user.id;
-  const company = await db.prepare('SELECT id FROM companies WHERE user_id=?').get(userId);
-  if (!company) return res.json({});
-  
-  let row = await db.prepare('SELECT * FROM production_data WHERE company_id=?').get(company.id);
-  
-  let alurProses = row?.alur_proses || row?.alurProses || row?.alurproses || '';
-  let layoutRuang = row?.layout_ruang || row?.layoutRuang || row?.layoutruang || '';
-  let bebasBabi = row?.bebas_babi || row?.bebasBabi || row?.bebasbabi || '';
-
-  // Fallback: search uploaded_files ONLY if no production_data record exists at all for this company
-  if (!row) {
-    try {
-      const uploaded = await db.prepare('SELECT stored_name, original_name, document_type FROM uploaded_files WHERE company_id=? ORDER BY id DESC').all(company.id);
-      for (const f of uploaded) {
-        const sName = f.stored_name || '';
-        const oName = (f.original_name || '').toLowerCase();
-        const dType = f.document_type || '';
-
-        if (!bebasBabi && (dType === 'bebasBabi' || oName.includes('babi') || oName.includes('bebas') || oName.includes('undangan') || (sName.toLowerCase().endsWith('.pdf') && !oName.includes('permohonan') && !oName.includes('sk_') && !oName.includes('kebijakan') && !oName.includes('ktp')))) {
-          bebasBabi = sName;
-        } else if (!alurProses && (dType === 'alurProses' || oName.includes('alur') || oName.includes('proses') || oName.includes('sppg'))) {
-          alurProses = sName;
-        } else if (!layoutRuang && (dType === 'layoutRuang' || oName.includes('layout') || oName.includes('denah') || oName.includes('ruang') || oName.includes('images'))) {
-          layoutRuang = sName;
-        }
-      }
-      if (alurProses || layoutRuang || bebasBabi) {
-        await db.prepare('INSERT INTO production_data (company_id, alur_proses, layout_ruang, bebas_babi) VALUES (?,?,?,?)')
-          .run(company.id, alurProses, layoutRuang, bebasBabi);
-      }
-    } catch(err) {
-      console.warn('Production fallback lookup warning:', err.message);
-    }
+  let company = null;
+  const user = await db.prepare('SELECT id, company_id FROM users WHERE id=?').get(userId);
+  if (user && user.company_id) {
+    company = await db.prepare('SELECT id FROM companies WHERE id=?').get(user.company_id);
   }
+  if (!company) {
+    company = await db.prepare('SELECT id FROM companies WHERE user_id=? ORDER BY id DESC LIMIT 1').get(userId);
+  }
+  if (!company) return res.json({ alurProses: '', layoutRuang: '', bebasBabi: '', alur_proses: '', layout_ruang: '', bebas_babi: '' });
+  
+  const row = await db.prepare('SELECT * FROM production_data WHERE company_id=?').get(company.id);
+  
+  const alurProses = row?.alur_proses || row?.alurProses || row?.alurproses || '';
+  const layoutRuang = row?.layout_ruang || row?.layoutRuang || row?.layoutruang || '';
+  const bebasBabi = row?.bebas_babi || row?.bebasBabi || row?.bebasbabi || '';
 
   res.json({
     alurProses, layoutRuang, bebasBabi,
@@ -1800,7 +1817,14 @@ app.get('/api/production', authMiddleware, async (req, res) => {
 // POST /api/production
 app.post('/api/production', authMiddleware, async (req, res) => {
   const userId = req.user.id;
-  const company = await db.prepare('SELECT id FROM companies WHERE user_id=?').get(userId);
+  let company = null;
+  const user = await db.prepare('SELECT id, company_id FROM users WHERE id=?').get(userId);
+  if (user && user.company_id) {
+    company = await db.prepare('SELECT id FROM companies WHERE id=?').get(user.company_id);
+  }
+  if (!company) {
+    company = await db.prepare('SELECT id FROM companies WHERE user_id=? ORDER BY id DESC LIMIT 1').get(userId);
+  }
   if (!company) return res.status(404).json({ error: 'Perusahaan tidak ditemukan' });
 
   const resolveVal = (camel, snake) => {
@@ -1836,6 +1860,52 @@ app.post('/api/production', authMiddleware, async (req, res) => {
   await db.prepare(`UPDATE certification_progress SET status='Menunggu Verifikasi', updated_at=datetime('now') WHERE company_id=? AND stage=5`).run(company.id);
   await logActivity(db, company.id, userId, 'production_save', 'Dokumen proses produksi halal disimpan');
   res.json({ message: 'OK', alurProses, layoutRuang, bebasBabi });
+});
+
+// DELETE /api/production/:field - Hapus berkas produksi secara spesifik
+app.delete('/api/production/:field', authMiddleware, async (req, res) => {
+  const userId = req.user.id;
+  let company = null;
+  const user = await db.prepare('SELECT id, company_id FROM users WHERE id=?').get(userId);
+  if (user && user.company_id) {
+    company = await db.prepare('SELECT id FROM companies WHERE id=?').get(user.company_id);
+  }
+  if (!company) {
+    company = await db.prepare('SELECT id FROM companies WHERE user_id=? ORDER BY id DESC LIMIT 1').get(userId);
+  }
+  if (!company) return res.status(404).json({ error: 'Perusahaan tidak ditemukan' });
+
+  const field = req.params.field;
+  const colMap = {
+    alurProses: 'alur_proses',
+    alur_proses: 'alur_proses',
+    layoutRuang: 'layout_ruang',
+    layout_ruang: 'layout_ruang',
+    bebasBabi: 'bebas_babi',
+    bebas_babi: 'bebas_babi'
+  };
+  const col = colMap[field];
+  if (!col) return res.status(400).json({ error: 'Field produksi tidak valid' });
+
+  const existing = await db.prepare('SELECT * FROM production_data WHERE company_id=?').get(company.id);
+  const oldVal = existing ? (existing[col] || existing[field] || '') : '';
+
+  if (existing) {
+    await db.prepare(`UPDATE production_data SET ${col}='', updated_at=datetime('now') WHERE company_id=?`).run(company.id);
+  }
+
+  if (oldVal) {
+    const safeOld = path.basename(oldVal);
+    await deleteStoredFile(safeOld);
+    try {
+      await db.prepare('DELETE FROM uploaded_files WHERE (stored_name=? OR original_name=?) AND company_id=?')
+        .run(safeOld, safeOld, company.id);
+    } catch (e) {
+      console.warn('Gagal bersihkan uploaded_files:', e.message);
+    }
+  }
+
+  res.json({ message: 'Berkas berhasil dihapus', field, col });
 });
 
 // =============================================
@@ -3305,36 +3375,9 @@ app.get('/api/admin/companies/:id/production', adminAuthMiddleware, async (req, 
     let row = await db.prepare('SELECT * FROM production_data WHERE company_id=?').get(companyId);
     const stage = await db.prepare('SELECT status FROM certification_progress WHERE company_id=? AND stage=5').get(companyId);
 
-    let alurProses = row?.alur_proses || row?.alurProses || row?.alurproses || '';
-    let layoutRuang = row?.layout_ruang || row?.layoutRuang || row?.layoutruang || '';
-    let bebasBabi = row?.bebas_babi || row?.bebasBabi || row?.bebasbabi || '';
-
-    // Fallback: check uploaded_files table only if row does not exist at all
-    if (!row) {
-      try {
-        const uploaded = await db.prepare('SELECT stored_name, original_name, document_type FROM uploaded_files WHERE company_id=? ORDER BY id DESC').all(companyId);
-        for (const f of uploaded) {
-          const sName = f.stored_name || '';
-          const oName = (f.original_name || '').toLowerCase();
-          const dType = f.document_type || '';
-
-          if (!bebasBabi && (dType === 'bebasBabi' || oName.includes('babi') || oName.includes('bebas') || oName.includes('undangan') || (sName.toLowerCase().endsWith('.pdf') && !oName.includes('permohonan') && !oName.includes('sk_') && !oName.includes('kebijakan') && !oName.includes('ktp')))) {
-            bebasBabi = sName;
-          } else if (!alurProses && (dType === 'alurProses' || oName.includes('alur') || oName.includes('proses') || oName.includes('sppg'))) {
-            alurProses = sName;
-          } else if (!layoutRuang && (dType === 'layoutRuang' || oName.includes('layout') || oName.includes('denah') || oName.includes('ruang') || oName.includes('images'))) {
-            layoutRuang = sName;
-          }
-        }
-        // Auto-heal production_data if any file was found
-        if (alurProses || layoutRuang || bebasBabi) {
-          await db.prepare('INSERT INTO production_data (company_id, alur_proses, layout_ruang, bebas_babi) VALUES (?,?,?,?)')
-            .run(companyId, alurProses, layoutRuang, bebasBabi);
-        }
-      } catch(lookupErr) {
-        console.warn('Production admin fallback lookup warning:', lookupErr.message);
-      }
-    }
+    const alurProses = row?.alur_proses || row?.alurProses || row?.alurproses || '';
+    const layoutRuang = row?.layout_ruang || row?.layoutRuang || row?.layoutruang || '';
+    const bebasBabi = row?.bebas_babi || row?.bebasBabi || row?.bebasbabi || '';
 
     const hasData = Boolean(alurProses || layoutRuang || bebasBabi);
     res.json({

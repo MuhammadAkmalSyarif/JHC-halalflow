@@ -1254,29 +1254,67 @@ app.post('/api/products/submit', authMiddleware, async (req, res) => {
 
 // =============================================
 // API: PROSES PRODUKSI (USER)
-// =============================================
-
-// GET /api/production
+// ===============================// GET /api/production
 app.get('/api/production', authMiddleware, async (req, res) => {
   const userId = req.user.id;
-  const company = await db.prepare('SELECT id FROM companies WHERE user_id=?').get(userId);
-  if (!company) return res.json({});
+  let company = null;
+  const user = await db.prepare('SELECT id, company_id FROM users WHERE id=?').get(userId);
+  if (user && user.company_id) {
+    company = await db.prepare('SELECT id FROM companies WHERE id=?').get(user.company_id);
+  }
+  if (!company) {
+    company = await db.prepare('SELECT id FROM companies WHERE user_id=? ORDER BY id DESC LIMIT 1').get(userId);
+  }
+  if (!company) return res.json({ alurProses: '', layoutRuang: '', bebasBabi: '', alur_proses: '', layout_ruang: '', bebas_babi: '' });
+
   const row = await db.prepare('SELECT * FROM production_data WHERE company_id=?').get(company.id);
-  if (!row) return res.json({});
-  res.json({ alurProses: row.alur_proses, layoutRuang: row.layout_ruang, bebasBabi: row.bebas_babi });
+  const alurProses = row?.alur_proses || row?.alurProses || '';
+  const layoutRuang = row?.layout_ruang || row?.layoutRuang || '';
+  const bebasBabi = row?.bebas_babi || row?.bebasBabi || '';
+
+  res.json({
+    alurProses, layoutRuang, bebasBabi,
+    alur_proses: alurProses, layout_ruang: layoutRuang, bebas_babi: bebasBabi
+  });
 });
 
 // POST /api/production
 app.post('/api/production', authMiddleware, async (req, res) => {
   const userId = req.user.id;
-  const company = await db.prepare('SELECT id FROM companies WHERE user_id=?').get(userId);
+  let company = null;
+  const user = await db.prepare('SELECT id, company_id FROM users WHERE id=?').get(userId);
+  if (user && user.company_id) {
+    company = await db.prepare('SELECT id FROM companies WHERE id=?').get(user.company_id);
+  }
+  if (!company) {
+    company = await db.prepare('SELECT id FROM companies WHERE user_id=? ORDER BY id DESC LIMIT 1').get(userId);
+  }
   if (!company) return res.status(404).json({ error: 'Perusahaan tidak ditemukan' });
-  const { alurProses, layoutRuang, bebasBabi } = req.body;
-  const existing = await db.prepare('SELECT id FROM production_data WHERE company_id=?').get(company.id);
+
+  const resolveVal = (camel, snake) => {
+    if (camel !== undefined && snake !== undefined) {
+      if (camel === '' || snake === '') return '';
+      return camel;
+    }
+    if (camel !== undefined) return camel;
+    if (snake !== undefined) return snake;
+    return undefined;
+  };
+
+  const alurProses = resolveVal(req.body.alurProses, req.body.alur_proses);
+  const layoutRuang = resolveVal(req.body.layoutRuang, req.body.layout_ruang);
+  const bebasBabi = resolveVal(req.body.bebasBabi, req.body.bebas_babi);
+
+  const existing = await db.prepare('SELECT * FROM production_data WHERE company_id=?').get(company.id);
   if (existing) {
-    const newAlur = alurProses !== undefined ? alurProses : (existing.alur_proses || '');
-    const newLayout = layoutRuang !== undefined ? layoutRuang : (existing.layout_ruang || '');
-    const newBabi = bebasBabi !== undefined ? bebasBabi : (existing.bebas_babi || '');
+    const prevAlur = existing.alur_proses || existing.alurProses || '';
+    const prevLayout = existing.layout_ruang || existing.layoutRuang || '';
+    const prevBabi = existing.bebas_babi || existing.bebasBabi || '';
+
+    const newAlur = alurProses !== undefined ? alurProses : prevAlur;
+    const newLayout = layoutRuang !== undefined ? layoutRuang : prevLayout;
+    const newBabi = bebasBabi !== undefined ? bebasBabi : prevBabi;
+
     await db.prepare(`UPDATE production_data SET alur_proses=?, layout_ruang=?, bebas_babi=?, updated_at=datetime('now') WHERE company_id=?`)
       .run(newAlur, newLayout, newBabi, company.id);
   } else {
@@ -1285,7 +1323,40 @@ app.post('/api/production', authMiddleware, async (req, res) => {
   }
   await db.prepare(`UPDATE certification_progress SET status='Menunggu Verifikasi', updated_at=datetime('now') WHERE company_id=? AND stage=5`).run(company.id);
   await logActivity(db, company.id, userId, 'production_save', 'Dokumen proses produksi halal disimpan');
-  res.json({ message: 'OK' });
+  res.json({ message: 'OK', alurProses, layoutRuang, bebasBabi });
+});
+
+// DELETE /api/production/:field
+app.delete('/api/production/:field', authMiddleware, async (req, res) => {
+  const userId = req.user.id;
+  let company = null;
+  const user = await db.prepare('SELECT id, company_id FROM users WHERE id=?').get(userId);
+  if (user && user.company_id) {
+    company = await db.prepare('SELECT id FROM companies WHERE id=?').get(user.company_id);
+  }
+  if (!company) {
+    company = await db.prepare('SELECT id FROM companies WHERE user_id=? ORDER BY id DESC LIMIT 1').get(userId);
+  }
+  if (!company) return res.status(404).json({ error: 'Perusahaan tidak ditemukan' });
+
+  const field = req.params.field;
+  const colMap = {
+    alurProses: 'alur_proses',
+    alur_proses: 'alur_proses',
+    layoutRuang: 'layout_ruang',
+    layout_ruang: 'layout_ruang',
+    bebasBabi: 'bebas_babi',
+    bebas_babi: 'bebas_babi'
+  };
+  const col = colMap[field];
+  if (!col) return res.status(400).json({ error: 'Field produksi tidak valid' });
+
+  const existing = await db.prepare('SELECT * FROM production_data WHERE company_id=?').get(company.id);
+  if (existing) {
+    await db.prepare(`UPDATE production_data SET ${col}='', updated_at=datetime('now') WHERE company_id=?`).run(company.id);
+  }
+
+  res.json({ message: 'Berkas berhasil dihapus', field, col });
 });
 
 // =============================================

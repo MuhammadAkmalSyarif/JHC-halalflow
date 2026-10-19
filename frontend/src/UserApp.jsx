@@ -479,7 +479,9 @@ export default function UserApp() {
   const isBahanComplete = Boolean(matrixSubmitted);
 
   const isPphComplete = Boolean(
-    productionData?.alurProses && productionData?.layoutRuang && productionData?.bebasBabi
+    (productionData?.alurProses || productionData?.alur_proses) &&
+    (productionData?.layoutRuang || productionData?.layout_ruang) &&
+    (productionData?.bebasBabi || productionData?.bebas_babi)
   );
 
   const isProdukComplete = Boolean(
@@ -2396,17 +2398,29 @@ const StepProsesProduksi = ({ productionData, setProductionData, handleGenericFi
       // Optimistic update so UI card immediately switches to empty dropzone
       setProductionData(updated);
 
+      // 1. Panggil endpoint DELETE khusus untuk proses produksi
+      await apiFetch(`/api/production/${field}`, {
+        method: 'DELETE'
+      });
+
+      // 2. Simpan juga via POST untuk memastikan konsistensi
       await apiFetch('/api/production', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(updated)
       });
 
-      const token = localStorage.getItem('jhc_token');
-      await apiFetch(`/api/upload/${encodeURIComponent(filename)}`, {
-        method: 'DELETE',
-        headers: token ? { 'Authorization': `Bearer ${token}` } : {}
-      });
+      // 3. Hapus berkas fisik melalui /api/upload dengan nama file yang aman (tanpa URL/path)
+      if (filename) {
+        const cleanName = filename.split('/').pop().split('\\').pop();
+        if (cleanName) {
+          const token = localStorage.getItem('jhc_token');
+          await apiFetch(`/api/upload/${encodeURIComponent(cleanName)}?filename=${encodeURIComponent(cleanName)}`, {
+            method: 'DELETE',
+            headers: token ? { 'Authorization': `Bearer ${token}` } : {}
+          });
+        }
+      }
 
       showToast('Berkas berhasil dihapus.');
     } catch (err) {
