@@ -1871,7 +1871,7 @@ function CompanyDetailPage({ companyId, onBack }) {
                 { label: 'Permohonan Pendaftaran', raw: legal.permohonan },
                 { label: 'SK Penyelia Halal', raw: legal.sk_penyelia },
                 { label: 'SK Manajemen Halal', raw: legal.sk_manajemen },
-                { label: 'Kebijakan Halal Bermaterai', raw: legal.kebijakan },
+                { label: 'Kebijakan Halal', raw: legal.kebijakan },
                 { label: 'KTP Pemilik Usaha', raw: legal.ktp_pemilik || legal.ktpPemilik },
                 { label: 'KTP Penyelia Halal', raw: legal.ktp_penyelia || legal.ktpPenyelia },
                 { label: 'Tanda Tangan Pemilik', raw: legal.ttd_pemilik || legal.ttdPemilik },
