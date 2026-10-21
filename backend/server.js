@@ -1741,7 +1741,7 @@ app.get('/api/products', authMiddleware, async (req, res) => {
   if (!company) return res.json({ products: [], productsSubmitted: false });
   const rows = await db.prepare('SELECT * FROM products WHERE company_id=? ORDER BY id').all(company.id);
   const products = rows.map(r => ({ ...r, bahan: typeof r.bahan === 'string' ? JSON.parse(r.bahan || '[]') : (r.bahan || []) }));
-  const submitted = products.length > 0 && products.every(p => p.submitted === 1);
+  const submitted = products.length > 0;
   res.json({ products, productsSubmitted: submitted });
 });
 
@@ -1753,7 +1753,8 @@ app.post('/api/products', authMiddleware, async (req, res) => {
   const { name, bahan } = req.body;
   if (!name) return res.status(400).json({ error: 'Nama produk wajib diisi' });
   const bahanJson = JSON.stringify(bahan || []);
-  await db.prepare(`INSERT INTO products (company_id, name, bahan, submitted) VALUES (?, ?, ?, 0)`).run(company.id, name, bahanJson);
+  await db.prepare(`INSERT INTO products (company_id, name, bahan, submitted) VALUES (?, ?, ?, 1)`).run(company.id, name, bahanJson);
+  await db.prepare(`UPDATE certification_progress SET status='Menunggu Verifikasi', updated_at=datetime('now') WHERE company_id=? AND stage=4`).run(company.id);
   const rows = await db.prepare('SELECT * FROM products WHERE company_id=? ORDER BY id').all(company.id);
   const products = rows.map(r => ({ ...r, bahan: typeof r.bahan === 'string' ? JSON.parse(r.bahan || '[]') : (r.bahan || []) }));
   await logActivity(db, company.id, userId, 'product_add', `Produk ditambahkan: ${name}`);

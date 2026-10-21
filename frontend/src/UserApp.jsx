@@ -241,8 +241,9 @@ export default function UserApp() {
         setMatrixSubmitted(matData.matrixSubmitted || false);
 
         const prodData = await prodRes.json();
-        setProducts(prodData.products || []);
-        setProductsSubmitted(prodData.productsSubmitted || false);
+        const loadedProducts = prodData.products || [];
+        setProducts(loadedProducts);
+        setProductsSubmitted(prodData.productsSubmitted || loadedProducts.length > 0 || false);
 
         setLegalData(await legalRes.json() || {});
         setProductionData(await productionRes.json() || {});
@@ -485,7 +486,7 @@ export default function UserApp() {
   );
 
   const isProdukComplete = Boolean(
-    productsSubmitted && products && products.length > 0
+    (products && products.length > 0) || productsSubmitted
   );
 
   const isEvaluasiComplete = Boolean(
@@ -1981,12 +1982,16 @@ const StepUploadProduk = ({ products, setProducts, materials, productsSubmitted,
       const res = await apiFetch('/api/products/submit', { method: 'POST' });
       const data = await res.json();
       if (res.ok) {
-        setProductsSubmitted(data.productsSubmitted);
+        setProductsSubmitted(true);
         setSuccessMsg('Seluruh data produk & komposisi berhasil disubmit!');
+        showToast('Seluruh data produk & komposisi berhasil disubmit!');
         setTimeout(() => setSuccessMsg(''), 4000);
+      } else {
+        showToast(data.error || 'Gagal submit produk.');
       }
     } catch (err) {
       console.error(err);
+      showToast('Terjadi kesalahan saat submit produk.');
     }
   };
 
@@ -2334,11 +2339,25 @@ const StepUploadProduk = ({ products, setProducts, materials, productsSubmitted,
         </div>
       </div>
 
-      {successMsg && (
-        <div className="pt-4 border-t flex justify-start">
-          <span className="text-emerald-600 font-semibold text-sm">{successMsg}</span>
+      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3 pt-4 border-t">
+        <div>
+          {successMsg ? (
+            <span className="text-emerald-600 font-semibold text-sm">{successMsg}</span>
+          ) : (
+            <span className="text-xs text-slate-500">
+              {bomProducts.length > 0 ? `✓ ${bomProducts.length} produk tersimpan & siap diverifikasi.` : 'Lengkapi produk dan bahan untuk menyelesaikan tahap ini.'}
+            </span>
+          )}
         </div>
-      )}
+        <button
+          onClick={handleSubmitProducts}
+          disabled={bomProducts.length === 0}
+          className="ml-auto px-6 py-2.5 rounded-xl font-bold text-sm shadow-md transition-all text-white bg-slate-900 hover:bg-slate-800 disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
+        >
+          <Icons.Check className="w-4 h-4 text-emerald-400" />
+          <span>{productsSubmitted || bomProducts.length > 0 ? 'Simpan & Submit Produk' : 'Submit Produk'}</span>
+        </button>
+      </div>
     </Card>
   );
 };
