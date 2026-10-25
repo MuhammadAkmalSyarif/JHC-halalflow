@@ -1474,7 +1474,7 @@ function CompaniesPage({ onSelectCompany }) {
                     <th className="text-left px-5 py-4 text-[10px] font-black text-slate-500 uppercase tracking-widest">NIB</th>
                     <th className="text-left px-5 py-4 text-[10px] font-black text-slate-500 uppercase tracking-widest">Penanggung Jawab</th>
                     <th className="text-left px-5 py-4 text-[10px] font-black text-slate-500 uppercase tracking-widest">Jenis Usaha</th>
-                    <th className="text-left px-5 py-4 text-[10px] font-black text-slate-500 uppercase tracking-widest">Progress</th>
+                    <th className="text-left px-5 py-4 text-[10px] font-black text-slate-500 uppercase tracking-widest">Readiness Score</th>
                     <th className="text-left px-5 py-4 text-[10px] font-black text-slate-500 uppercase tracking-widest">Jadwal Audit</th>
                     <th className="text-left px-5 py-4 text-[10px] font-black text-slate-500 uppercase tracking-widest">Update</th>
                     <th className="text-left px-5 py-4 text-[10px] font-black text-slate-500 uppercase tracking-widest">Aksi</th>
@@ -1496,9 +1496,9 @@ function CompaniesPage({ onSelectCompany }) {
                       <td className="px-5 py-4">
                         <div className="flex items-center gap-2">
                           <div className="flex-1 bg-slate-200 rounded-full h-1.5 min-w-[60px]">
-                            <div className="bg-gradient-to-r from-emerald-600 to-emerald-400 h-full rounded-full transition-all" style={{width:`${c.progress_percent || 0}%`}}></div>
+                            <div className="bg-gradient-to-r from-emerald-600 to-emerald-400 h-full rounded-full transition-all" style={{width:`${c.readiness_score ?? c.progress_percent ?? 0}%`}}></div>
                           </div>
-                          <span className="text-[11px] font-bold text-emerald-600 shrink-0">{c.progress_percent || 0}%</span>
+                          <span className="text-[11px] font-bold text-emerald-600 shrink-0">{c.readiness_score ?? c.progress_percent ?? 0}%</span>
                         </div>
                       </td>
                       <td className="px-5 py-4">
@@ -1696,7 +1696,49 @@ function CompanyDetailPage({ companyId, onBack }) {
   if (loading) return <LoadingState text="Memuat detail perusahaan..."/>;
   if (!company) return <EmptyState text="Perusahaan tidak ditemukan"/>;
 
-  const tabs = ['overview', 'registrasi', 'dokumen-legal', 'matrix-bahan', 'bom-produk', 'proses-produksi', 'evidence', 'arsip-berkas', 'sertifikasi-bpjph'];
+  // Hitung Halal Readiness Score sinkron dengan User App (5 Kriteria SJPH)
+  const isKomitmenComplete = Boolean(
+    (legal?.permohonan || legal?.sk_penyelia || legal?.sk_manajemen || legal?.kebijakan) &&
+    (evidence?.sosialisasiFoto || evidence?.sosialisasifoto) &&
+    (evidence?.sosialisasiAbsen || evidence?.sosialisasiabsen)
+  );
+
+  const isBahanComplete = Boolean(
+    (materials && materials.length > 0) ||
+    ['Menunggu Verifikasi', 'Terverifikasi', 'Selesai'].includes(progress.find(p => p.stage === 3)?.status)
+  );
+
+  const isPphComplete = Boolean(
+    ((production?.alurProses || production?.alur_proses) &&
+     (production?.layoutRuang || production?.layout_ruang) &&
+     (production?.bebasBabi || production?.bebas_babi)) ||
+    ['Menunggu Verifikasi', 'Terverifikasi', 'Selesai'].includes(productionStageStatus)
+  );
+
+  const isProdukComplete = Boolean(
+    (products && products.length > 0) ||
+    ['Menunggu Verifikasi', 'Terverifikasi', 'Selesai'].includes(productStageStatus)
+  );
+
+  const isEvaluasiComplete = Boolean(
+    ((evidence?.auditInternalFoto || evidence?.auditinternalfoto) &&
+     (evidence?.auditInternalAbsen || evidence?.auditinternalabsen)) ||
+    ['Menunggu Verifikasi', 'Terverifikasi', 'Selesai'].includes(evidenceStageStatus)
+  );
+
+  let completedCriteriaCount = 0;
+  if (isKomitmenComplete) completedCriteriaCount++;
+  if (isBahanComplete) completedCriteriaCount++;
+  if (isPphComplete) completedCriteriaCount++;
+  if (isProdukComplete) completedCriteriaCount++;
+  if (isEvaluasiComplete) completedCriteriaCount++;
+
+  const computedReadiness = Math.round((completedCriteriaCount / 5) * 100);
+  const readinessScore = company?.readiness_score !== undefined
+    ? company.readiness_score
+    : (company?.progress_percent !== undefined ? company.progress_percent : computedReadiness);
+
+  const tabs = ['overview', 'registrasi', 'dokumen-legal', 'matrix-bahan', 'bom-produk', 'proses-produksi', 'evidence', 'sertifikasi-bpjph'];
   const tabLabels = {
     'overview': 'Overview',
     'registrasi': 'Registrasi',
@@ -1705,7 +1747,6 @@ function CompanyDetailPage({ companyId, onBack }) {
     'bom-produk': 'BOM Produk',
     'proses-produksi': 'Proses Produksi',
     'evidence': 'Evidence (Bukti)',
-    'arsip-berkas': `Semua Berkas (${companyFiles.length})`,
     'sertifikasi-bpjph': 'Sertifikasi BPJPH'
   };
 
@@ -1725,9 +1766,12 @@ function CompanyDetailPage({ companyId, onBack }) {
             </div>
           </div>
           <div className="flex items-center gap-4">
-            <div className="text-center">
-              <p className="text-3xl font-black text-emerald-600">{company.progress_percent || 0}%</p>
-              <p className="text-[10px] text-slate-400 font-bold uppercase tracking-wider">Progress</p>
+            <div className="text-center bg-white px-5 py-3 rounded-2xl border border-slate-200 shadow-2xs">
+              <p className="text-3xl font-black text-emerald-600">{readinessScore}%</p>
+              <p className="text-[10px] text-slate-400 font-bold uppercase tracking-wider">Readiness Score</p>
+              <span className={`inline-block mt-1 text-[10px] font-bold px-2.5 py-0.5 rounded-full ${readinessScore >= 100 ? 'bg-emerald-100 text-emerald-700' : 'bg-amber-100 text-amber-700'}`}>
+                {readinessScore >= 100 ? 'Siap Diajukan' : 'Persiapan Berkas'}
+              </span>
             </div>
           </div>
         </div>
@@ -2168,71 +2212,6 @@ function CompanyDetailPage({ companyId, onBack }) {
                   </div>
                 );
               })}
-            </div>
-          )}
-        </div>
-      )}
-
-      {/* TAB: ARSIP SEMUA BERKAS TERUPLOAD */}
-      {activeTab === 'arsip-berkas' && (
-        <div className="bg-white border border-slate-200 rounded-2xl p-6 shadow-sm">
-          <div className="flex flex-col md:flex-row md:items-center justify-between gap-2 mb-5">
-            <div>
-              <h3 className="font-bold text-slate-800 text-base">Arsip Lengkap Berkas Terupload</h3>
-              <p className="text-xs text-slate-500 mt-0.5">Semua file fisik yang diunggah oleh perusahaan ini tercatat lengkap di bawah ini.</p>
-            </div>
-            <span className="text-xs font-bold px-3 py-1 bg-emerald-50 text-emerald-800 border border-emerald-200 rounded-full shrink-0">
-              Total {companyFiles.length} berkas
-            </span>
-          </div>
-
-          {companyFiles.length === 0 ? (
-            <EmptyState text="Belum ada berkas terupload" sub="Perusahaan belum pernah mengunggah berkas ke sistem" />
-          ) : (
-            <div className="overflow-x-auto border border-slate-200 rounded-xl">
-              <table className="w-full text-xs text-left">
-                <thead className="bg-slate-50 border-b border-slate-200 text-slate-600 font-bold">
-                  <tr>
-                    <th className="p-3 w-10">No</th>
-                    <th className="p-3">Nama Berkas Asli</th>
-                    <th className="p-3">Nama di Server</th>
-                    <th className="p-3">Kategori</th>
-                    <th className="p-3">Ukuran</th>
-                    <th className="p-3">Tanggal Unggah</th>
-                    <th className="p-3 text-center w-28">Aksi</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-slate-100">
-                  {companyFiles.map((f, idx) => (
-                    <tr key={f.id || idx} className="hover:bg-slate-50">
-                      <td className="p-3 text-slate-400">{idx + 1}</td>
-                      <td className="p-3 font-semibold text-slate-800 break-all">{f.original_name || f.stored_name}</td>
-                      <td className="p-3 font-mono text-slate-500 break-all">{f.stored_name}</td>
-                      <td className="p-3">
-                        <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-slate-100 text-slate-700">
-                          {f.document_type || 'Umum'}
-                        </span>
-                      </td>
-                      <td className="p-3 text-slate-500 whitespace-nowrap">
-                        {f.file_size ? `${(f.file_size / 1024).toFixed(1)} KB` : '-'}
-                      </td>
-                      <td className="p-3 text-slate-500 whitespace-nowrap">
-                        {f.created_at ? new Date(f.created_at).toLocaleString('id-ID') : '-'}
-                      </td>
-                      <td className="p-3 text-center">
-                        <a
-                          href={getFullUrl(`/uploads/${f.stored_name}`)}
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          className="inline-flex items-center gap-1 px-2.5 py-1 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg font-bold text-[11px] shadow-2xs"
-                        >
-                          <Icons.Eye className="w-3 h-3"/> Lihat ↗
-                        </a>
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
             </div>
           )}
         </div>

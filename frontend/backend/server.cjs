@@ -41,6 +41,78 @@ async function logActivity(database, companyId, userId, activityType, descriptio
   } catch(e) {}
 }
 
+async function calculateCompanyReadiness(database, companyId) {
+  try {
+    const [legal, evidence, prodData, prodCountRow, matCountRow, progressRows] = await Promise.all([
+      database.prepare('SELECT permohonan, sk_penyelia, sk_manajemen, kebijakan FROM legal_documents WHERE company_id = ?').get(companyId).catch(() => null),
+      database.prepare('SELECT "sosialisasiFoto", "sosialisasiAbsen", "auditInternalFoto", "auditInternalAbsen" FROM evidence_data WHERE company_id = ?').get(companyId).catch(() => null),
+      database.prepare('SELECT alur_proses, layout_ruang, bebas_babi FROM production_data WHERE company_id = ?').get(companyId).catch(() => null),
+      database.prepare('SELECT COUNT(*) as c FROM products WHERE company_id = ?').get(companyId).catch(() => ({ c: 0 })),
+      database.prepare('SELECT COUNT(*) as c FROM halal_materials WHERE company_id = ?').get(companyId).catch(() => ({ c: 0 })),
+      database.prepare('SELECT stage, status FROM certification_progress WHERE company_id = ?').all(companyId).catch(() => [])
+    ]);
+
+    let ev = evidence;
+    if (!ev) {
+      try {
+        ev = await database.prepare('SELECT * FROM evidence_data WHERE company_id = ?').get(companyId);
+      } catch (e) {}
+    }
+
+    const stage3 = progressRows?.find(p => p.stage === 3);
+    const stage4 = progressRows?.find(p => p.stage === 4);
+    const stage5 = progressRows?.find(p => p.stage === 5);
+    const stage6 = progressRows?.find(p => p.stage === 6);
+
+    const sosFoto = ev?.sosialisasiFoto || ev?.sosialisasifoto;
+    const sosAbsen = ev?.sosialisasiAbsen || ev?.sosialisasiabsen;
+    const auditFoto = ev?.auditInternalFoto || ev?.auditinternalfoto;
+    const auditAbsen = ev?.auditInternalAbsen || ev?.auditinternalabsen;
+
+    const isKomitmenComplete = Boolean(
+      (legal?.permohonan || legal?.sk_penyelia || legal?.sk_manajemen || legal?.kebijakan) &&
+      sosFoto && sosAbsen
+    );
+
+    const matCount = Number(matCountRow?.c || matCountRow?.count || 0);
+    const isBahanComplete = Boolean(
+      matCount > 0 ||
+      ['Menunggu Verifikasi', 'Terverifikasi', 'Selesai'].includes(stage3?.status)
+    );
+
+    const pAlur = prodData?.alur_proses || prodData?.alurproses || prodData?.alurProses;
+    const pLayout = prodData?.layout_ruang || prodData?.layoutruang || prodData?.layoutRuang;
+    const pBabi = prodData?.bebas_babi || prodData?.bebasbabi || prodData?.bebasBabi;
+    const isPphComplete = Boolean(
+      (pAlur && pLayout && pBabi) ||
+      ['Menunggu Verifikasi', 'Terverifikasi', 'Selesai'].includes(stage5?.status)
+    );
+
+    const prodCount = Number(prodCountRow?.c || prodCountRow?.count || 0);
+    const isProdukComplete = Boolean(
+      prodCount > 0 ||
+      ['Menunggu Verifikasi', 'Terverifikasi', 'Selesai'].includes(stage4?.status)
+    );
+
+    const isEvaluasiComplete = Boolean(
+      (auditFoto && auditAbsen) ||
+      ['Menunggu Verifikasi', 'Terverifikasi', 'Selesai'].includes(stage6?.status)
+    );
+
+    let completedCriteriaCount = 0;
+    if (isKomitmenComplete) completedCriteriaCount++;
+    if (isBahanComplete) completedCriteriaCount++;
+    if (isPphComplete) completedCriteriaCount++;
+    if (isProdukComplete) completedCriteriaCount++;
+    if (isEvaluasiComplete) completedCriteriaCount++;
+
+    return Math.round((completedCriteriaCount / 5) * 100);
+  } catch (err) {
+    console.warn('Gagal menghitung readiness score untuk company ' + companyId, err.message);
+    return 0;
+  }
+}
+
 const app = express();
 const PORT = process.env.PORT || 5000;
 const JWT_SECRET = process.env.JWT_SECRET || 'jhc_halalflow_jwt_secret_2026';
@@ -1980,7 +2052,11 @@ app.get('/api/admin/companies', adminAuthMiddleware, async (req, res) => {
   params.push(parseInt(limit), offset);
 
   const companies = await db.prepare(query).all(...params);
-  companies.forEach(c => { c.progress_percent = Math.round((c.completed_stages / 7) * 100); });
+  for (const c of companies) {
+    const readiness = await calculateCompanyReadiness(db, c.id);
+    c.readiness_score = readiness;
+    c.progress_percent = readiness;
+  }
 
   res.json({
     companies,
@@ -2031,7 +2107,9 @@ app.get('/api/admin/companies/:id', adminAuthMiddleware, async (req, res) => {
 
   const progress = await db.prepare('SELECT * FROM certification_progress WHERE company_id = ? ORDER BY stage').all(companyId);
   const completedStages = progress.filter(s => ['Selesai','Terverifikasi'].includes(s.status)).length;
-  company.progress_percent = Math.round((completedStages / 7) * 100);
+  const readiness = await calculateCompanyReadiness(db, companyId);
+  company.readiness_score = readiness;
+  company.progress_percent = readiness;
   company.completed_stages = completedStages;
   company.mat_count = await db.prepare('SELECT COUNT(*) as c FROM halal_materials WHERE company_id=?').get(companyId).c;
 
@@ -2151,7 +2229,8 @@ app.get('/api/admin/companies/:id/progress', adminAuthMiddleware, async (req, re
   const companyId = parseInt(req.params.id);
   const progress = await db.prepare('SELECT * FROM certification_progress WHERE company_id=? ORDER BY stage').all(companyId);
   const completedStages = progress.filter(s => ['Selesai','Terverifikasi'].includes(s.status)).length;
-  res.json({ progress, completedStages, totalPercent: Math.round((completedStages / 7) * 100) });
+  const readiness = await calculateCompanyReadiness(db, companyId);
+  res.json({ progress, completedStages, totalPercent: readiness, readinessScore: readiness });
 });
 
 // PATCH /api/admin/companies/:id/stage-status — Admin update status per stage
